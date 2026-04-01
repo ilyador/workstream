@@ -28,8 +28,16 @@
 .list {}
 .item {
   border-bottom: 1px solid var(--divider);
-  cursor: pointer;
-  transition: background 0.12s;
+  cursor: grab;
+  transition: background 0.12s, border-color 0.15s;
+}
+.item:active { cursor: grabbing; }
+.dragging {
+  opacity: 0.4;
+}
+.dropTarget {
+  border-top: 2px solid var(--blue) !important;
+  margin-top: -2px;
 }
 .item:hover { background: var(--bg-hover); margin: 0 -16px; padding-left: 16px; padding-right: 16px; border-radius: 10px; border-color: transparent; }
 .expanded { background: var(--bg-hover); margin: 0 -16px; padding-left: 16px; padding-right: 16px; border-radius: 10px; border-color: transparent; }
@@ -41,34 +49,6 @@
   gap: 14px;
   padding: 14px 0;
 }
-/* Reorder buttons replace the drag handle */
-.reorderBtns {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  opacity: 0;
-  transition: opacity 0.15s;
-  width: 14px;
-  flex-shrink: 0;
-}
-.item:hover .reorderBtns { opacity: 1; }
-.expanded .reorderBtns { opacity: 1; }
-.reorderBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-4);
-  font-size: 8px;
-  line-height: 1;
-  padding: 1px 0;
-  transition: color 0.1s;
-}
-.reorderBtn:hover:not(:disabled) { color: var(--text-2); }
-.reorderBtn:disabled { opacity: 0.25; cursor: default; }
-.handle { color: var(--text-4); font-size: 16px; cursor: grab; user-select: none; width: 12px; }
 .title {
   flex: 1;
   font-size: 15px;
@@ -146,22 +126,22 @@
 .detailImages {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
   flex-wrap: wrap;
+  margin-top: 12px;
 }
-.detailImageLink {
-  display: block;
+.detailImageWrap {
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid var(--divider);
+  cursor: pointer;
   transition: border-color 0.15s;
 }
-.detailImageLink:hover { border-color: var(--blue); }
-.detailImageThumb {
+.detailImageWrap:hover { border-color: var(--blue); }
+.detailImage {
+  max-width: 200px;
+  max-height: 150px;
+  object-fit: contain;
   display: block;
-  width: 80px;
-  height: 56px;
-  object-fit: cover;
 }
 /* Human mode actions — uses global .btn variants */
 .humanActions {

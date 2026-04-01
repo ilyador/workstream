@@ -90,7 +90,9 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
   const [assignee, setAssignee] = useState(editTask?.assignee || '');
   const [multiagent, setMultiagent] = useState(editTask?.multiagent || 'auto');
   const [blockedBy, setBlockedBy] = useState<string[]>(editTask?.blocked_by || []);
-  const [imageUrls, setImageUrls] = useState(editTask?.images?.join(', ') || '');
+  const [images, setImages] = useState<string[]>(editTask?.images || []);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showMore, setShowMore] = useState(isEdit);
   const [blockerSearch, setBlockerSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -160,6 +162,44 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
     });
   }, [description, slashStart, skillFilter]);
 
+  function handleImageDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    for (const file of files) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImages(prev => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function handleImagePaste(e: React.ClipboardEvent) {
+    const items = Array.from(e.clipboardData.items).filter(i => i.type.startsWith('image/'));
+    for (const item of items) {
+      const file = item.getAsFile();
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = () => setImages(prev => [...prev, reader.result as string]);
+        reader.readAsDataURL(file);
+      }
+    }
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
+    for (const file of files) {
+      const reader = new FileReader();
+      reader.onload = () => setImages(prev => [...prev, reader.result as string]);
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function removeImage(index: number) {
+    setImages(prev => prev.filter((_, i) => i !== index));
+  }
+
   const handleDescriptionKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!showSkills || filteredSkills.length === 0) return;
     if (e.key === 'ArrowDown') {
@@ -183,10 +223,6 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
     setError('');
     setLoading(true);
     try {
-      const images = imageUrls
-        .split(',')
-        .map(u => u.trim())
-        .filter(u => u.length > 0);
       const resolvedType = isCustomType ? customType.trim().toLowerCase().replace(/\s+/g, '-') : type;
       await onSubmit({
         title: title.trim(),
@@ -242,6 +278,13 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
               onChange={handleDescriptionChange}
               onKeyDown={handleDescriptionKeyDown}
               onBlur={() => { setTimeout(() => setShowSkills(false), 150); }}
+              onPaste={e => {
+                const hasImage = Array.from(e.clipboardData.items).some(i => i.type.startsWith('image/'));
+                if (hasImage) {
+                  e.preventDefault();
+                  handleImagePaste(e);
+                }
+              }}
               rows={3}
             />
             {showSkills && filteredSkills.length > 0 && (
@@ -398,14 +441,28 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
               </div>
 
               <div className={s.field}>
-                <label className={s.label}>Image URLs</label>
-                <input
-                  className={s.input}
-                  placeholder="Comma-separated URLs"
-                  value={imageUrls}
-                  onChange={e => setImageUrls(e.target.value)}
-                />
-                <span className={s.hint}>Screenshots, designs, error captures. Full upload coming soon.</span>
+                <label className={s.label}>Images</label>
+                <div
+                  className={`${s.dropZone} ${dragOver ? s.dropZoneActive : ''}`}
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={e => { handleImageDrop(e); setDragOver(false); }}
+                  onPaste={handleImagePaste}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <span className={s.dropText}>Drop images here, paste, or click to browse</span>
+                  <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFileSelect} />
+                </div>
+                {images.length > 0 && (
+                  <div className={s.imageGrid}>
+                    {images.map((url, i) => (
+                      <div key={i} className={s.imageThumb}>
+                        <img src={url} alt="" />
+                        <button type="button" className={s.imageRemove} onClick={() => removeImage(i)}>&times;</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

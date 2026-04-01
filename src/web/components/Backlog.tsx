@@ -52,6 +52,8 @@ interface BacklogProps {
 
 export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteTask, onEditTask, milestoneFilter, milestones, onMilestoneFilter }: BacklogProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const filteredTasks = milestoneFilter
     ? tasks.filter(t => t.milestone_id === milestoneFilter)
@@ -76,33 +78,46 @@ export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteT
         )}
       </div>
       <div className={s.list}>
-        {filteredTasks.map((task, idx) => (
+        {filteredTasks.map((task) => (
           <div
             key={task.id}
-            className={`${s.item} ${task.blocked ? s.blockedItem : ''} ${expanded === task.id ? s.expanded : ''}`}
+            draggable
+            onDragStart={(e) => {
+              setDraggedId(task.id);
+              e.dataTransfer.effectAllowed = 'move';
+              if (e.currentTarget instanceof HTMLElement) {
+                e.currentTarget.style.opacity = '0.5';
+              }
+            }}
+            onDragEnd={(e) => {
+              setDraggedId(null);
+              setDropTarget(null);
+              if (e.currentTarget instanceof HTMLElement) {
+                e.currentTarget.style.opacity = '1';
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              if (task.id !== draggedId) {
+                setDropTarget(task.id);
+              }
+            }}
+            onDragLeave={() => {
+              setDropTarget(null);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (draggedId && draggedId !== task.id) {
+                onSwapTasks?.(draggedId, task.id);
+              }
+              setDraggedId(null);
+              setDropTarget(null);
+            }}
+            className={`${s.item} ${task.blocked ? s.blockedItem : ''} ${expanded === task.id ? s.expanded : ''} ${dropTarget === task.id ? s.dropTarget : ''} ${draggedId === task.id ? s.dragging : ''}`}
             onClick={() => setExpanded(expanded === task.id ? null : task.id)}
           >
             <div className={s.row}>
-              <div className={s.reorderBtns}>
-                <button
-                  className={s.reorderBtn}
-                  disabled={idx === 0}
-                  title="Move up"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (idx > 0) onSwapTasks?.(task.id, filteredTasks[idx - 1].id);
-                  }}
-                >&#9650;</button>
-                <button
-                  className={s.reorderBtn}
-                  disabled={idx === filteredTasks.length - 1}
-                  title="Move down"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (idx < filteredTasks.length - 1) onSwapTasks?.(task.id, filteredTasks[idx + 1].id);
-                  }}
-                >&#9660;</button>
-              </div>
               <span className={s.title}>{task.title}</span>
               {task.blocked && <span className={s.tag + ' ' + s.tagRed}>blocked</span>}
               {task.mode === 'human' && <span className={s.tag + ' ' + s.tagGray}>human</span>}
@@ -136,8 +151,8 @@ export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteT
                 {task.images && task.images.length > 0 && (
                   <div className={s.detailImages}>
                     {task.images.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className={s.detailImageLink}>
-                        <img src={url} alt={`Attachment ${i + 1}`} className={s.detailImageThumb} />
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className={s.detailImageWrap}>
+                        <img src={url} alt={`Attachment ${i + 1}`} className={s.detailImage} />
                       </a>
                     ))}
                   </div>
