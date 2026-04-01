@@ -343,12 +343,14 @@ function ReplyInput({ onReply }: { onReply: (answer: string) => void }) {
   const [val, setVal] = useState('');
   const [sending, setSending] = useState(false);
 
-  const handleReply = () => {
+  const handleReply = async () => {
     if (!val.trim() || sending) return;
     setSending(true);
-    onReply(val.trim());
-    setVal('');
-    setSending(false);
+    try {
+      await onReply(val.trim());
+      setVal('');
+    } catch { /* error handled by parent */ }
+    finally { setSending(false); }
   };
 
   return (

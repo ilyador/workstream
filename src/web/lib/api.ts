@@ -319,8 +319,8 @@ export function subscribeToJob(jobId: string, handlers: {
   source.addEventListener('phase_complete', (e) => { const d = JSON.parse(e.data); handlers.onPhaseComplete?.(d.phase, d.output); });
   source.addEventListener('paused', (e) => handlers.onPause?.(JSON.parse(e.data).question));
   source.addEventListener('review', (e) => handlers.onReview?.(JSON.parse(e.data)));
-  source.addEventListener('done', () => handlers.onDone?.());
-  source.addEventListener('failed', (e) => handlers.onFail?.(JSON.parse(e.data).error));
+  source.addEventListener('done', () => { handlers.onDone?.(); source.close(); });
+  source.addEventListener('failed', (e) => { handlers.onFail?.(JSON.parse(e.data).error); source.close(); });
   return () => source.close();
 }
 

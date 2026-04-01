@@ -88,10 +88,15 @@ src/
 
 supabase/
   migrations/
-    00001_foundation.sql  profiles, projects, project_members, RLS
-    00002_tasks.sql       milestones, tasks, task_blockers, RLS
-    00003_jobs.sql        jobs table, RLS
+    00001_foundation.sql              profiles, projects, project_members, RLS
+    00002_tasks.sql                   milestones, tasks, task_blockers, RLS
+    00003_jobs.sql                    jobs table, RLS
     00004_comments_notifications.sql  comments, notifications, triggers
+    00005_review_fixes.sql            RLS fixes, ON DELETE, indexes, trigger improvements
+    00006_custom_task_type.sql        drop type CHECK (allow custom types)
+    00007_checkpoints.sql             checkpoint_ref, checkpoint_status on jobs
+    00008_custom_task_types.sql       custom_task_types table
+    00009_final_review_fixes.sql      RLS on custom_task_types, self-block guard, jobs DELETE policy
 ```
 
 ## Task Type Configuration

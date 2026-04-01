@@ -212,7 +212,11 @@ dataRouter.post('/api/tasks', requireAuth, async (req, res) => {
 });
 
 dataRouter.patch('/api/tasks/:id', requireAuth, async (req, res) => {
-  const updates = { ...req.body };
+  const allowed = ['title', 'description', 'type', 'mode', 'effort', 'multiagent', 'status', 'assignee', 'milestone_id', 'position', 'images', 'followup_notes', 'blocked_by'];
+  const updates: Record<string, any> = {};
+  for (const key of allowed) {
+    if (key in req.body) updates[key] = req.body[key];
+  }
   if (updates.status === 'done' && !updates.completed_at) {
     updates.completed_at = new Date().toISOString();
   }
@@ -286,7 +290,7 @@ dataRouter.post('/api/comments', requireAuth, async (req, res) => {
       const { data: profile } = await supabase
         .from('profiles')
         .select('id')
-        .ilike('name', `%${name}%`)
+        .ilike('name', name)
         .limit(1)
         .single();
 
@@ -664,9 +668,15 @@ setInterval(async () => {
   }
 }, 2000);
 
-dataRouter.get('/api/changes', (req, res) => {
+dataRouter.get('/api/changes', async (req, res) => {
   const projectId = req.query.project_id as string;
   if (!projectId) return res.status(400).end();
+  // Validate token from query param (EventSource can't set headers)
+  const token = req.query.token as string;
+  if (token) {
+    const { error } = await supabase.auth.getUser(token);
+    if (error) return res.status(401).end();
+  }
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',

@@ -148,19 +148,7 @@
   outline: none;
   transition: border-color 0.15s;
 }
-.input {
-  flex: 1;
-  padding: 8px 14px;
-  background: var(--white);
-  border: 1.5px solid var(--divider);
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 13px;
-  color: var(--text);
-  outline: none;
-}
-.input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
-.input::placeholder { color: var(--text-4); }
+/* .input removed — unused dead CSS */
 .replySend {
   padding: 8px 18px;
   background: var(--text);

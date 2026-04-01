@@ -127,8 +127,14 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
 });
 
 // SSE stream for job logs
-executionRouter.get('/api/jobs/:id/events', (req, res) => {
+executionRouter.get('/api/jobs/:id/events', async (req, res) => {
   const jobId = req.params.id;
+  // Validate token from query param
+  const token = req.query.token as string;
+  if (token) {
+    const { error } = await supabase.auth.getUser(token);
+    if (error) return res.status(401).end();
+  }
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',

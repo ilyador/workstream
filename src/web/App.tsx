@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useProjects } from './hooks/useProjects';
 import { useTasks } from './hooks/useTasks';
@@ -6,7 +6,7 @@ import { useJobs } from './hooks/useJobs';
 import { useMilestones } from './hooks/useMilestones';
 import { useMembers } from './hooks/useMembers';
 import { useNotifications } from './hooks/useNotifications';
-import { signUp, signIn, signOut, addComment as apiAddComment, runTaskApi, replyToJob, approveJob, rejectJob, revertJob, terminateJob, deleteJob, gitCommit, gitPush, gitPr } from './lib/api';
+import { signUp, signIn, signOut, addComment as apiAddComment, runTaskApi, replyToJob, approveJob, rejectJob, revertJob, terminateJob, deleteJob, gitCommit, gitPush, gitPr, updateTask } from './lib/api';
 import { computeFocus } from './lib/focus';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
@@ -104,6 +104,15 @@ export default function App() {
     }
     return map;
   }, [tasks.tasks]);
+
+  // Tick counter for elapsed time updates on running jobs
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const hasRunning = jobs.jobs.some(j => j.status === 'running');
+    if (!hasRunning) return;
+    const interval = setInterval(() => setTick(t => t + 1), 10000);
+    return () => clearInterval(interval);
+  }, [jobs.jobs]);
 
   // Build a member lookup from project members
   const memberMap = useMemo(() => {
@@ -335,8 +344,11 @@ export default function App() {
                   const taskA = tasks.backlog.find(t => t.id === idA);
                   const taskB = tasks.backlog.find(t => t.id === idB);
                   if (!taskA || !taskB) return;
-                  await tasks.updateTask(idA, { position: taskB.position });
-                  await tasks.updateTask(idB, { position: taskA.position });
+                  await Promise.all([
+                    updateTask(idA, { position: taskB.position }),
+                    updateTask(idB, { position: taskA.position }),
+                  ]);
+                  tasks.reload();
                 }}
                 onDeleteTask={async (taskId) => {
                   await tasks.deleteTask(taskId);
