@@ -242,6 +242,12 @@ dataRouter.get('/api/jobs', requireAuth, async (req, res) => {
   res.json(data || []);
 });
 
+dataRouter.delete('/api/jobs/:id', requireAuth, async (req, res) => {
+  const { error } = await supabase.from('jobs').delete().eq('id', req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
 // --- Comments ---
 
 dataRouter.get('/api/comments', requireAuth, async (req, res) => {

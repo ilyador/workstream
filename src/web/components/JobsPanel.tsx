@@ -49,12 +49,14 @@ const PHASE_DESCRIPTIONS: Record<string, string> = {
   'write-tests': 'Writing tests...',
 };
 
-export function JobsPanel({ jobs, onReply, onApprove, onReject, onTerminate }: {
+export function JobsPanel({ jobs, onReply, onApprove, onReject, onRevert, onTerminate, onDeleteJob }: {
   jobs: JobView[];
   onReply?: (jobId: string, answer: string) => void;
   onApprove?: (jobId: string, action?: GitAction) => void;
   onReject?: (jobId: string) => void;
+  onRevert?: (jobId: string) => void;
   onTerminate?: (jobId: string) => void;
+  onDeleteJob?: (jobId: string) => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(jobs.find(j => j.status !== 'done')?.id || null);
 
@@ -129,6 +131,24 @@ export function JobsPanel({ jobs, onReply, onApprove, onReject, onTerminate }: {
                 >
                   Return task to backlog
                 </button>
+                {onRevert && (
+                  <button className={s.revert} onClick={() => onRevert(job.id)} style={{ marginTop: 8, marginLeft: 10 }}>
+                    Revert Changes
+                  </button>
+                )}
+                {onDeleteJob && (
+                  <button className={s.dismissBtn} onClick={() => onDeleteJob(job.id)}>
+                    Dismiss
+                  </button>
+                )}
+              </div>
+            )}
+
+            {isOpen && isDone && onDeleteJob && (
+              <div className={s.detail} onClick={e => e.stopPropagation()}>
+                <button className={s.dismissBtn} onClick={() => onDeleteJob(job.id)}>
+                  Dismiss
+                </button>
               </div>
             )}
 
@@ -171,6 +191,11 @@ export function JobsPanel({ jobs, onReply, onApprove, onReject, onTerminate }: {
                     <div className={s.reviewActions}>
                       <ApproveDropdown onSelect={(action) => onApprove?.(job.id, action)} />
                       <button className={s.reject} onClick={() => onReject?.(job.id)}>Reject &rarr; Backlog</button>
+                      {onRevert && (
+                        <button className={s.revert} onClick={() => onRevert(job.id)}>
+                          Revert Changes
+                        </button>
+                      )}
                     </div>
                   </>
                 )}

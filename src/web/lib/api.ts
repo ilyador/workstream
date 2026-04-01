@@ -191,6 +191,17 @@ export async function terminateJob(jobId: string) {
   return apiFetch(`/api/jobs/${jobId}/terminate`, { method: 'POST' });
 }
 
+export async function deleteJob(jobId: string) {
+  return apiFetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+}
+
+export async function revertJob(jobId: string, localPath: string) {
+  return apiFetch(`/api/jobs/${jobId}/revert`, {
+    method: 'POST',
+    body: JSON.stringify({ localPath }),
+  });
+}
+
 // --- Git ---
 export async function gitCommit(jobId: string, localPath: string) {
   return apiFetch('/api/git/commit', { method: 'POST', body: JSON.stringify({ jobId, localPath }) });

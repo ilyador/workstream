@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { runJob, cancelJob, loadTaskTypeConfig } from '../runner.js';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../auth-middleware.js';
+import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from '../checkpoint.js';
 
 // SSE connections per job
 const sseClients = new Map<string, Set<(event: string, data: any) => void>>();
@@ -86,6 +87,18 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
 
   // Update task status
   await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', taskId);
+
+  // Create checkpoint before running
+  try {
+    const checkpoint = createCheckpoint(localPath, job.id);
+    await supabase.from('jobs').update({
+      checkpoint_ref: checkpoint.commitSha,
+      checkpoint_status: 'active'
+    }).eq('id', job.id);
+    broadcast(job.id, 'log', { text: '[checkpoint] Saved working directory state\n' });
+  } catch (err: any) {
+    broadcast(job.id, 'log', { text: `[checkpoint] Warning: ${err.message}\n` });
+  }
 
   // Return job ID immediately -- execution happens async
   res.json({ jobId: job.id });
@@ -248,6 +261,9 @@ executionRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => {
     completed_at: new Date().toISOString(),
   }).eq('id', job.task_id);
 
+  try { deleteCheckpoint(req.body.localPath || '', jobId); } catch {}
+  await supabase.from('jobs').update({ checkpoint_status: 'cleaned' }).eq('id', jobId);
+
   res.json({ ok: true });
 });
 
@@ -268,6 +284,37 @@ executionRouter.post('/api/jobs/:id/reject', requireAuth, async (req, res) => {
     status: 'backlog',
     followup_notes: note || null,
   }).eq('id', job.task_id);
+
+  res.json({ ok: true });
+});
+
+// Revert job -> restore files to pre-job state
+executionRouter.post('/api/jobs/:id/revert', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+  const { localPath } = req.body;
+
+  const { data: job } = await supabase.from('jobs').select('*').eq('id', jobId).single();
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+
+  if (!['review', 'failed', 'done'].includes(job.status)) {
+    return res.status(400).json({ error: 'Job must be in review, failed, or done status to revert' });
+  }
+
+  if (!localPath) {
+    return res.status(400).json({ error: 'localPath is required' });
+  }
+
+  try {
+    revertToCheckpoint(localPath, jobId);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'Failed to revert checkpoint' });
+  }
+
+  await supabase.from('jobs').update({ checkpoint_status: 'reverted' }).eq('id', jobId);
+
+  await supabase.from('tasks').update({ status: 'backlog' }).eq('id', job.task_id);
+
+  broadcast(jobId, 'reverted', {});
 
   res.json({ ok: true });
 });

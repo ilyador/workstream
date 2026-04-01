@@ -23,9 +23,10 @@ interface BacklogProps {
   onAddTask?: () => void;
   onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
   onSwapTasks?: (idA: string, idB: string) => void;
+  onDeleteTask?: (taskId: string) => void;
 }
 
-export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks }: BacklogProps) {
+export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteTask }: BacklogProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   return (
@@ -110,6 +111,9 @@ export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks }: Backlog
                   </div>
                 )}
                 <CommentsSection taskId={task.id} />
+                <button className={s.deleteBtn} onClick={(e) => { e.stopPropagation(); if (confirm('Delete this task?')) onDeleteTask?.(task.id); }}>
+                  Delete task
+                </button>
               </div>
             )}
           </div>

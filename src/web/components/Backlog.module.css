@@ -236,6 +236,22 @@
 .commentSend:hover { opacity: 0.8; }
 .commentSend:disabled { opacity: 0.4; cursor: default; }
 
+.deleteBtn {
+  margin-top: 12px;
+  padding: 5px 12px;
+  background: none;
+  color: var(--red);
+  border: none;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  align-self: flex-end;
+}
+.deleteBtn:hover { opacity: 1; }
+
 .addRow {
   padding: 16px 0;
   font-size: 15px;

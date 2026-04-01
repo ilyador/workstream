@@ -6,7 +6,7 @@ import { useJobs } from './hooks/useJobs';
 import { useMilestones } from './hooks/useMilestones';
 import { useMembers } from './hooks/useMembers';
 import { useNotifications } from './hooks/useNotifications';
-import { signUp, signIn, runTaskApi, replyToJob, approveJob, rejectJob, terminateJob, gitCommit, gitPush, gitPr } from './lib/api';
+import { signUp, signIn, runTaskApi, replyToJob, approveJob, rejectJob, revertJob, terminateJob, deleteJob, gitCommit, gitPush, gitPr } from './lib/api';
 import { computeFocus } from './lib/focus';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
@@ -283,6 +283,9 @@ export default function App() {
                 await tasks.updateTask(idA, { position: taskB.position });
                 await tasks.updateTask(idB, { position: taskA.position });
               }}
+              onDeleteTask={async (taskId) => {
+                await tasks.deleteTask(taskId);
+              }}
             />
           </div>
         </div>
@@ -333,6 +336,25 @@ export default function App() {
                 tasks.reload();
               } catch (err: any) {
                 alert(err.message || 'Failed to reject');
+              }
+            }}
+            onRevert={async (jobId) => {
+              if (confirm('Revert all file changes? This restores files to their state before the task ran.')) {
+                try {
+                  await revertJob(jobId, projects.current?.local_path || '');
+                  jobs.reload();
+                  tasks.reload();
+                } catch (err: any) {
+                  alert(err.message || 'Failed to revert');
+                }
+              }
+            }}
+            onDeleteJob={async (jobId) => {
+              try {
+                await deleteJob(jobId);
+                jobs.reload();
+              } catch (err: any) {
+                alert(err.message || 'Failed to dismiss job');
               }
             }}
           />
