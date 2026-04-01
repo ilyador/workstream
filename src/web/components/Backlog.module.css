@@ -60,6 +60,46 @@
   font-size: 13px;
   color: var(--text-3);
 }
+.detailBlockers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.detailBlockersLabel {
+  color: var(--text-3);
+  font-weight: 500;
+}
+.detailBlockerTag {
+  padding: 2px 8px;
+  background: var(--red-bg);
+  color: var(--red);
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.detailImages {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.detailImageLink {
+  display: block;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--divider);
+  transition: border-color 0.15s;
+}
+.detailImageLink:hover { border-color: var(--blue); }
+.detailImageThumb {
+  display: block;
+  width: 80px;
+  height: 56px;
+  object-fit: cover;
+}
 .addRow {
   padding: 16px 0;
   font-size: 15px;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { writeFileSync, readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
+import { writeFileSync, readFileSync, existsSync, readdirSync } from 'fs';
+import { resolve, join, basename } from 'path';
+import { homedir } from 'os';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../auth-middleware.js';
 
@@ -99,6 +100,26 @@ dataRouter.patch('/api/projects/:id/local-path', requireAuth, async (req, res) =
   res.json({ ok: true });
 });
 
+// --- Members ---
+
+dataRouter.get('/api/members', requireAuth, async (req, res) => {
+  const projectId = req.query.project_id as string;
+  if (!projectId) return res.status(400).json({ error: 'project_id required' });
+
+  const { data } = await supabase
+    .from('project_members')
+    .select('user_id, role, profiles(id, name, initials)')
+    .eq('project_id', projectId);
+
+  const members = (data || []).map((d: any) => ({
+    id: d.user_id,
+    name: d.profiles?.name || 'Unknown',
+    initials: d.profiles?.initials || '??',
+    role: d.role,
+  }));
+  res.json(members);
+});
+
 // --- Milestones ---
 
 dataRouter.get('/api/milestones', requireAuth, async (req, res) => {
@@ -151,7 +172,7 @@ dataRouter.get('/api/tasks', requireAuth, async (req, res) => {
 
 dataRouter.post('/api/tasks', requireAuth, async (req, res) => {
   const userId = (req as any).userId;
-  const { project_id, title, description, type, mode, effort, milestone_id } = req.body;
+  const { project_id, title, description, type, mode, effort, milestone_id, multiagent, assignee, blocked_by, images } = req.body;
 
   // Get max position
   const { data: maxTask } = await supabase
@@ -171,6 +192,10 @@ dataRouter.post('/api/tasks', requireAuth, async (req, res) => {
       type: type || 'feature',
       mode: mode || 'ai',
       effort: effort || 'high',
+      multiagent: multiagent || 'auto',
+      assignee: assignee || null,
+      blocked_by: blocked_by || [],
+      images: images || [],
       milestone_id: milestone_id || null,
       position: (maxTask?.position || 0) + 1,
       created_by: userId,
@@ -266,6 +291,79 @@ dataRouter.post('/api/notifications/read-all', requireAuth, async (req, res) => 
   const userId = (req as any).userId;
   await supabase.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false);
   res.json({ ok: true });
+});
+
+// --- Skills discovery ---
+
+interface SkillInfo {
+  name: string;
+  description: string;
+  source: string; // 'global' | 'project' | plugin name
+}
+
+function parseSkillFrontmatter(filePath: string): { description: string } | null {
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+    if (!match) return { description: '' };
+    const frontmatter = match[1];
+    const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
+    return { description: descMatch?.[1]?.trim() || '' };
+  } catch {
+    return null;
+  }
+}
+
+function discoverSkills(localPath?: string): SkillInfo[] {
+  const skills: SkillInfo[] = [];
+  const seen = new Set<string>();
+
+  function addFromDir(dir: string, source: string) {
+    if (!existsSync(dir)) return;
+    try {
+      const files = readdirSync(dir).filter(f => f.endsWith('.md'));
+      for (const file of files) {
+        const name = basename(file, '.md');
+        if (seen.has(name)) continue;
+        const meta = parseSkillFrontmatter(join(dir, file));
+        if (!meta) continue;
+        seen.add(name);
+        skills.push({ name, description: meta.description, source });
+      }
+    } catch { /* skip unreadable dirs */ }
+  }
+
+  // Project-level commands (highest priority)
+  if (localPath) {
+    addFromDir(join(localPath, '.claude', 'commands'), 'project');
+  }
+
+  // Global user commands
+  const home = homedir();
+  addFromDir(join(home, '.claude', 'commands'), 'global');
+
+  // Installed plugins
+  const pluginsDir = join(home, '.claude', 'plugins', 'marketplaces');
+  if (existsSync(pluginsDir)) {
+    try {
+      for (const marketplace of readdirSync(pluginsDir)) {
+        const mpPlugins = join(pluginsDir, marketplace, 'plugins');
+        if (!existsSync(mpPlugins)) continue;
+        for (const plugin of readdirSync(mpPlugins)) {
+          const cmdDir = join(mpPlugins, plugin, 'commands');
+          addFromDir(cmdDir, plugin);
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  return skills;
+}
+
+dataRouter.get('/api/skills', requireAuth, (req, res) => {
+  const localPath = req.query.local_path as string | undefined;
+  const skills = discoverSkills(localPath);
+  res.json(skills);
 });
 
 // --- SSE: Realtime changes ---

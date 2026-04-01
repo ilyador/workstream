@@ -11,6 +11,7 @@ interface Task {
   effort: string;
   multiagent: string;
   status: string;
+  blocked_by: string[];
   assignee: string | null;
   milestone_id: string | null;
   position: number;

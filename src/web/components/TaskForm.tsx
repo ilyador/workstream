@@ -6,26 +6,49 @@ interface Milestone {
   name: string;
 }
 
+interface Member {
+  id: string;
+  name: string;
+  initials: string;
+}
+
+interface TaskOption {
+  id: string;
+  title: string;
+}
+
 interface Props {
   milestones: Milestone[];
+  members: Member[];
+  existingTasks: TaskOption[];
   onSubmit: (data: {
     title: string;
     description: string;
     type: string;
     mode: string;
     effort: string;
+    multiagent: string;
+    assignee: string | null;
+    blocked_by: string[];
+    images: string[];
     milestone_id: string | null;
   }) => Promise<void>;
   onClose: () => void;
 }
 
-export function TaskForm({ milestones, onSubmit, onClose }: Props) {
+export function TaskForm({ milestones, members, existingTasks, onSubmit, onClose }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState('feature');
   const [mode, setMode] = useState('ai');
   const [effort, setEffort] = useState('high');
   const [milestoneId, setMilestoneId] = useState('');
+  const [assignee, setAssignee] = useState('');
+  const [multiagent, setMultiagent] = useState('auto');
+  const [blockedBy, setBlockedBy] = useState<string[]>([]);
+  const [imageUrls, setImageUrls] = useState('');
+  const [showMore, setShowMore] = useState(false);
+  const [blockerSearch, setBlockerSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,12 +58,20 @@ export function TaskForm({ milestones, onSubmit, onClose }: Props) {
     setError('');
     setLoading(true);
     try {
+      const images = imageUrls
+        .split(',')
+        .map(u => u.trim())
+        .filter(u => u.length > 0);
       await onSubmit({
         title: title.trim(),
         description: description.trim(),
         type,
         mode,
         effort,
+        multiagent,
+        assignee: assignee || null,
+        blocked_by: blockedBy,
+        images,
         milestone_id: milestoneId || null,
       });
       onClose();
@@ -50,6 +81,18 @@ export function TaskForm({ milestones, onSubmit, onClose }: Props) {
       setLoading(false);
     }
   }
+
+  function toggleBlocker(taskId: string) {
+    setBlockedBy(prev =>
+      prev.includes(taskId)
+        ? prev.filter(id => id !== taskId)
+        : [...prev, taskId]
+    );
+  }
+
+  const filteredTasks = existingTasks.filter(t =>
+    t.title.toLowerCase().includes(blockerSearch.toLowerCase())
+  );
 
   return (
     <div className={s.overlay} onClick={onClose}>
@@ -100,15 +143,96 @@ export function TaskForm({ milestones, onSubmit, onClose }: Props) {
               </select>
             </div>
           </div>
-          {milestones.length > 0 && (
+          <div className={s.row}>
+            {milestones.length > 0 && (
+              <div className={s.field}>
+                <label className={s.label}>Milestone</label>
+                <select className={s.select} value={milestoneId} onChange={e => setMilestoneId(e.target.value)}>
+                  <option value="">None</option>
+                  {milestones.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+            )}
             <div className={s.field}>
-              <label className={s.label}>Milestone</label>
-              <select className={s.select} value={milestoneId} onChange={e => setMilestoneId(e.target.value)}>
-                <option value="">None</option>
-                {milestones.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              <label className={s.label}>Assignee</label>
+              <select className={s.select} value={assignee} onChange={e => setAssignee(e.target.value)}>
+                <option value="">AI (default)</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
+          </div>
+
+          <button
+            type="button"
+            className={s.moreToggle}
+            onClick={() => setShowMore(!showMore)}
+          >
+            {showMore ? '- Less options' : '+ More options'}
+          </button>
+
+          {showMore && (
+            <div className={s.moreSection}>
+              <div className={s.field}>
+                <label className={s.label}>Multi-agent</label>
+                <select className={s.select} value={multiagent} onChange={e => setMultiagent(e.target.value)}>
+                  <option value="auto">auto</option>
+                  <option value="yes">yes</option>
+                </select>
+              </div>
+
+              <div className={s.field}>
+                <label className={s.label}>Blocked by</label>
+                {existingTasks.length > 0 ? (
+                  <div className={s.blockerBox}>
+                    {existingTasks.length > 5 && (
+                      <input
+                        className={s.blockerSearch}
+                        placeholder="Search tasks..."
+                        value={blockerSearch}
+                        onChange={e => setBlockerSearch(e.target.value)}
+                      />
+                    )}
+                    <div className={s.blockerList}>
+                      {filteredTasks.map(t => (
+                        <label key={t.id} className={s.blockerItem}>
+                          <input
+                            type="checkbox"
+                            checked={blockedBy.includes(t.id)}
+                            onChange={() => toggleBlocker(t.id)}
+                          />
+                          <span className={s.blockerTitle}>{t.title}</span>
+                        </label>
+                      ))}
+                      {filteredTasks.length === 0 && (
+                        <span className={s.blockerEmpty}>No matching tasks</span>
+                      )}
+                    </div>
+                    {blockedBy.length > 0 && (
+                      <div className={s.blockerCount}>
+                        {blockedBy.length} task{blockedBy.length !== 1 ? 's' : ''} selected
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <span className={s.noItems}>No other tasks yet</span>
+                )}
+              </div>
+
+              <div className={s.field}>
+                <label className={s.label}>Image URLs</label>
+                <input
+                  className={s.input}
+                  placeholder="Comma-separated URLs"
+                  value={imageUrls}
+                  onChange={e => setImageUrls(e.target.value)}
+                />
+                <span className={s.hint}>Screenshots, designs, error captures. Full upload coming soon.</span>
+              </div>
+            </div>
           )}
+
+          {error && <div className={s.error}>{error}</div>}
+
           <div className={s.actions}>
             <button className={s.submit} type="submit" disabled={loading || !title.trim()}>
               {loading ? 'Creating...' : 'Create'}

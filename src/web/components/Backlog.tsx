@@ -8,9 +8,12 @@ interface Task {
   type: string;
   mode: string;
   effort: string;
+  multiagent?: string;
   blocked: boolean;
   blockedBy?: string;
-  assignee: { type: string; initials?: string };
+  blockedByTitles?: string[];
+  assignee: { type: string; name?: string; initials?: string };
+  images?: string[];
 }
 
 export function Backlog({ tasks, onAddTask }: { tasks: Task[]; onAddTask?: () => void }) {
@@ -42,9 +45,26 @@ export function Backlog({ tasks, onAddTask }: { tasks: Task[]; onAddTask?: () =>
                 <div className={s.detailMeta}>
                   <span>effort: {task.effort}</span>
                   <span>mode: {task.mode}</span>
-                  {task.blockedBy && <span>blocked by: {task.blockedBy}</span>}
-                  <span>assignee: {task.assignee.type === 'ai' ? 'AI' : task.assignee.initials}</span>
+                  {task.multiagent && <span>multiagent: {task.multiagent}</span>}
+                  <span>assignee: {task.assignee.type === 'ai' ? 'AI' : (task.assignee.name || task.assignee.initials)}</span>
                 </div>
+                {task.blockedByTitles && task.blockedByTitles.length > 0 && (
+                  <div className={s.detailBlockers}>
+                    <span className={s.detailBlockersLabel}>blocked by:</span>
+                    {task.blockedByTitles.map((title, i) => (
+                      <span key={i} className={s.detailBlockerTag}>{title}</span>
+                    ))}
+                  </div>
+                )}
+                {task.images && task.images.length > 0 && (
+                  <div className={s.detailImages}>
+                    {task.images.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className={s.detailImageLink}>
+                        <img src={url} alt={`Attachment ${i + 1}`} className={s.detailImageThumb} />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

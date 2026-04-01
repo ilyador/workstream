@@ -123,6 +123,11 @@ export async function checkHealth(): Promise<{ ok: boolean }> {
   return apiFetch('/api/health');
 }
 
+// --- Members ---
+export async function getMembers(projectId: string) {
+  return apiFetch(`/api/members?project_id=${projectId}`) as Promise<{ id: string; name: string; initials: string; role: string }[]>;
+}
+
 // --- Milestones ---
 export async function getMilestones(projectId: string) {
   return apiFetch(`/api/milestones?project_id=${projectId}`);
@@ -144,6 +149,10 @@ export async function createTask(data: {
   type?: string;
   mode?: string;
   effort?: string;
+  multiagent?: string;
+  assignee?: string | null;
+  blocked_by?: string[];
+  images?: string[];
   milestone_id?: string | null;
 }) {
   return apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(data) });
@@ -211,6 +220,18 @@ export async function markNotificationRead(id: string) {
 
 export async function markAllNotificationsRead() {
   return apiFetch('/api/notifications/read-all', { method: 'POST' });
+}
+
+// --- Skills ---
+export interface SkillInfo {
+  name: string;
+  description: string;
+  source: string;
+}
+
+export async function getSkills(localPath?: string): Promise<SkillInfo[]> {
+  const params = localPath ? `?local_path=${encodeURIComponent(localPath)}` : '';
+  return apiFetch(`/api/skills${params}`) as Promise<SkillInfo[]>;
 }
 
 // --- SSE: Job log stream (token passed as query param since EventSource can't set headers) ---

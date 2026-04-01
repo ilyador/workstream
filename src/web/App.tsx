@@ -1,19 +1,58 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useProjects } from './hooks/useProjects';
 import { useTasks } from './hooks/useTasks';
+import { useJobs } from './hooks/useJobs';
 import { useMilestones } from './hooks/useMilestones';
-import { signUp, signIn, runTaskApi } from './lib/api';
+import { useMembers } from './hooks/useMembers';
+import { signUp, signIn, runTaskApi, replyToJob, approveJob, rejectJob } from './lib/api';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
 import { NewProject } from './components/NewProject';
 import { Header } from './components/Header';
 import { FocusView } from './components/FocusView';
 import { JobsPanel } from './components/JobsPanel';
+import type { JobView } from './components/JobsPanel';
 import { Backlog } from './components/Backlog';
 import { TaskForm } from './components/TaskForm';
 import { AddProjectModal } from './components/AddProjectModal';
 import './styles/global.css';
+
+/** Standard phase pipeline used to build the phases display */
+const PHASE_NAMES = ['plan', 'code', 'test', 'review'];
+
+/** Compute elapsed time as a human-readable string */
+function elapsed(startedAt: string): string {
+  const ms = Date.now() - new Date(startedAt).getTime();
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ${mins % 60}m`;
+}
+
+/** Compute "ago" string from a completed_at timestamp */
+function timeAgo(completedAt: string): string {
+  const ms = Date.now() - new Date(completedAt).getTime();
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+/** Build phases array for the UI from API data */
+function buildPhases(phasesCompleted: any[], currentPhase: string | null): { name: string; status: string }[] {
+  const completedSet = new Set((phasesCompleted || []).map((p: any) => typeof p === 'string' ? p : p.name || p.phase));
+  return PHASE_NAMES.map(name => ({
+    name,
+    status: completedSet.has(name) ? 'completed' : name === currentPhase ? 'current' : 'pending',
+  }));
+}
 
 export default function App() {
   const [envReady, setEnvReady] = useState(false);
@@ -22,7 +61,57 @@ export default function App() {
   const auth = useAuth();
   const projects = useProjects(auth.profile?.id);
   const tasks = useTasks(projects.current?.id || null);
+  const jobs = useJobs(projects.current?.id || null);
   const milestones = useMilestones(projects.current?.id || null);
+  const members = useMembers(projects.current?.id || null);
+
+  // Build a task-title lookup from all tasks
+  const taskTitleMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const t of tasks.tasks) {
+      map[t.id] = t.title;
+    }
+    return map;
+  }, [tasks.tasks]);
+
+  // Build a member lookup from project members
+  const memberMap = useMemo(() => {
+    const map: Record<string, { name: string; initials: string }> = {};
+    for (const m of members.members) {
+      map[m.id] = { name: m.name, initials: m.initials };
+    }
+    return map;
+  }, [members.members]);
+
+  // Map API jobs to the shape JobsPanel expects
+  const jobViews: JobView[] = useMemo(() => {
+    // Order: running first, then paused, review, done, failed
+    const order: Record<string, number> = { running: 0, paused: 1, review: 2, done: 3, failed: 4 };
+    const sorted = [...jobs.jobs].sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5));
+
+    return sorted.map(j => ({
+      id: j.id,
+      taskId: j.task_id,
+      title: taskTitleMap[j.task_id] || 'Task',
+      type: 'task',
+      status: j.status as JobView['status'],
+      currentPhase: j.current_phase || undefined,
+      attempt: j.attempt,
+      maxAttempts: j.max_attempts,
+      elapsed: j.status === 'running' ? elapsed(j.started_at) : undefined,
+      phases: buildPhases(j.phases_completed || [], j.current_phase),
+      question: j.question || undefined,
+      review: j.review_result ? {
+        filesChanged: j.review_result.files_changed ?? j.review_result.filesChanged ?? 0,
+        testsPassed: j.review_result.tests_passed ?? j.review_result.testsPassed ?? true,
+        linesAdded: j.review_result.lines_added ?? j.review_result.linesAdded ?? 0,
+        linesRemoved: j.review_result.lines_removed ?? j.review_result.linesRemoved ?? 0,
+        summary: j.review_result.summary ?? '',
+        changedFiles: j.review_result.changed_files ?? j.review_result.changedFiles ?? undefined,
+      } : undefined,
+      completedAgo: j.completed_at ? timeAgo(j.completed_at) : undefined,
+    }));
+  }, [jobs.jobs, taskTitleMap]);
 
   // Step 1: Environment check
   if (!envReady) {
@@ -50,7 +139,7 @@ export default function App() {
     return <Loading text="Loading projects..." />;
   }
 
-  // Step 5: No projects yet — full onboarding with Supabase setup
+  // Step 5: No projects yet
   if (projects.projects.length === 0) {
     return <NewProject onCreate={async (name, supabaseConfig, localPath) => { await projects.createProject(name, supabaseConfig, localPath); }} />;
   }
@@ -114,6 +203,7 @@ export default function App() {
                   }
                   try {
                     await runTaskApi(taskId, projects.current.id, projects.current.local_path);
+                    jobs.reload();
                     tasks.reload();
                   } catch (err: any) {
                     alert(err.message || 'Failed to start task');
@@ -127,16 +217,27 @@ export default function App() {
               <EmptyState onAdd={() => setShowTaskForm(true)} />
             )}
             <Backlog
-              tasks={tasks.backlog.map(t => ({
-                id: t.id,
-                title: t.title,
-                description: t.description || '',
-                type: t.type,
-                mode: t.mode,
-                effort: t.effort,
-                blocked: false,
-                assignee: t.assignee ? { type: 'user', initials: '?' } : { type: 'ai' },
-              }))}
+              tasks={tasks.backlog.map(t => {
+                const blockedByTitles = (t.blocked_by || [])
+                  .map(id => taskTitleMap[id])
+                  .filter((title): title is string => !!title);
+                const member = t.assignee ? memberMap[t.assignee] : null;
+                return {
+                  id: t.id,
+                  title: t.title,
+                  description: t.description || '',
+                  type: t.type,
+                  mode: t.mode,
+                  effort: t.effort,
+                  multiagent: t.multiagent,
+                  blocked: blockedByTitles.length > 0,
+                  blockedByTitles,
+                  assignee: member
+                    ? { type: 'user', name: member.name, initials: member.initials }
+                    : { type: 'ai' },
+                  images: t.images || [],
+                };
+              })}
               onAddTask={() => setShowTaskForm(true)}
             />
           </div>
@@ -145,13 +246,47 @@ export default function App() {
           padding: '56px 40px 100px',
           borderLeft: '1px solid var(--divider)',
         }}>
-          <JobsPanel jobs={[]} />
+          <JobsPanel
+            jobs={jobViews}
+            onReply={async (jobId, answer) => {
+              try {
+                await replyToJob(jobId, answer, projects.current?.local_path || '');
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                alert(err.message || 'Failed to send reply');
+              }
+            }}
+            onApprove={async (jobId) => {
+              try {
+                await approveJob(jobId);
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                alert(err.message || 'Failed to approve');
+              }
+            }}
+            onReject={async (jobId) => {
+              try {
+                await rejectJob(jobId, '');
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                alert(err.message || 'Failed to reject');
+              }
+            }}
+          />
         </div>
       </main>
 
       {showTaskForm && projects.current && (
         <TaskForm
           milestones={milestones.active.map(m => ({ id: m.id, name: m.name }))}
+          members={members.members.map(m => ({ id: m.id, name: m.name, initials: m.initials }))}
+          existingTasks={tasks.tasks
+            .filter(t => t.status !== 'done' && t.status !== 'canceled')
+            .map(t => ({ id: t.id, title: t.title }))
+          }
           onSubmit={async (data) => {
             await tasks.createTask({
               project_id: projects.current!.id,
@@ -160,6 +295,10 @@ export default function App() {
               type: data.type,
               mode: data.mode as any,
               effort: data.effort as any,
+              multiagent: data.multiagent,
+              assignee: data.assignee,
+              blocked_by: data.blocked_by,
+              images: data.images,
               milestone_id: data.milestone_id,
             });
           }}
