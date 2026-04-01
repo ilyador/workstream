@@ -25,7 +25,9 @@ interface Task {
   blocked: boolean;
   blockedBy?: string;
   blockedByTitles?: string[];
+  blockedByIds?: string[];
   assignee: { type: string; name?: string; initials?: string };
+  assigneeId?: string | null;
   images?: string[];
   status?: string;
   milestone_id?: string | null;
@@ -42,12 +44,13 @@ interface BacklogProps {
   onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
   onSwapTasks?: (idA: string, idB: string) => void;
   onDeleteTask?: (taskId: string) => void;
+  onEditTask?: (task: Task) => void;
   milestoneFilter?: string | null;
   milestones?: Milestone[];
   onMilestoneFilter?: (id: string | null) => void;
 }
 
-export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteTask, milestoneFilter, milestones, onMilestoneFilter }: BacklogProps) {
+export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteTask, onEditTask, milestoneFilter, milestones, onMilestoneFilter }: BacklogProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const filteredTasks = milestoneFilter
@@ -107,7 +110,15 @@ export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteT
             </div>
             {expanded === task.id && (
               <div className={s.detail} onClick={e => e.stopPropagation()}>
-                {task.description && <p className={s.desc}>{task.description}</p>}
+                <div className={s.detailHeader}>
+                  {task.description && <p className={s.desc} style={{ marginBottom: 0 }}>{task.description}</p>}
+                  {onEditTask && (
+                    <button
+                      className={`btn btnGhost ${s.editBtn}`}
+                      onClick={() => onEditTask(task)}
+                    >Edit</button>
+                  )}
+                </div>
                 <div className={s.detailMeta}>
                   <span>effort: {task.effort}</span>
                   <span>mode: {task.mode}</span>

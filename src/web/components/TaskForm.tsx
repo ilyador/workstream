@@ -24,6 +24,33 @@ interface CustomType {
   pipeline: string;
 }
 
+export interface TaskFormData {
+  title: string;
+  description: string;
+  type: string;
+  mode: string;
+  effort: string;
+  multiagent: string;
+  assignee: string | null;
+  blocked_by: string[];
+  images: string[];
+  milestone_id: string | null;
+}
+
+export interface EditTaskData {
+  id: string;
+  title: string;
+  description?: string;
+  type: string;
+  mode: string;
+  effort: string;
+  multiagent?: string;
+  assignee?: string | null;
+  blocked_by?: string[];
+  images?: string[];
+  milestone_id?: string | null;
+}
+
 interface Props {
   milestones: Milestone[];
   members: Member[];
@@ -31,18 +58,8 @@ interface Props {
   customTypes?: CustomType[];
   onSaveCustomType?: (name: string, pipeline: string) => Promise<void>;
   localPath?: string;
-  onSubmit: (data: {
-    title: string;
-    description: string;
-    type: string;
-    mode: string;
-    effort: string;
-    multiagent: string;
-    assignee: string | null;
-    blocked_by: string[];
-    images: string[];
-    milestone_id: string | null;
-  }) => Promise<void>;
+  editTask?: EditTaskData;
+  onSubmit: (data: TaskFormData) => Promise<void>;
   onClose: () => void;
 }
 
@@ -55,21 +72,26 @@ const PIPELINE_OPTIONS = [
   { value: 'test', label: 'test (plan → write-tests → verify → review)' },
 ];
 
-export function TaskForm({ milestones, members, existingTasks, customTypes = [], onSaveCustomType, localPath, onSubmit, onClose }: Props) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [type, setType] = useState('feature');
-  const [customType, setCustomType] = useState('');
+export function TaskForm({ milestones, members, existingTasks, customTypes = [], onSaveCustomType, localPath, editTask, onSubmit, onClose }: Props) {
+  const isEdit = !!editTask;
+
+  // Determine if the editTask type is a custom (non-built-in) type
+  const editTypeIsCustom = isEdit && !BUILT_IN_TYPES.includes(editTask!.type);
+
+  const [title, setTitle] = useState(editTask?.title || '');
+  const [description, setDescription] = useState(editTask?.description || '');
+  const [type, setType] = useState(editTypeIsCustom ? 'feature' : (editTask?.type || 'feature'));
+  const [customType, setCustomType] = useState(editTypeIsCustom ? editTask!.type : '');
   const [customPipeline, setCustomPipeline] = useState('feature');
-  const [isCustomType, setIsCustomType] = useState(false);
-  const [mode, setMode] = useState('ai');
-  const [effort, setEffort] = useState('high');
-  const [milestoneId, setMilestoneId] = useState('');
-  const [assignee, setAssignee] = useState('');
-  const [multiagent, setMultiagent] = useState('auto');
-  const [blockedBy, setBlockedBy] = useState<string[]>([]);
-  const [imageUrls, setImageUrls] = useState('');
-  const [showMore, setShowMore] = useState(false);
+  const [isCustomType, setIsCustomType] = useState(editTypeIsCustom);
+  const [mode, setMode] = useState(editTask?.mode || 'ai');
+  const [effort, setEffort] = useState(editTask?.effort || 'high');
+  const [milestoneId, setMilestoneId] = useState(editTask?.milestone_id || '');
+  const [assignee, setAssignee] = useState(editTask?.assignee || '');
+  const [multiagent, setMultiagent] = useState(editTask?.multiagent || 'auto');
+  const [blockedBy, setBlockedBy] = useState<string[]>(editTask?.blocked_by || []);
+  const [imageUrls, setImageUrls] = useState(editTask?.images?.join(', ') || '');
+  const [showMore, setShowMore] = useState(isEdit);
   const [blockerSearch, setBlockerSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -180,7 +202,7 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
       });
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to create task');
+      setError(err.message || (isEdit ? 'Failed to save task' : 'Failed to create task'));
     } finally {
       setLoading(false);
     }
@@ -201,7 +223,7 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
   return (
     <div className={s.overlay} onClick={onClose}>
       <div className={s.modal} onClick={e => e.stopPropagation()}>
-        <h2 className={s.heading}>New task</h2>
+        <h2 className={s.heading}>{isEdit ? 'Edit task' : 'New task'}</h2>
         <form onSubmit={handleSubmit} className={s.form}>
           <input
             className={s.input}
@@ -392,7 +414,7 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
 
           <div className={s.actions}>
             <button className="btn btnPrimary" type="submit" disabled={loading || !title.trim() || (isCustomType && !customType.trim())}>
-              {loading ? 'Creating...' : 'Create'}
+              {loading ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save' : 'Create')}
             </button>
             <button className="btn btnSecondary" type="button" onClick={onClose}>Cancel</button>
           </div>
