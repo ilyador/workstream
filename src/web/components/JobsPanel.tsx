@@ -37,11 +37,24 @@ const labels: Record<string, string> = {
 
 export type GitAction = 'commit' | 'commit_push' | 'branch_pr';
 
-export function JobsPanel({ jobs, onReply, onApprove, onReject }: {
+/** Human-readable descriptions for phase names */
+const PHASE_DESCRIPTIONS: Record<string, string> = {
+  plan: 'Planning implementation approach...',
+  analyze: 'Analyzing the codebase...',
+  implement: 'Implementing changes...',
+  fix: 'Fixing the issue...',
+  verify: 'Running tests to verify...',
+  review: 'Reviewing code quality...',
+  refactor: 'Refactoring code...',
+  'write-tests': 'Writing tests...',
+};
+
+export function JobsPanel({ jobs, onReply, onApprove, onReject, onTerminate }: {
   jobs: JobView[];
   onReply?: (jobId: string, answer: string) => void;
   onApprove?: (jobId: string, action?: GitAction) => void;
   onReject?: (jobId: string) => void;
+  onTerminate?: (jobId: string) => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(jobs.find(j => j.status !== 'done')?.id || null);
 
@@ -96,6 +109,14 @@ export function JobsPanel({ jobs, onReply, onApprove, onReject }: {
                 </span>
               </div>
               <span className={`${s.badge} ${s[`b_${job.status}`]}`}>{labels[job.status] || job.status}</span>
+              {job.status === 'running' && onTerminate && (
+                <button
+                  className={s.terminate}
+                  onClick={(e) => { e.stopPropagation(); onTerminate(job.id); }}
+                >
+                  Terminate
+                </button>
+              )}
             </div>
 
             {isOpen && isFailed && (
@@ -186,6 +207,8 @@ function LiveLogs({ jobId }: { jobId: string }) {
       onPhaseStart: (phase, attempt) => {
         const label = attempt > 1 ? `Phase: ${phase} (attempt ${attempt})` : `Phase: ${phase}`;
         addLine(label, 'phase');
+        const desc = PHASE_DESCRIPTIONS[phase];
+        if (desc) addLine(desc, 'phase');
       },
       onPhaseComplete: (phase) => {
         addLine(`Phase: ${phase} complete`, 'phase');
@@ -243,6 +266,9 @@ function LiveLogs({ jobId }: { jobId: string }) {
       <div ref={scrollRef} className={s.logBox}>
         {lines.length === 0 && connState === 'connecting' && (
           <span style={{ color: 'var(--text-4)' }}>Waiting for output...</span>
+        )}
+        {lines.length === 0 && connState === 'open' && (
+          <span className={s.noOutput}>Claude is working... output will appear when the phase completes.</span>
         )}
         {lines.map((line, i) => (
           <div key={i} className={line.type === 'phase' ? s.logPhase : s.logLine}>

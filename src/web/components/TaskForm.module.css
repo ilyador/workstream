@@ -191,6 +191,59 @@
   border-color: var(--text-3);
 }
 
+/* Skill autocomplete */
+.descriptionWrap {
+  position: relative;
+}
+.skillDropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 300;
+  background: white;
+  border: 1.5px solid var(--divider);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.skillItem {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.skillItem:first-child { border-radius: 6px 6px 0 0; }
+.skillItem:last-child { border-radius: 0 0 6px 6px; }
+.skillItemActive {
+  background: var(--blue-bg);
+}
+.skillName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.skillDesc {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.skillSource {
+  font-size: 11px;
+  color: var(--text-4);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .error {
   font-size: 13px;
   color: var(--red);

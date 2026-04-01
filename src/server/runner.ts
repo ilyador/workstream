@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { supabase } from './supabase.js';
+import { discoverSkills } from './routes/data.js';
 
 interface PhaseConfig {
   skill: string | null;
@@ -41,7 +42,7 @@ interface JobContext {
 // Default task type configs (used when .codesync/config.json doesn't exist)
 const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
   'bug-fix': {
-    phases: ['analyze', 'fix', 'verify'],
+    phases: ['plan', 'analyze', 'fix', 'verify'],
     on_verify_fail: 'fix',
     verify_retries: 2,
     final: 'review',
@@ -49,6 +50,7 @@ const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
     review_retries: 1,
     on_max_retries: 'pause',
     phase_config: {
+      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
       analyze: { skill: null, tools: ['Read', 'Grep', 'Bash'], prompt: '', model: 'opus' },
       fix: { skill: null, tools: ['Read', 'Edit', 'Bash'], prompt: '', model: 'opus' },
       verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
@@ -56,7 +58,7 @@ const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
     },
   },
   'feature': {
-    phases: ['implement', 'verify'],
+    phases: ['plan', 'implement', 'verify'],
     on_verify_fail: 'implement',
     verify_retries: 2,
     final: 'review',
@@ -64,13 +66,14 @@ const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
     review_retries: 1,
     on_max_retries: 'pause',
     phase_config: {
+      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
       implement: { skill: null, tools: ['Read', 'Edit', 'Write', 'Bash'], prompt: '', model: 'opus' },
       verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
       review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
     },
   },
   'refactor': {
-    phases: ['analyze', 'refactor', 'verify'],
+    phases: ['plan', 'analyze', 'refactor', 'verify'],
     on_verify_fail: 'refactor',
     verify_retries: 2,
     final: 'review',
@@ -78,6 +81,7 @@ const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
     review_retries: 1,
     on_max_retries: 'pause',
     phase_config: {
+      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
       analyze: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'opus' },
       refactor: { skill: null, tools: ['Read', 'Edit', 'Bash'], prompt: '', model: 'opus' },
       verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
@@ -85,7 +89,7 @@ const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
     },
   },
   'test': {
-    phases: ['write-tests', 'verify'],
+    phases: ['plan', 'write-tests', 'verify'],
     on_verify_fail: 'write-tests',
     verify_retries: 2,
     final: 'review',
@@ -93,6 +97,7 @@ const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
     review_retries: 1,
     on_max_retries: 'pause',
     phase_config: {
+      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
       'write-tests': { skill: null, tools: ['Read', 'Write', 'Bash'], prompt: '', model: 'opus' },
       verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
       review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
@@ -128,6 +133,24 @@ Type: ${task.type}
 Description: ${task.description || 'No description provided.'}
 `;
 
+  // Skill references: parse /skillname from description, verify they exist, inject invocations
+  if (task.description) {
+    const skillRefs = [...task.description.matchAll(/(?:^|[\s\n])\/([a-zA-Z0-9_][\w:-]*)/g)]
+      .map(m => m[1]);
+    if (skillRefs.length > 0) {
+      const available = discoverSkills(localPath);
+      const availableNames = new Set(available.map(s => s.name));
+      const verified = skillRefs.filter(name => availableNames.has(name));
+      if (verified.length > 0) {
+        prompt += '\n## Skills to Apply\nBefore starting your work, invoke the following skills using the Skill tool:\n';
+        for (const name of verified) {
+          prompt += `- /${name}\n`;
+        }
+        prompt += '\nApply the methodologies from these skills throughout this task.\n';
+      }
+    }
+  }
+
   // Feature 2: Images passed to AI prompt
   if (Array.isArray(task.images) && task.images.length > 0) {
     prompt += '\n## Attached Images\n';
@@ -158,6 +181,7 @@ Description: ${task.description || 'No description provided.'}
 
   // Phase-specific instructions
   const phaseInstructions: Record<string, string> = {
+    plan: 'Read the codebase to understand the relevant files and architecture. Create a step-by-step implementation plan. List which files need to be created or modified and what changes are needed. Do NOT make any changes yet — only plan.',
     analyze: 'Analyze the codebase to understand the problem. Identify the root cause and location. Output a structured summary of your findings.',
     fix: 'Fix the issue based on the analysis. Make the minimal changes needed. Run tests if available.',
     implement: 'Implement the feature described above. Follow existing code patterns. Run tests if available.',
@@ -320,8 +344,8 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
       const prompt = buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
 
-      // Spawn claude -p
-      const args = ['-p', prompt, '--max-turns', '20'];
+      // Spawn claude -p (prompt piped via stdin to avoid arg length limits)
+      const args = ['-p', '--max-turns', '20'];
       if (phaseConfig.tools.length > 0) {
         args.push('--allowedTools', phaseConfig.tools.join(','));
       }
@@ -334,7 +358,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
       onLog(`\n--- Phase: ${phase} (attempt ${attempt}/${maxAttempts}) ---\n`);
 
       try {
-        const output = await spawnClaude(jobId, args, localPath, onLog);
+        const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
 
         const phaseOutput = {
           phase,
@@ -429,13 +453,21 @@ export async function runJob(ctx: JobContext): Promise<void> {
   onReview(reviewResult);
 }
 
-function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: string) => void): Promise<string> {
+function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: string) => void, prompt?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn('claude', args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, TERM: 'dumb' },
     });
+
+    // Pipe prompt via stdin to avoid arg length limits
+    if (prompt) {
+      proc.stdin.write(prompt);
+      proc.stdin.end();
+    } else {
+      proc.stdin.end();
+    }
 
     activeProcesses.set(jobId, proc);
     let stdout = '';

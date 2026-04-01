@@ -202,6 +202,33 @@ executionRouter.post('/api/jobs/:id/reply', requireAuth, async (req, res) => {
   });
 });
 
+// Terminate a running job
+executionRouter.post('/api/jobs/:id/terminate', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+
+  const { data: job } = await supabase.from('jobs').select('*').eq('id', jobId).single();
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+
+  // Kill the child process
+  cancelJob(jobId);
+
+  // Mark job as failed
+  await supabase.from('jobs').update({
+    status: 'failed',
+    completed_at: new Date().toISOString(),
+    question: 'Job terminated by user',
+  }).eq('id', jobId);
+
+  // Move task back to backlog
+  await supabase.from('tasks').update({
+    status: 'backlog',
+  }).eq('id', job.task_id);
+
+  broadcast(jobId, 'failed', { error: 'Job terminated by user' });
+
+  res.json({ ok: true });
+});
+
 // Approve job
 executionRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => {
   const jobId = req.params.id;

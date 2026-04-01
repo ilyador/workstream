@@ -187,6 +187,10 @@ export async function rejectJob(jobId: string, note: string) {
   return apiFetch(`/api/jobs/${jobId}/reject`, { method: 'POST', body: JSON.stringify({ note }) });
 }
 
+export async function terminateJob(jobId: string) {
+  return apiFetch(`/api/jobs/${jobId}/terminate`, { method: 'POST' });
+}
+
 // --- Git ---
 export async function gitCommit(jobId: string, localPath: string) {
   return apiFetch('/api/git/commit', { method: 'POST', body: JSON.stringify({ jobId, localPath }) });

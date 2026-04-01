@@ -6,7 +6,7 @@ import { useJobs } from './hooks/useJobs';
 import { useMilestones } from './hooks/useMilestones';
 import { useMembers } from './hooks/useMembers';
 import { useNotifications } from './hooks/useNotifications';
-import { signUp, signIn, runTaskApi, replyToJob, approveJob, rejectJob, gitCommit, gitPush, gitPr } from './lib/api';
+import { signUp, signIn, runTaskApi, replyToJob, approveJob, rejectJob, terminateJob, gitCommit, gitPush, gitPr } from './lib/api';
 import { computeFocus } from './lib/focus';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
@@ -19,9 +19,6 @@ import { Backlog } from './components/Backlog';
 import { TaskForm } from './components/TaskForm';
 import { AddProjectModal } from './components/AddProjectModal';
 import './styles/global.css';
-
-/** Standard phase pipeline used to build the phases display */
-const PHASE_NAMES = ['plan', 'code', 'test', 'review'];
 
 /** Compute elapsed time as a human-readable string */
 function elapsed(startedAt: string): string {
@@ -47,13 +44,15 @@ function timeAgo(completedAt: string): string {
   return `${days}d ago`;
 }
 
-/** Build phases array for the UI from API data */
+/** Build phases array for the UI from API data.
+ *  Uses actual phase names from the job instead of a hardcoded list. */
 function buildPhases(phasesCompleted: any[], currentPhase: string | null): { name: string; status: string }[] {
-  const completedSet = new Set((phasesCompleted || []).map((p: any) => typeof p === 'string' ? p : p.name || p.phase));
-  return PHASE_NAMES.map(name => ({
-    name,
-    status: completedSet.has(name) ? 'completed' : name === currentPhase ? 'current' : 'pending',
-  }));
+  const completed = (phasesCompleted || []).map((p: any) => typeof p === 'string' ? p : p.name || p.phase);
+  const phases: { name: string; status: string }[] = completed.map((name: string) => ({ name, status: 'completed' }));
+  if (currentPhase && !completed.includes(currentPhase)) {
+    phases.push({ name: currentPhase, status: 'current' });
+  }
+  return phases;
 }
 
 export default function App() {
@@ -293,6 +292,13 @@ export default function App() {
         }}>
           <JobsPanel
             jobs={jobViews}
+            onTerminate={async (jobId) => {
+              if (confirm('Terminate this running job?')) {
+                await terminateJob(jobId);
+                jobs.reload();
+                tasks.reload();
+              }
+            }}
             onReply={async (jobId, answer) => {
               try {
                 await replyToJob(jobId, answer, projects.current?.local_path || '');
@@ -335,6 +341,7 @@ export default function App() {
 
       {showTaskForm && projects.current && (
         <TaskForm
+          localPath={projects.current?.local_path}
           milestones={milestones.active.map(m => ({ id: m.id, name: m.name }))}
           members={members.members.map(m => ({ id: m.id, name: m.name, initials: m.initials }))}
           existingTasks={tasks.tasks

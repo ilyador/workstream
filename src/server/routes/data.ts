@@ -295,7 +295,7 @@ dataRouter.post('/api/notifications/read-all', requireAuth, async (req, res) => 
 
 // --- Skills discovery ---
 
-interface SkillInfo {
+export interface SkillInfo {
   name: string;
   description: string;
   source: string; // 'global' | 'project' | plugin name
@@ -314,7 +314,7 @@ function parseSkillFrontmatter(filePath: string): { description: string } | null
   }
 }
 
-function discoverSkills(localPath?: string): SkillInfo[] {
+export function discoverSkills(localPath?: string): SkillInfo[] {
   const skills: SkillInfo[] = [];
   const seen = new Set<string>();
 

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { getSkills, type SkillInfo } from '../lib/api';
 import s from './TaskForm.module.css';
 
 interface Milestone {
@@ -21,6 +22,7 @@ interface Props {
   milestones: Milestone[];
   members: Member[];
   existingTasks: TaskOption[];
+  localPath?: string;
   onSubmit: (data: {
     title: string;
     description: string;
@@ -38,7 +40,7 @@ interface Props {
 
 const BUILT_IN_TYPES = ['feature', 'bug-fix', 'ui-fix', 'refactor', 'test', 'design', 'chore'];
 
-export function TaskForm({ milestones, members, existingTasks, onSubmit, onClose }: Props) {
+export function TaskForm({ milestones, members, existingTasks, localPath, onSubmit, onClose }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState('feature');
@@ -55,6 +57,79 @@ export function TaskForm({ milestones, members, existingTasks, onSubmit, onClose
   const [blockerSearch, setBlockerSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Skill autocomplete state
+  const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [showSkills, setShowSkills] = useState(false);
+  const [skillFilter, setSkillFilter] = useState('');
+  const [selectedSkillIdx, setSelectedSkillIdx] = useState(0);
+  const [slashStart, setSlashStart] = useState(-1);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Fetch skills on mount
+  useEffect(() => {
+    getSkills(localPath).then(setSkills).catch(() => {});
+  }, [localPath]);
+
+  const filteredSkills = skills.filter(sk =>
+    sk.name.toLowerCase().includes(skillFilter.toLowerCase())
+  );
+
+  // Detect `/` trigger in textarea
+  const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const cursor = e.target.selectionStart;
+    setDescription(val);
+
+    // Find the `/` that triggers autocomplete: must be at start of line or after whitespace
+    const textBefore = val.substring(0, cursor);
+    const slashMatch = textBefore.match(/(?:^|[\s\n])\/([a-zA-Z0-9_:-]*)$/);
+    if (slashMatch) {
+      const matchStart = textBefore.lastIndexOf('/' + slashMatch[1]);
+      setSlashStart(matchStart);
+      setSkillFilter(slashMatch[1]);
+      setShowSkills(true);
+      setSelectedSkillIdx(0);
+    } else {
+      setShowSkills(false);
+    }
+  }, []);
+
+  const insertSkill = useCallback((skillName: string) => {
+    if (slashStart < 0) return;
+    const before = description.substring(0, slashStart);
+    const cursor = textareaRef.current?.selectionStart ?? (slashStart + skillFilter.length + 1);
+    const after = description.substring(cursor);
+    const newDesc = before + '/' + skillName + ' ' + after;
+    setDescription(newDesc);
+    setShowSkills(false);
+    // Restore focus and cursor
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.focus();
+        const pos = before.length + skillName.length + 2; // +2 for / and space
+        ta.selectionStart = ta.selectionEnd = pos;
+      }
+    });
+  }, [description, slashStart, skillFilter]);
+
+  const handleDescriptionKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!showSkills || filteredSkills.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedSkillIdx(i => Math.min(i + 1, filteredSkills.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSkillIdx(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      insertSkill(filteredSkills[selectedSkillIdx].name);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowSkills(false);
+    }
+  }, [showSkills, filteredSkills, selectedSkillIdx, insertSkill]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -112,13 +187,34 @@ export function TaskForm({ milestones, members, existingTasks, onSubmit, onClose
             required
             autoFocus
           />
-          <textarea
-            className={s.textarea}
-            placeholder="Description (optional)"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            rows={3}
-          />
+          <div className={s.descriptionWrap}>
+            <textarea
+              ref={textareaRef}
+              className={s.textarea}
+              placeholder="Description (optional) — type / to insert a skill"
+              value={description}
+              onChange={handleDescriptionChange}
+              onKeyDown={handleDescriptionKeyDown}
+              onBlur={() => { setTimeout(() => setShowSkills(false), 150); }}
+              rows={3}
+            />
+            {showSkills && filteredSkills.length > 0 && (
+              <div className={s.skillDropdown}>
+                {filteredSkills.map((sk, i) => (
+                  <div
+                    key={sk.name}
+                    className={`${s.skillItem} ${i === selectedSkillIdx ? s.skillItemActive : ''}`}
+                    onMouseDown={(e) => { e.preventDefault(); insertSkill(sk.name); }}
+                    onMouseEnter={() => setSelectedSkillIdx(i)}
+                  >
+                    <span className={s.skillName}>/{sk.name}</span>
+                    {sk.description && <span className={s.skillDesc}>{sk.description}</span>}
+                    <span className={s.skillSource}>{sk.source}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className={s.row}>
             <div className={s.field}>
               <label className={s.label}>Type</label>
