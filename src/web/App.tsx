@@ -44,15 +44,31 @@ function timeAgo(completedAt: string): string {
   return `${days}d ago`;
 }
 
+/** Full phase pipeline per task type (mirrors server DEFAULT_TASK_TYPES + final). */
+const TASK_TYPE_PHASES: Record<string, string[]> = {
+  'bug-fix': ['plan', 'analyze', 'fix', 'verify', 'review'],
+  'feature': ['plan', 'implement', 'verify', 'review'],
+  'refactor': ['plan', 'analyze', 'refactor', 'verify', 'review'],
+  'test': ['plan', 'write-tests', 'verify', 'review'],
+  'ui-fix': ['plan', 'implement', 'verify', 'review'],
+  'design': ['plan', 'implement', 'verify', 'review'],
+  'chore': ['plan', 'implement', 'verify', 'review'],
+};
+
 /** Build phases array for the UI from API data.
- *  Uses actual phase names from the job instead of a hardcoded list. */
-function buildPhases(phasesCompleted: any[], currentPhase: string | null): { name: string; status: string }[] {
-  const completed = (phasesCompleted || []).map((p: any) => typeof p === 'string' ? p : p.name || p.phase);
-  const phases: { name: string; status: string }[] = completed.map((name: string) => ({ name, status: 'completed' }));
-  if (currentPhase && !completed.includes(currentPhase)) {
-    phases.push({ name: currentPhase, status: 'current' });
-  }
-  return phases;
+ *  Shows the full pipeline for the task type, marking each phase as
+ *  completed, current, or pending. */
+function buildPhases(phasesCompleted: any[], currentPhase: string | null, taskType: string): { name: string; status: string }[] {
+  const completed = new Set(
+    (phasesCompleted || []).map((p: any) => typeof p === 'string' ? p : p.name || p.phase)
+  );
+  const allPhases = TASK_TYPE_PHASES[taskType] || TASK_TYPE_PHASES['feature'];
+
+  return allPhases.map(name => {
+    if (completed.has(name)) return { name, status: 'completed' };
+    if (name === currentPhase) return { name, status: 'current' };
+    return { name, status: 'pending' };
+  });
 }
 
 export default function App() {
@@ -72,6 +88,15 @@ export default function App() {
     const map: Record<string, string> = {};
     for (const t of tasks.tasks) {
       map[t.id] = t.title;
+    }
+    return map;
+  }, [tasks.tasks]);
+
+  // Build a task-type lookup from all tasks (id -> type)
+  const taskTypeMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const t of tasks.tasks) {
+      map[t.id] = t.type;
     }
     return map;
   }, [tasks.tasks]);
@@ -126,7 +151,7 @@ export default function App() {
       attempt: j.attempt,
       maxAttempts: j.max_attempts,
       elapsed: j.status === 'running' ? elapsed(j.started_at) : undefined,
-      phases: buildPhases(j.phases_completed || [], j.current_phase),
+      phases: buildPhases(j.phases_completed || [], j.current_phase, taskTypeMap[j.task_id] || 'feature'),
       question: j.question || undefined,
       review: j.review_result ? {
         filesChanged: j.review_result.files_changed ?? j.review_result.filesChanged ?? 0,
@@ -138,7 +163,7 @@ export default function App() {
       } : undefined,
       completedAgo: j.completed_at ? timeAgo(j.completed_at) : undefined,
     }));
-  }, [jobs.jobs, taskTitleMap]);
+  }, [jobs.jobs, taskTitleMap, taskTypeMap]);
 
   // Step 1: Environment check
   if (!envReady) {
