@@ -146,6 +146,84 @@
   background: var(--red);
   border-radius: 50%;
 }
+/* Notification bell wrapper */
+.notifWrap {
+  position: relative;
+}
+.notifDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 320px;
+  max-height: 400px;
+  background: var(--white);
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05);
+  z-index: 100;
+  overflow: hidden;
+  animation: dropIn 0.12s ease-out;
+}
+.notifHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--divider);
+}
+.notifTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.notifMarkAll {
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--blue);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.notifMarkAll:hover { text-decoration: underline; }
+.notifList {
+  max-height: 340px;
+  overflow-y: auto;
+}
+.notifItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--divider);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.notifItem:last-child { border-bottom: none; }
+.notifItem:hover { background: var(--bg-hover); }
+.notifUnread { background: var(--blue-bg); }
+.notifUnread:hover { background: rgba(37,99,235,0.1); }
+.notifMsg {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.4;
+}
+.notifTime {
+  font-size: 11px;
+  color: var(--text-4);
+}
+.notifEmpty {
+  padding: 24px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-4);
+}
+
 .avatar {
   width: 30px;
   height: 30px;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useComments } from '../hooks/useComments';
 import s from './Backlog.module.css';
 
 interface Task {
@@ -14,9 +15,17 @@ interface Task {
   blockedByTitles?: string[];
   assignee: { type: string; name?: string; initials?: string };
   images?: string[];
+  status?: string;
 }
 
-export function Backlog({ tasks, onAddTask }: { tasks: Task[]; onAddTask?: () => void }) {
+interface BacklogProps {
+  tasks: Task[];
+  onAddTask?: () => void;
+  onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
+  onSwapTasks?: (idA: string, idB: string) => void;
+}
+
+export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks }: BacklogProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   return (
@@ -26,14 +35,33 @@ export function Backlog({ tasks, onAddTask }: { tasks: Task[]; onAddTask?: () =>
         <span className={s.count}>{tasks.length}</span>
       </div>
       <div className={s.list}>
-        {tasks.map((task) => (
+        {tasks.map((task, idx) => (
           <div
             key={task.id}
             className={`${s.item} ${task.blocked ? s.blockedItem : ''} ${expanded === task.id ? s.expanded : ''}`}
             onClick={() => setExpanded(expanded === task.id ? null : task.id)}
           >
             <div className={s.row}>
-              <span className={s.handle}>&#8942;</span>
+              <div className={s.reorderBtns}>
+                <button
+                  className={s.reorderBtn}
+                  disabled={idx === 0}
+                  title="Move up"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (idx > 0) onSwapTasks?.(task.id, tasks[idx - 1].id);
+                  }}
+                >&#9650;</button>
+                <button
+                  className={s.reorderBtn}
+                  disabled={idx === tasks.length - 1}
+                  title="Move down"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (idx < tasks.length - 1) onSwapTasks?.(task.id, tasks[idx + 1].id);
+                  }}
+                >&#9660;</button>
+              </div>
               <span className={s.title}>{task.title}</span>
               {task.blocked && <span className={s.tag + ' ' + s.tagRed}>blocked</span>}
               {task.mode === 'human' && <span className={s.tag + ' ' + s.tagGray}>human</span>}
@@ -65,6 +93,23 @@ export function Backlog({ tasks, onAddTask }: { tasks: Task[]; onAddTask?: () =>
                     ))}
                   </div>
                 )}
+                {task.mode === 'human' && (
+                  <div className={s.humanActions}>
+                    <button
+                      className={s.humanBtn}
+                      onClick={() => onUpdateTask?.(task.id, { status: 'in_progress' })}
+                    >Start</button>
+                    <button
+                      className={`${s.humanBtn} ${s.humanBtnDone}`}
+                      onClick={() => onUpdateTask?.(task.id, { status: 'done' })}
+                    >Done</button>
+                    <button
+                      className={`${s.humanBtn} ${s.humanBtnCancel}`}
+                      onClick={() => onUpdateTask?.(task.id, { status: 'canceled' })}
+                    >Cancel</button>
+                  </div>
+                )}
+                <CommentsSection taskId={task.id} />
               </div>
             )}
           </div>
@@ -72,5 +117,52 @@ export function Backlog({ tasks, onAddTask }: { tasks: Task[]; onAddTask?: () =>
         <div className={s.addRow} onClick={onAddTask}>+ Add task</div>
       </div>
     </section>
+  );
+}
+
+function CommentsSection({ taskId }: { taskId: string }) {
+  const { comments, addComment } = useComments(taskId);
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    const body = text.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try {
+      await addComment(body);
+      setText('');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className={s.comments}>
+      <span className={s.commentsLabel}>Comments</span>
+      {comments.length === 0 && <span className={s.commentsEmpty}>No comments yet</span>}
+      {comments.map(c => (
+        <div key={c.id} className={s.comment}>
+          <span className={s.commentAuthor}>{c.profiles?.initials || '??'}</span>
+          <div className={s.commentContent}>
+            <span className={s.commentBody}>{c.body}</span>
+            <span className={s.commentTime}>{new Date(c.created_at).toLocaleString()}</span>
+          </div>
+        </div>
+      ))}
+      <div className={s.commentInput}>
+        <input
+          className={s.commentField}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
+          placeholder="Add a comment..."
+          disabled={sending}
+        />
+        <button className={s.commentSend} onClick={handleSend} disabled={sending || !text.trim()}>
+          Send
+        </button>
+      </div>
+    </div>
   );
 }

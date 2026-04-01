@@ -111,7 +111,7 @@ function loadTaskTypeConfig(localPath: string, taskType: string): TaskTypeConfig
   return DEFAULT_TASK_TYPES[taskType] || DEFAULT_TASK_TYPES['feature'];
 }
 
-function buildPrompt(phase: string, task: any, previousOutputs: any[], localPath: string, answer?: string): string {
+function buildPrompt(phase: string, task: any, previousOutputs: any[], localPath: string, phaseConfig: PhaseConfig, taskType: TaskTypeConfig, answer?: string): string {
   // Inject project context from CLAUDE.md if it exists
   let projectContext = '';
   const claudeMdPath = join(localPath, 'CLAUDE.md');
@@ -127,6 +127,19 @@ Title: ${task.title}
 Type: ${task.type}
 Description: ${task.description || 'No description provided.'}
 `;
+
+  // Feature 2: Images passed to AI prompt
+  if (Array.isArray(task.images) && task.images.length > 0) {
+    prompt += '\n## Attached Images\n';
+    for (const url of task.images) {
+      prompt += `${url}\n`;
+    }
+  }
+
+  // Feature 3: Multi-agent prompt injection
+  if (task.multiagent === 'yes') {
+    prompt += '\n## Multi-Agent Mode\nUse subagents to parallelize this work. Dispatch separate agents for independent subtasks.\n';
+  }
 
   if (task.followup_notes) {
     prompt += `\n## Followup Notes (from previous rejection)\n${task.followup_notes}\n`;
@@ -154,7 +167,59 @@ Description: ${task.description || 'No description provided.'}
     'write-tests': 'Write tests for the described functionality. Follow existing test patterns in the project.',
   };
 
-  prompt += `\n## Current Phase: ${phase}\n${phaseInstructions[phase] || 'Complete this phase of the task.'}\n`;
+  // Feature 5: Custom prompt files from .codesync/prompts/
+  let phaseText = phaseInstructions[phase] || 'Complete this phase of the task.';
+  if (phaseConfig.prompt && phaseConfig.prompt.length > 0) {
+    const customPromptPath = join(localPath, '.codesync', phaseConfig.prompt);
+    if (existsSync(customPromptPath)) {
+      try {
+        phaseText = readFileSync(customPromptPath, 'utf-8');
+      } catch { /* fall through to default */ }
+    }
+  }
+
+  prompt += `\n## Current Phase: ${phase}\n${phaseText}\n`;
+
+  // Feature 4: Skill field injection
+  if (phaseConfig.skill) {
+    prompt += `\n## Skill: ${phaseConfig.skill}\nApply the ${phaseConfig.skill} methodology for this phase.\n`;
+  }
+
+  // Feature 6: Review criteria from ARCHITECTURE.md
+  if (phase === 'review') {
+    // Check config.json for review_criteria
+    const configPath = join(localPath, '.codesync', 'config.json');
+    if (existsSync(configPath)) {
+      try {
+        const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+        if (config.review_criteria && Array.isArray(config.review_criteria.rules) && config.review_criteria.rules.length > 0) {
+          prompt += '\n## Review Criteria\n';
+          for (const rule of config.review_criteria.rules) {
+            prompt += `- ${rule}\n`;
+          }
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    // Check for ARCHITECTURE.md
+    let archContent: string | null = null;
+    const archPaths = [
+      join(localPath, 'ARCHITECTURE.md'),
+      join(localPath, 'docs', 'ARCHITECTURE.md'),
+    ];
+    for (const archPath of archPaths) {
+      if (existsSync(archPath)) {
+        try {
+          archContent = readFileSync(archPath, 'utf-8');
+          break;
+        } catch { /* ignore */ }
+      }
+    }
+    if (archContent) {
+      prompt += `\n## Architecture Reference\n${archContent.substring(0, 8000)}\n`;
+    }
+  }
+
   prompt += '\nWhen done, write a brief summary of what you did and any issues found.\n';
   prompt += 'If you need clarification from the human, clearly state your question and stop.\n';
 
@@ -213,12 +278,17 @@ export async function runJob(ctx: JobContext): Promise<void> {
         attempt,
       }).eq('id', jobId);
 
-      const prompt = buildPrompt(phase, task, phasesCompleted, localPath, ctx.task.answer);
+      const prompt = buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
 
       // Spawn claude -p
       const args = ['-p', prompt, '--max-turns', '20'];
       if (phaseConfig.tools.length > 0) {
         args.push('--allowedTools', phaseConfig.tools.join(','));
+      }
+
+      // Feature 1: Effort flag
+      if (task.effort) {
+        args.push('--effort', task.effort);
       }
 
       onLog(`\n--- Phase: ${phase} (attempt ${attempt}/${maxAttempts}) ---\n`);

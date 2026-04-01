@@ -36,10 +36,14 @@ interface Props {
   onClose: () => void;
 }
 
+const BUILT_IN_TYPES = ['feature', 'bug-fix', 'ui-fix', 'refactor', 'test', 'design', 'chore'];
+
 export function TaskForm({ milestones, members, existingTasks, onSubmit, onClose }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState('feature');
+  const [customType, setCustomType] = useState('');
+  const [isCustomType, setIsCustomType] = useState(false);
   const [mode, setMode] = useState('ai');
   const [effort, setEffort] = useState('high');
   const [milestoneId, setMilestoneId] = useState('');
@@ -62,10 +66,11 @@ export function TaskForm({ milestones, members, existingTasks, onSubmit, onClose
         .split(',')
         .map(u => u.trim())
         .filter(u => u.length > 0);
+      const resolvedType = isCustomType ? customType.trim().toLowerCase().replace(/\s+/g, '-') : type;
       await onSubmit({
         title: title.trim(),
         description: description.trim(),
-        type,
+        type: resolvedType,
         mode,
         effort,
         multiagent,
@@ -117,14 +122,34 @@ export function TaskForm({ milestones, members, existingTasks, onSubmit, onClose
           <div className={s.row}>
             <div className={s.field}>
               <label className={s.label}>Type</label>
-              <select className={s.select} value={type} onChange={e => setType(e.target.value)}>
-                <option value="feature">feature</option>
-                <option value="bug-fix">bug-fix</option>
-                <option value="ui-fix">ui-fix</option>
-                <option value="refactor">refactor</option>
-                <option value="test">test</option>
-                <option value="design">design</option>
-              </select>
+              {isCustomType ? (
+                <div className={s.customTypeRow}>
+                  <input
+                    className={s.input}
+                    placeholder="e.g. docs, spike, deploy"
+                    value={customType}
+                    onChange={e => setCustomType(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    className={s.customTypeCancel}
+                    onClick={() => { setIsCustomType(false); setCustomType(''); }}
+                    title="Use preset type"
+                  >&times;</button>
+                </div>
+              ) : (
+                <select className={s.select} value={type} onChange={e => {
+                  if (e.target.value === '__custom__') {
+                    setIsCustomType(true);
+                  } else {
+                    setType(e.target.value);
+                  }
+                }}>
+                  {BUILT_IN_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  <option value="__custom__">custom...</option>
+                </select>
+              )}
             </div>
             <div className={s.field}>
               <label className={s.label}>Mode</label>
@@ -234,7 +259,7 @@ export function TaskForm({ milestones, members, existingTasks, onSubmit, onClose
           {error && <div className={s.error}>{error}</div>}
 
           <div className={s.actions}>
-            <button className={s.submit} type="submit" disabled={loading || !title.trim()}>
+            <button className={s.submit} type="submit" disabled={loading || !title.trim() || (isCustomType && !customType.trim())}>
               {loading ? 'Creating...' : 'Create'}
             </button>
             <button className={s.cancel} type="button" onClick={onClose}>Cancel</button>

@@ -5,7 +5,9 @@ import { useTasks } from './hooks/useTasks';
 import { useJobs } from './hooks/useJobs';
 import { useMilestones } from './hooks/useMilestones';
 import { useMembers } from './hooks/useMembers';
-import { signUp, signIn, runTaskApi, replyToJob, approveJob, rejectJob } from './lib/api';
+import { useNotifications } from './hooks/useNotifications';
+import { signUp, signIn, runTaskApi, replyToJob, approveJob, rejectJob, gitCommit, gitPush, gitPr } from './lib/api';
+import { computeFocus } from './lib/focus';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
 import { NewProject } from './components/NewProject';
@@ -64,6 +66,7 @@ export default function App() {
   const jobs = useJobs(projects.current?.id || null);
   const milestones = useMilestones(projects.current?.id || null);
   const members = useMembers(projects.current?.id || null);
+  const notifs = useNotifications(auth.profile?.id);
 
   // Build a task-title lookup from all tasks
   const taskTitleMap = useMemo(() => {
@@ -82,6 +85,31 @@ export default function App() {
     }
     return map;
   }, [members.members]);
+
+  // Focus algorithm: score tasks by blockers, deadlines, position
+  const focusResult = useMemo(() => {
+    const blockers = tasks.tasks.flatMap(t =>
+      (t.blocked_by || []).map(dep => ({ task_id: t.id, blocked_by: dep }))
+    );
+    return computeFocus(
+      tasks.tasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        type: t.type,
+        mode: t.mode,
+        effort: t.effort,
+        status: t.status,
+        position: t.position,
+        milestone_id: t.milestone_id,
+      })),
+      milestones.milestones.map(m => ({
+        id: m.id,
+        name: m.name,
+        deadline: m.deadline,
+      })),
+      blockers,
+    );
+  }, [tasks.tasks, milestones.milestones]);
 
   // Map API jobs to the shape JobsPanel expects
   const jobViews: JobView[] = useMemo(() => {
@@ -145,8 +173,11 @@ export default function App() {
   }
 
   // Step 6: Focus task
-  const focusTask = tasks.backlog[0];
-  const nextTasks = tasks.backlog.slice(1, 3);
+  const focusTask = focusResult?.task
+    ? tasks.backlog.find(t => t.id === focusResult.task.id) || tasks.backlog[0]
+    : tasks.backlog[0];
+  const focusReason = focusResult?.reason || `Top of your backlog. ${tasks.backlog.length} tasks remaining.`;
+  const nextTasks = tasks.backlog.filter(t => t.id !== focusTask?.id).slice(0, 2);
 
   // Milestone progress
   const activeMilestone = milestones.active[0];
@@ -164,7 +195,10 @@ export default function App() {
       <Header
         projectName={projects.current?.name || ''}
         milestone={msProgress}
-        notifications={0}
+        notifications={notifs.unreadCount}
+        notificationList={notifs.notifications}
+        onMarkRead={notifs.markRead}
+        onMarkAllRead={notifs.markAllRead}
         userInitials={auth.profile.initials}
         projects={projects.projects.map(p => ({ id: p.id, name: p.name }))}
         currentProjectId={projects.current?.id || null}
@@ -193,7 +227,7 @@ export default function App() {
                   effort: focusTask.effort,
                   blocksCount: 0,
                 }}
-                reason={`Top of your backlog. ${tasks.backlog.length} tasks remaining.`}
+                reason={focusReason}
                 next={nextTasks[0]?.title || ''}
                 then={nextTasks[1]?.title || ''}
                 onRun={async (taskId) => {
@@ -236,9 +270,20 @@ export default function App() {
                     ? { type: 'user', name: member.name, initials: member.initials }
                     : { type: 'ai' },
                   images: t.images || [],
+                  status: t.status,
                 };
               })}
               onAddTask={() => setShowTaskForm(true)}
+              onUpdateTask={async (taskId, data) => {
+                await tasks.updateTask(taskId, data);
+              }}
+              onSwapTasks={async (idA, idB) => {
+                const taskA = tasks.backlog.find(t => t.id === idA);
+                const taskB = tasks.backlog.find(t => t.id === idB);
+                if (!taskA || !taskB) return;
+                await tasks.updateTask(idA, { position: taskB.position });
+                await tasks.updateTask(idB, { position: taskA.position });
+              }}
             />
           </div>
         </div>
@@ -257,9 +302,18 @@ export default function App() {
                 alert(err.message || 'Failed to send reply');
               }
             }}
-            onApprove={async (jobId) => {
+            onApprove={async (jobId, action) => {
               try {
                 await approveJob(jobId);
+                const localPath = projects.current?.local_path || '';
+                if (action === 'commit') {
+                  await gitCommit(jobId, localPath);
+                } else if (action === 'commit_push') {
+                  await gitCommit(jobId, localPath);
+                  await gitPush(localPath);
+                } else if (action === 'branch_pr') {
+                  await gitPr(jobId, localPath);
+                }
                 jobs.reload();
                 tasks.reload();
               } catch (err: any) {

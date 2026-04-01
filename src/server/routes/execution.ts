@@ -6,7 +6,19 @@ import { requireAuth } from '../auth-middleware.js';
 // SSE connections per job
 const sseClients = new Map<string, Set<(event: string, data: any) => void>>();
 
+// Feature 7: SSE event buffer -- stores last 100 events per job for replay
+const MAX_BUFFER_SIZE = 100;
+const sseEventBuffer = new Map<string, Array<{ event: string; data: any }>>();
+
 function broadcast(jobId: string, event: string, data: any) {
+  // Push to buffer
+  if (!sseEventBuffer.has(jobId)) sseEventBuffer.set(jobId, []);
+  const buffer = sseEventBuffer.get(jobId)!;
+  buffer.push({ event, data });
+  if (buffer.length > MAX_BUFFER_SIZE) {
+    buffer.splice(0, buffer.length - MAX_BUFFER_SIZE);
+  }
+
   const clients = sseClients.get(jobId);
   if (clients) {
     for (const send of clients) {
@@ -78,7 +90,8 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
   // Return job ID immediately -- execution happens async
   res.json({ jobId: job.id });
 
-  // Run async
+  // Feature 8: Delay 500ms to give the browser time to connect SSE before events fire
+  setTimeout(() => {
   runJob({
     jobId: job.id,
     taskId,
@@ -97,6 +110,7 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
   }).catch(err => {
     broadcast(job.id, 'failed', { error: err.message });
   });
+  }, 500);
 });
 
 // SSE stream for job logs
@@ -107,7 +121,11 @@ executionRouter.get('/api/jobs/:id/events', (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
   });
+
+  // Tell EventSource to retry after 3 seconds on disconnect
+  res.write('retry: 3000\n\n');
 
   const send = (event: string, data: any) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -116,6 +134,17 @@ executionRouter.get('/api/jobs/:id/events', (req, res) => {
   // Register client
   if (!sseClients.has(jobId)) sseClients.set(jobId, new Set());
   sseClients.get(jobId)!.add(send);
+
+  // Send initial connected event so the client knows the stream is live
+  send('connected', { status: 'ok' });
+
+  // Feature 7: Replay buffered events for late-connecting clients
+  const buffer = sseEventBuffer.get(jobId);
+  if (buffer && buffer.length > 0) {
+    for (const entry of buffer) {
+      send(entry.event, entry.data);
+    }
+  }
 
   // Send heartbeat
   const heartbeat = setInterval(() => res.write(':heartbeat\n\n'), 15000);

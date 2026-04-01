@@ -235,6 +235,8 @@ export async function getSkills(localPath?: string): Promise<SkillInfo[]> {
 }
 
 // --- SSE: Job log stream (token passed as query param since EventSource can't set headers) ---
+export type ConnectionState = 'connecting' | 'open' | 'error';
+
 export function subscribeToJob(jobId: string, handlers: {
   onLog?: (text: string) => void;
   onPhaseStart?: (phase: string, attempt: number) => void;
@@ -243,9 +245,26 @@ export function subscribeToJob(jobId: string, handlers: {
   onReview?: (result: any) => void;
   onDone?: () => void;
   onFail?: (error: string) => void;
+  onConnectionChange?: (state: ConnectionState) => void;
 }): () => void {
   const tokenParam = accessToken ? `?token=${encodeURIComponent(accessToken)}` : '';
   const source = new EventSource(`${BASE}/api/jobs/${jobId}/events${tokenParam}`);
+
+  handlers.onConnectionChange?.('connecting');
+
+  source.onopen = () => {
+    handlers.onConnectionChange?.('open');
+  };
+
+  source.onerror = () => {
+    // EventSource will auto-reconnect; surface state so UI can show it
+    if (source.readyState === EventSource.CONNECTING) {
+      handlers.onConnectionChange?.('connecting');
+    } else if (source.readyState === EventSource.CLOSED) {
+      handlers.onConnectionChange?.('error');
+    }
+  };
+
   source.addEventListener('log', (e) => handlers.onLog?.(JSON.parse(e.data).text));
   source.addEventListener('phase_start', (e) => { const d = JSON.parse(e.data); handlers.onPhaseStart?.(d.phase, d.attempt); });
   source.addEventListener('phase_complete', (e) => { const d = JSON.parse(e.data); handlers.onPhaseComplete?.(d.phase, d.output); });

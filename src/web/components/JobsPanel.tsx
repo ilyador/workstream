@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { subscribeToJob } from '../lib/api';
+import type { ConnectionState } from '../lib/api';
 import s from './JobsPanel.module.css';
 
 export type JobView = {
@@ -34,10 +35,12 @@ const labels: Record<string, string> = {
   failed: 'Failed',
 };
 
+export type GitAction = 'commit' | 'commit_push' | 'branch_pr';
+
 export function JobsPanel({ jobs, onReply, onApprove, onReject }: {
   jobs: JobView[];
   onReply?: (jobId: string, answer: string) => void;
-  onApprove?: (jobId: string) => void;
+  onApprove?: (jobId: string, action?: GitAction) => void;
   onReject?: (jobId: string) => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(jobs.find(j => j.status !== 'done')?.id || null);
@@ -132,7 +135,7 @@ export function JobsPanel({ jobs, onReply, onApprove, onReject }: {
                       <span className={s.checkOk}>&#10003; Architecture rules pass</span>
                     </div>
                     <div className={s.reviewActions}>
-                      <button className={s.approve} onClick={() => onApprove?.(job.id)}>Approve &#9662;</button>
+                      <ApproveDropdown onSelect={(action) => onApprove?.(job.id, action)} />
                       <button className={s.reject} onClick={() => onReject?.(job.id)}>Reject &rarr; Backlog</button>
                     </div>
                   </>
@@ -148,25 +151,61 @@ export function JobsPanel({ jobs, onReply, onApprove, onReject }: {
 
 /** Shows live SSE log lines for a running job */
 function LiveLogs({ jobId }: { jobId: string }) {
-  const [lines, setLines] = useState<string[]>([]);
-  const [currentPhase, setCurrentPhase] = useState<string | null>(null);
+  const [lines, setLines] = useState<{ text: string; type: 'log' | 'phase' | 'status' }[]>([]);
+  const [connState, setConnState] = useState<ConnectionState>('connecting');
+  const [connVisible, setConnVisible] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasConnectedRef = useRef(false);
+
+  const addLine = useCallback((text: string, type: 'log' | 'phase' | 'status' = 'log') => {
+    setLines(prev => [...prev.slice(-200), { text, type }]);
+  }, []);
 
   useEffect(() => {
     setLines([]);
-    setCurrentPhase(null);
+    setConnState('connecting');
+    setConnVisible(true);
+    hasConnectedRef.current = false;
+
     const unsub = subscribeToJob(jobId, {
-      onLog: (text) => setLines(prev => [...prev.slice(-200), text]),
-      onPhaseStart: (phase) => {
-        setCurrentPhase(phase);
-        setLines(prev => [...prev, `--- ${phase} ---`]);
+      onLog: (text) => addLine(text, 'log'),
+      onPhaseStart: (phase, attempt) => {
+        const label = attempt > 1 ? `Phase: ${phase} (attempt ${attempt})` : `Phase: ${phase}`;
+        addLine(label, 'phase');
       },
       onPhaseComplete: (phase) => {
-        setLines(prev => [...prev, `--- ${phase} complete ---`]);
+        addLine(`Phase: ${phase} complete`, 'phase');
+      },
+      onPause: (question) => {
+        addLine(`Paused: ${question}`, 'status');
+      },
+      onReview: () => {
+        addLine('Ready for review', 'status');
+      },
+      onDone: () => {
+        addLine('Done', 'status');
+      },
+      onFail: (error) => {
+        addLine(`Failed: ${error}`, 'status');
+      },
+      onConnectionChange: (state) => {
+        setConnState(state);
+        setConnVisible(true);
+        if (state === 'open') hasConnectedRef.current = true;
+        // Hide "Connected" indicator after 2 seconds
+        if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+        if (state === 'open') {
+          hideTimerRef.current = setTimeout(() => setConnVisible(false), 2000);
+        }
       },
     });
-    return unsub;
-  }, [jobId]);
+
+    return () => {
+      unsub();
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [jobId, addLine]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -174,28 +213,69 @@ function LiveLogs({ jobId }: { jobId: string }) {
     }
   }, [lines]);
 
+  const connLabel = connState === 'connecting'
+    ? (hasConnectedRef.current ? 'Reconnecting...' : 'Connecting...')
+    : connState === 'open' ? 'Connected'
+    : 'Connection lost';
+
+  // Show status when connecting/reconnecting/error; hide "Connected" after delay
+  const showConn = connState !== 'open' || connVisible;
+
   return (
-    <div
-      ref={scrollRef}
-      style={{
-        maxHeight: 200,
-        overflow: 'auto',
-        background: 'var(--bg-active)',
-        borderRadius: 8,
-        padding: '10px 14px',
-        marginBottom: 12,
-        fontFamily: "ui-monospace, 'SF Mono', 'Cascadia Mono', monospace",
-        fontSize: 12,
-        lineHeight: 1.7,
-        color: 'var(--text-2)',
-      }}
-    >
-      {lines.length === 0 && (
-        <span style={{ color: 'var(--text-4)' }}>Connecting to log stream...</span>
+    <>
+      <div className={`${s.connBar} ${s[`conn${connState.charAt(0).toUpperCase()}${connState.slice(1)}`]} ${!showConn ? s.connHidden : ''}`}>
+        <span className={s.connDot} />
+        {connLabel}
+      </div>
+      <div ref={scrollRef} className={s.logBox}>
+        {lines.length === 0 && connState === 'connecting' && (
+          <span style={{ color: 'var(--text-4)' }}>Waiting for output...</span>
+        )}
+        {lines.map((line, i) => (
+          <div key={i} className={line.type === 'phase' ? s.logPhase : s.logLine}>
+            {line.text}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ApproveDropdown({ onSelect }: { onSelect: (action: GitAction) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const options: { label: string; action: GitAction }[] = [
+    { label: 'Commit', action: 'commit' },
+    { label: 'Commit + Push', action: 'commit_push' },
+    { label: 'New Branch + PR', action: 'branch_pr' },
+  ];
+
+  return (
+    <div ref={ref} className={s.approveWrap}>
+      <button className={s.approve} onClick={() => setOpen(prev => !prev)}>
+        Approve &#9662;
+      </button>
+      {open && (
+        <div className={s.approveMenu}>
+          {options.map(o => (
+            <button
+              key={o.action}
+              className={s.approveOption}
+              onClick={() => { setOpen(false); onSelect(o.action); }}
+            >{o.label}</button>
+          ))}
+        </div>
       )}
-      {lines.map((line, i) => (
-        <div key={i}>{line}</div>
-      ))}
     </div>
   );
 }

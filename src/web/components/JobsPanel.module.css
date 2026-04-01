@@ -31,11 +31,16 @@
   flex-shrink: 0;
   margin-top: 5px;
 }
-.d_running { background: var(--blue); }
+.d_running { background: var(--blue); animation: pulse 1.8s ease-in-out infinite; }
 .d_paused { background: var(--amber); }
 .d_review { background: var(--green); }
 .d_done { background: var(--text-4); }
 .d_failed { background: var(--red, #ef4444); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(37,99,235,0.35); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 5px rgba(37,99,235,0); }
+}
 
 .rowText { flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .title {
@@ -167,6 +172,7 @@
 .checkOk { color: var(--green); font-weight: 500; }
 
 .reviewActions { display: flex; gap: 10px; }
+.approveWrap { position: relative; }
 .approve {
   padding: 8px 18px;
   background: var(--green-bg);
@@ -179,6 +185,38 @@
   cursor: pointer;
 }
 .approve:hover { background: rgba(22,163,74,0.1); }
+.approveMenu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 180px;
+  background: var(--white);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.05);
+  z-index: 50;
+  padding: 4px 0;
+  animation: approveIn 0.1s ease-out;
+}
+@keyframes approveIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.approveOption {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.approveOption:hover { background: var(--green-bg); color: var(--green); }
 .reject {
   padding: 8px 18px;
   background: none;
@@ -191,3 +229,46 @@
   cursor: pointer;
 }
 .reject:hover { color: var(--red); border-color: var(--red-bg); }
+
+/* --- Live logs --- */
+.logBox {
+  max-height: 200px;
+  overflow: auto;
+  background: var(--bg-active);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+.logLine { }
+.logPhase {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+/* Connection status bar */
+.connBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  transition: opacity 0.4s;
+}
+.connDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.connConnecting .connDot { background: var(--amber); }
+.connConnecting { color: var(--amber); }
+.connOpen .connDot { background: var(--green); }
+.connOpen { color: var(--green); }
+.connError .connDot { background: var(--red); }
+.connError { color: var(--red); }
+.connHidden { opacity: 0; pointer-events: none; }
