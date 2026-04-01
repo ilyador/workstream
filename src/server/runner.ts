@@ -289,6 +289,13 @@ export function cancelJob(jobId: string) {
   }
 }
 
+export function cancelAllJobs() {
+  for (const [jobId, proc] of activeProcesses) {
+    proc.kill('SIGTERM');
+    activeProcesses.delete(jobId);
+  }
+}
+
 export function isJobActive(jobId: string): boolean {
   return activeProcesses.has(jobId);
 }
@@ -417,7 +424,10 @@ export async function runJob(ctx: JobContext): Promise<void> {
         // Verify phase: check if output indicates failure
         if (phase === 'verify') {
           const lower = output.toLowerCase();
-          const failed = lower.includes('fail') || lower.includes('error') || lower.includes('not passing');
+          const hasFail = /\bfail\b|tests?\s+fail/.test(lower);
+          const hasError = lower.includes('error') || lower.includes('not passing');
+          const excluded = lower.includes('no failures') || lower.includes('0 failed') || lower.includes('fixed');
+          const failed = (hasFail || hasError) && !excluded;
           if (failed && attempt < maxAttempts) {
             // Jump back to the on_verify_fail phase instead of re-running verify
             const jumpTarget = taskType.on_verify_fail;
@@ -451,7 +461,10 @@ export async function runJob(ctx: JobContext): Promise<void> {
         // Review/final phase: check if output indicates failure
         if (phase === taskType.final) {
           const lower = output.toLowerCase();
-          const failed = lower.includes('fail') || lower.includes('issue') || lower.includes('problem') || lower.includes('reject');
+          const hasIssues = /issues?\s+found/.test(lower);
+          const hasFail = lower.includes('fail') || lower.includes('problem') || lower.includes('reject');
+          const excluded = lower.includes('no issues found') || lower.includes('no issues') || lower.includes('0 issues');
+          const failed = (hasIssues || hasFail) && !excluded;
           if (failed && attempt < maxAttempts) {
             // Jump back to the on_review_fail phase instead of re-running review
             const jumpTarget = taskType.on_review_fail;
@@ -548,6 +561,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
   }).eq('id', jobId);
   await supabase.from('tasks').update({ status: 'review' }).eq('id', ctx.taskId);
   onReview(reviewResult);
+  onDone();
 }
 
 function formatStreamEvent(event: any): string | null {

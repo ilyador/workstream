@@ -162,11 +162,17 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
     });
   }, [description, slashStart, skillFilter]);
 
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+
   function handleImageDrop(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
     for (const file of files) {
+      if (file.size > MAX_IMAGE_SIZE) {
+        setError(`Image too large (max 5MB)`);
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         setImages(prev => [...prev, reader.result as string]);
@@ -180,6 +186,10 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
     for (const item of items) {
       const file = item.getAsFile();
       if (file) {
+        if (file.size > MAX_IMAGE_SIZE) {
+          setError(`Image too large (max 5MB)`);
+          return;
+        }
         const reader = new FileReader();
         reader.onload = () => setImages(prev => [...prev, reader.result as string]);
         reader.readAsDataURL(file);
@@ -190,6 +200,10 @@ export function TaskForm({ milestones, members, existingTasks, customTypes = [],
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
     for (const file of files) {
+      if (file.size > MAX_IMAGE_SIZE) {
+        setError(`Image too large (max 5MB)`);
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => setImages(prev => [...prev, reader.result as string]);
       reader.readAsDataURL(file);

@@ -326,8 +326,28 @@ export function subscribeToJob(jobId: string, handlers: {
 
 // --- SSE: Realtime project changes ---
 export function subscribeToChanges(projectId: string, onUpdate: (data: any) => void): () => void {
-  const tokenParam = accessToken ? `?token=${encodeURIComponent(accessToken)}` : '';
-  const source = new EventSource(`${BASE}/api/changes?project_id=${projectId}${tokenParam}`);
-  source.addEventListener('message', (e) => onUpdate(JSON.parse(e.data)));
-  return () => source.close();
+  const url = `${BASE}/api/changes?project_id=${projectId}${accessToken ? `&token=${encodeURIComponent(accessToken)}` : ''}`;
+  const source = new EventSource(url);
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 5;
+  let resetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  source.addEventListener('message', (e) => {
+    consecutiveErrors = 0;
+    if (resetTimer) clearTimeout(resetTimer);
+    onUpdate(JSON.parse(e.data));
+  });
+
+  source.onerror = () => {
+    consecutiveErrors++;
+    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+      source.close();
+      return;
+    }
+  };
+
+  return () => {
+    if (resetTimer) clearTimeout(resetTimer);
+    source.close();
+  };
 }

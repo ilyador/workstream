@@ -146,9 +146,14 @@ dataRouter.post('/api/milestones', requireAuth, async (req, res) => {
 });
 
 dataRouter.patch('/api/milestones/:id', requireAuth, async (req, res) => {
+  const allowed = ['name', 'deadline', 'status'];
+  const updates: Record<string, any> = {};
+  for (const key of allowed) {
+    if (key in req.body) updates[key] = req.body[key];
+  }
   const { data, error } = await supabase
     .from('milestones')
-    .update(req.body)
+    .update(updates)
     .eq('id', req.params.id)
     .select()
     .single();
