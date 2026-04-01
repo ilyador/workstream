@@ -1,18 +1,7 @@
 import { useState } from 'react';
 import { useComments } from '../hooks/useComments';
+import { timeAgo } from '../lib/time';
 import s from './Backlog.module.css';
-
-function timeAgo(date: string): string {
-  const ms = Date.now() - new Date(date).getTime();
-  const sec = Math.floor(ms / 1000);
-  if (sec < 60) return 'just now';
-  const m = Math.floor(sec / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
 
 interface Task {
   id: string;

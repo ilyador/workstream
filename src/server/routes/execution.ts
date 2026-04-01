@@ -7,23 +7,36 @@ import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from '../check
 // SSE connections per job
 const sseClients = new Map<string, Set<(event: string, data: any) => void>>();
 
-// Feature 7: SSE event buffer -- stores last 100 events per job for replay
+// SSE event buffer with incrementing IDs for Last-Event-ID deduplication
 const MAX_BUFFER_SIZE = 100;
-const sseEventBuffer = new Map<string, Array<{ event: string; data: any }>>();
+const sseEventBuffer = new Map<string, Array<{ id: number; event: string; data: any }>>();
+const sseEventCounters = new Map<string, number>();
 
 function broadcast(jobId: string, event: string, data: any) {
+  // Increment event ID
+  const counter = (sseEventCounters.get(jobId) || 0) + 1;
+  sseEventCounters.set(jobId, counter);
+
   // Push to buffer
   if (!sseEventBuffer.has(jobId)) sseEventBuffer.set(jobId, []);
   const buffer = sseEventBuffer.get(jobId)!;
-  buffer.push({ event, data });
+  buffer.push({ id: counter, event, data });
   if (buffer.length > MAX_BUFFER_SIZE) {
     buffer.splice(0, buffer.length - MAX_BUFFER_SIZE);
+  }
+
+  // Clean up buffer after job completes
+  if (event === 'done' || event === 'failed') {
+    setTimeout(() => {
+      sseEventBuffer.delete(jobId);
+      sseEventCounters.delete(jobId);
+    }, 60000);
   }
 
   const clients = sseClients.get(jobId);
   if (clients) {
     for (const send of clients) {
-      send(event, data);
+      send(counter, event, data);
     }
   }
 }
@@ -36,6 +49,18 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
 
   if (!taskId || !projectId || !localPath) {
     return res.status(400).json({ error: 'taskId, projectId, and localPath are required' });
+  }
+
+  // Validate localPath against the user's registered path for this project
+  const userId = (req as any).userId;
+  const { data: membership } = await supabase
+    .from('project_members')
+    .select('local_path')
+    .eq('project_id', projectId)
+    .eq('user_id', userId)
+    .single();
+  if (membership && membership.local_path && membership.local_path !== localPath) {
+    return res.status(403).json({ error: 'localPath does not match your registered project path' });
   }
 
   // Prevent concurrent jobs for the same task
@@ -146,22 +171,25 @@ executionRouter.get('/api/jobs/:id/events', async (req, res) => {
   // Tell EventSource to retry after 3 seconds on disconnect
   res.write('retry: 3000\n\n');
 
-  const send = (event: string, data: any) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  const send = (id: number, event: string, data: any) => {
+    res.write(`id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
   // Register client
   if (!sseClients.has(jobId)) sseClients.set(jobId, new Set());
   sseClients.get(jobId)!.add(send);
 
-  // Send initial connected event so the client knows the stream is live
-  send('connected', { status: 'ok' });
+  // Send initial connected event
+  res.write(`event: connected\ndata: ${JSON.stringify({ status: 'ok' })}\n\n`);
 
-  // Feature 7: Replay buffered events for late-connecting clients
+  // Replay buffered events, skipping those the client already received
+  const lastEventId = parseInt(req.headers['last-event-id'] as string) || 0;
   const buffer = sseEventBuffer.get(jobId);
   if (buffer && buffer.length > 0) {
     for (const entry of buffer) {
-      send(entry.event, entry.data);
+      if (entry.id > lastEventId) {
+        send(entry.id, entry.event, entry.data);
+      }
     }
   }
 

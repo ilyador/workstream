@@ -21,29 +21,7 @@ import { AddProjectModal } from './components/AddProjectModal';
 import { MembersModal } from './components/MembersModal';
 import './styles/global.css';
 
-/** Compute elapsed time as a human-readable string */
-function elapsed(startedAt: string): string {
-  const ms = Date.now() - new Date(startedAt).getTime();
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  return `${hrs}h ${mins % 60}m`;
-}
-
-/** Compute "ago" string from a completed_at timestamp */
-function timeAgo(completedAt: string): string {
-  const ms = Date.now() - new Date(completedAt).getTime();
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return 'just now';
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
+import { elapsed, timeAgo } from './lib/time';
 
 /** Full phase pipeline per task type (mirrors server DEFAULT_TASK_TYPES + final). */
 const TASK_TYPE_PHASES: Record<string, string[]> = {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { timeAgo } from '../lib/time';
 import s from './Header.module.css';
 
 interface Project {
@@ -29,18 +30,6 @@ interface Props {
   onNewProject: () => void;
   onSignOut?: () => void;
   onManageMembers?: () => void;
-}
-
-function notifTimeAgo(dateStr: string): string {
-  const ms = Date.now() - new Date(dateStr).getTime();
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return 'just now';
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
 }
 
 export function Header({
@@ -171,7 +160,7 @@ export function Header({
                       }}
                     >
                       <span className={s.notifMsg}>{n.message}</span>
-                      <span className={s.notifTime}>{notifTimeAgo(n.created_at)}</span>
+                      <span className={s.notifTime}>{timeAgo(n.created_at)}</span>
                     </button>
                   ))}
                 </div>
