@@ -65,7 +65,7 @@ export function AuthGate({ onAuth }: Props) {
           required
           minLength={6}
         />
-        <button className={s.submit} type="submit" disabled={loading}>
+        <button className={`btn btnPrimary ${s.submitWrap}`} type="submit" disabled={loading}>
           {loading ? '...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
         </button>
       </form>

@@ -39,21 +39,11 @@
 }
 .input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 .input::placeholder { color: var(--text-4); }
-.submit {
-  padding: 12px;
-  background: var(--text);
-  color: var(--bg);
-  border: none;
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
+/* Submit button now uses global .btn .btnPrimary */
+.submitWrap {
   width: 100%;
   max-width: 360px;
 }
-.submit:hover { opacity: 0.85; }
-.submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Setup cards */
 .cards {
@@ -142,64 +132,18 @@
   word-break: break-all;
 }
 
-/* Check connection button */
-.checkBtn {
-  padding: 10px 20px;
-  background: var(--bg-hover);
-  color: var(--text-2);
-  border: 1.5px solid var(--divider);
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-  align-self: flex-start;
-}
-.checkBtn:hover {
-  border-color: var(--text-4);
-  background: var(--bg-active);
-}
-.checkBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+/* Check connection, Back — now use global .btn variants */
+/* Status-specific overrides for the check button */
 .checkBtnOk {
-  background: var(--green-bg);
-  border-color: var(--green);
-  color: var(--green);
-}
-.checkBtnOk:hover {
-  background: var(--green-bg);
-  border-color: var(--green);
+  background: var(--green-bg) !important;
+  border-color: var(--green) !important;
+  color: var(--green) !important;
 }
 .checkBtnError {
-  background: var(--red-bg);
-  border-color: var(--red);
-  color: var(--red);
+  background: var(--red-bg) !important;
+  border-color: var(--red) !important;
+  color: var(--red) !important;
 }
-.checkBtnError:hover {
-  background: var(--red-bg);
-  border-color: var(--red);
-}
-
-/* Back button */
-.backBtn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  background: none;
-  border: none;
-  color: var(--text-3);
-  font-family: var(--font);
-  font-size: 14px;
-  cursor: pointer;
+.backWrap {
   margin-bottom: 24px;
-  border-radius: 6px;
-  transition: color 0.15s, background 0.15s;
-}
-.backBtn:hover {
-  color: var(--text);
-  background: var(--bg-hover);
 }

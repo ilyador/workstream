@@ -127,29 +127,12 @@
   height: 56px;
   object-fit: cover;
 }
-/* Human mode status buttons */
+/* Human mode actions — uses global .btn variants */
 .humanActions {
   display: flex;
   gap: 8px;
   margin-top: 12px;
 }
-.humanBtn {
-  padding: 6px 16px;
-  background: var(--bg-active);
-  color: var(--text-2);
-  border: 1px solid var(--divider);
-  border-radius: 6px;
-  font-family: var(--font);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-}
-.humanBtn:hover { background: var(--blue-bg); color: var(--blue); border-color: var(--blue-bg); }
-.humanBtnDone { background: var(--green-bg); color: var(--green); border-color: transparent; }
-.humanBtnDone:hover { background: rgba(22,163,74,0.12); }
-.humanBtnCancel { color: var(--text-4); }
-.humanBtnCancel:hover { background: var(--red-bg); color: var(--red); border-color: var(--red-bg); }
 
 /* Comments section */
 .comments {
@@ -222,35 +205,11 @@
 }
 .commentField:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 .commentField::placeholder { color: var(--text-4); }
-.commentSend {
-  padding: 7px 14px;
-  background: var(--text);
-  color: var(--bg);
-  border: none;
-  border-radius: 6px;
-  font-family: var(--font);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.commentSend:hover { opacity: 0.8; }
-.commentSend:disabled { opacity: 0.4; cursor: default; }
-
-.deleteBtn {
+/* commentSend and deleteBtn now use global .btn variants */
+.deleteWrap {
   margin-top: 12px;
-  padding: 5px 12px;
-  background: none;
-  color: var(--red);
-  border: none;
-  font-family: var(--font);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.15s;
   align-self: flex-end;
 }
-.deleteBtn:hover { opacity: 1; }
 
 .addRow {
   padding: 16px 0;

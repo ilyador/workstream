@@ -51,44 +51,7 @@
   color: var(--text-3);
 }
 .actions { display: flex; gap: 10px; margin-top: 8px; }
-.submit {
-  padding: 10px 24px;
-  background: var(--text);
-  color: var(--bg);
-  border: none;
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.submit:hover { opacity: 0.85; }
-.submit:disabled { opacity: 0.5; cursor: not-allowed; }
-.cancel {
-  padding: 10px 24px;
-  background: none;
-  color: var(--text-3);
-  border: 1.5px solid var(--divider);
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 15px;
-  cursor: pointer;
-}
-.cancel:hover { color: var(--text-2); }
-
-/* More options toggle */
-.moreToggle {
-  background: none;
-  border: none;
-  font-family: var(--font);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-3);
-  cursor: pointer;
-  padding: 0;
-  text-align: left;
-}
-.moreToggle:hover { color: var(--text-2); }
+/* Submit, Cancel, More toggle now use global .btn variants */
 
 /* More options section */
 .moreSection {
@@ -242,6 +205,29 @@
   color: var(--text-4);
   white-space: nowrap;
   flex-shrink: 0;
+}
+.skillBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.skillBadgeValid {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--green) 15%, transparent);
+  color: var(--green);
+  font-weight: 500;
+}
+.skillBadgeInvalid {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--red) 15%, transparent);
+  color: var(--red);
+  font-weight: 500;
+  cursor: help;
 }
 
 .error {

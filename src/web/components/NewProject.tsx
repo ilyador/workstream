@@ -103,10 +103,11 @@ export function NewProject({ onCreate }: Props) {
             <p className={s.detailLabel}>Make sure Docker is running, then run:</p>
             <pre className={s.codeBlock}>npx supabase start && npx supabase db reset</pre>
             <button
-              className={`${s.checkBtn} ${healthStatus === 'ok' ? s.checkBtnOk : ''} ${healthStatus === 'error' ? s.checkBtnError : ''}`}
+              className={`btn btnSecondary ${healthStatus === 'ok' ? s.checkBtnOk : ''} ${healthStatus === 'error' ? s.checkBtnError : ''}`}
               onClick={handleCheckConnection}
               disabled={healthStatus === 'checking'}
               type="button"
+              style={{ alignSelf: 'flex-start' }}
             >
               {healthStatus === 'idle' && 'Check Connection'}
               {healthStatus === 'checking' && 'Checking...'}
@@ -140,7 +141,7 @@ export function NewProject({ onCreate }: Props) {
 
         {mode && (
           <button
-            className={s.submit}
+            className={`btn btnPrimary ${s.submitWrap}`}
             onClick={handleContinue}
             disabled={!canContinue()}
             type="button"
@@ -154,7 +155,7 @@ export function NewProject({ onCreate }: Props) {
 
   return (
     <div className={s.container}>
-      <button className={s.backBtn} onClick={() => setStep('setup')} type="button">
+      <button className={`btn btnGhost ${s.backWrap}`} onClick={() => setStep('setup')} type="button">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
         Back
       </button>
@@ -187,7 +188,7 @@ export function NewProject({ onCreate }: Props) {
         <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: -8 }}>
           The absolute path to your project's root folder on this machine.
         </p>
-        <button className={s.submit} type="submit" disabled={loading || !name.trim() || !localPath.trim()}>
+        <button className={`btn btnPrimary ${s.submitWrap}`} type="submit" disabled={loading || !name.trim() || !localPath.trim()}>
           {loading ? 'Creating...' : 'Create Project'}
         </button>
       </form>

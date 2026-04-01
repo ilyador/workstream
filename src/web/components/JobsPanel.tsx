@@ -113,7 +113,7 @@ export function JobsPanel({ jobs, onReply, onApprove, onReject, onRevert, onTerm
               <span className={`${s.badge} ${s[`b_${job.status}`]}`}>{labels[job.status] || job.status}</span>
               {job.status === 'running' && onTerminate && (
                 <button
-                  className={s.terminate}
+                  className="btn btnDanger btnSm"
                   onClick={(e) => { e.stopPropagation(); onTerminate(job.id); }}
                 >
                   Terminate
@@ -125,19 +125,19 @@ export function JobsPanel({ jobs, onReply, onApprove, onReject, onRevert, onTerm
               <div className={s.detail} onClick={e => e.stopPropagation()}>
                 {job.question && <div className={s.question}>{job.question}</div>}
                 <button
-                  className={s.reject}
+                  className="btn btnDanger btnSm"
                   onClick={() => onReject?.(job.id)}
                   style={{ marginTop: 8 }}
                 >
                   Return task to backlog
                 </button>
                 {onRevert && (
-                  <button className={s.revert} onClick={() => onRevert(job.id)} style={{ marginTop: 8, marginLeft: 10 }}>
+                  <button className="btn btnWarning btnSm" onClick={() => onRevert(job.id)} style={{ marginTop: 8, marginLeft: 10 }}>
                     Revert Changes
                   </button>
                 )}
                 {onDeleteJob && (
-                  <button className={s.dismissBtn} onClick={() => onDeleteJob(job.id)}>
+                  <button className={`btn btnGhost ${s.dismissWrap}`} onClick={() => onDeleteJob(job.id)}>
                     Dismiss
                   </button>
                 )}
@@ -146,7 +146,7 @@ export function JobsPanel({ jobs, onReply, onApprove, onReject, onRevert, onTerm
 
             {isOpen && isDone && onDeleteJob && (
               <div className={s.detail} onClick={e => e.stopPropagation()}>
-                <button className={s.dismissBtn} onClick={() => onDeleteJob(job.id)}>
+                <button className={`btn btnGhost ${s.dismissWrap}`} onClick={() => onDeleteJob(job.id)}>
                   Dismiss
                 </button>
               </div>
@@ -190,9 +190,9 @@ export function JobsPanel({ jobs, onReply, onApprove, onReject, onRevert, onTerm
                     </div>
                     <div className={s.reviewActions}>
                       <ApproveDropdown onSelect={(action) => onApprove?.(job.id, action)} />
-                      <button className={s.reject} onClick={() => onReject?.(job.id)}>Reject &rarr; Backlog</button>
+                      <button className="btn btnDanger btnSm" onClick={() => onReject?.(job.id)}>Reject &rarr; Backlog</button>
                       {onRevert && (
-                        <button className={s.revert} onClick={() => onRevert(job.id)}>
+                        <button className="btn btnWarning btnSm" onClick={() => onRevert(job.id)}>
                           Revert Changes
                         </button>
                       )}
@@ -326,7 +326,7 @@ function ApproveDropdown({ onSelect }: { onSelect: (action: GitAction) => void }
 
   return (
     <div ref={ref} className={s.approveWrap}>
-      <button className={s.approve} onClick={() => setOpen(prev => !prev)}>
+      <button className="btn btnSuccess btnSm" onClick={() => setOpen(prev => !prev)}>
         Approve &#9662;
       </button>
       {open && (
@@ -366,7 +366,7 @@ function ReplyInput({ onReply }: { onReply: (answer: string) => void }) {
         placeholder="Your answer..."
         disabled={sending}
       />
-      <button className={s.send} onClick={handleReply} disabled={sending}>
+      <button className="btn btnPrimary" onClick={handleReply} disabled={sending}>
         {sending ? 'Sending...' : 'Reply'}
       </button>
     </div>

@@ -71,31 +71,4 @@
   justify-content: flex-end;
   margin-top: 8px;
 }
-.cancelBtn {
-  padding: 10px 20px;
-  background: none;
-  border: 1.5px solid var(--divider);
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-2);
-  cursor: pointer;
-}
-.cancelBtn:hover {
-  background: var(--bg-hover);
-  border-color: var(--text-4);
-}
-.createBtn {
-  padding: 10px 24px;
-  background: var(--text);
-  color: var(--bg);
-  border: none;
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.createBtn:hover { opacity: 0.85; }
-.createBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Cancel and Create buttons now use global .btn variants */

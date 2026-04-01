@@ -18,11 +18,11 @@ export function FocusView({ task, reason, next, then, onRun, onSkip }: Props) {
 
       <div className={s.actions}>
         {task.mode === 'ai' ? (
-          <button className={s.run} onClick={() => onRun?.(task.id)}>Run</button>
+          <button className="btn btnPrimary" onClick={() => onRun?.(task.id)}>Run</button>
         ) : (
-          <button className={s.run} onClick={() => onRun?.(task.id)}>Start</button>
+          <button className="btn btnPrimary" onClick={() => onRun?.(task.id)}>Start</button>
         )}
-        <button className={s.skip} onClick={() => onSkip?.(task.id)}>Skip</button>
+        <button className="btn btnSecondary" onClick={() => onSkip?.(task.id)}>Skip</button>
         <span className={s.meta}>
           {task.type} &middot; {task.effort} &middot; {task.mode}
         </span>

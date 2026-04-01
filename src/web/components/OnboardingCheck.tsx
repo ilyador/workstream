@@ -66,7 +66,7 @@ export function OnboardingCheck({ onReady }: { onReady: () => void }) {
         ))}
       </div>
 
-      <button className={s.retry} onClick={() => window.location.reload()}>
+      <button className="btn btnPrimary" onClick={() => window.location.reload()}>
         Re-check
       </button>
     </div>

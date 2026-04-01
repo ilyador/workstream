@@ -97,21 +97,21 @@ export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteT
                 {task.mode === 'human' && (
                   <div className={s.humanActions}>
                     <button
-                      className={s.humanBtn}
+                      className="btn btnPrimary btnSm"
                       onClick={() => onUpdateTask?.(task.id, { status: 'in_progress' })}
                     >Start</button>
                     <button
-                      className={`${s.humanBtn} ${s.humanBtnDone}`}
+                      className="btn btnSuccess btnSm"
                       onClick={() => onUpdateTask?.(task.id, { status: 'done' })}
                     >Done</button>
                     <button
-                      className={`${s.humanBtn} ${s.humanBtnCancel}`}
+                      className="btn btnSecondary btnSm"
                       onClick={() => onUpdateTask?.(task.id, { status: 'canceled' })}
                     >Cancel</button>
                   </div>
                 )}
                 <CommentsSection taskId={task.id} />
-                <button className={s.deleteBtn} onClick={(e) => { e.stopPropagation(); if (confirm('Delete this task?')) onDeleteTask?.(task.id); }}>
+                <button className={`btn btnGhost ${s.deleteWrap}`} style={{ color: 'var(--red)' }} onClick={(e) => { e.stopPropagation(); if (confirm('Delete this task?')) onDeleteTask?.(task.id); }}>
                   Delete task
                 </button>
               </div>
@@ -163,7 +163,7 @@ function CommentsSection({ taskId }: { taskId: string }) {
           placeholder="Add a comment..."
           disabled={sending}
         />
-        <button className={s.commentSend} onClick={handleSend} disabled={sending || !text.trim()}>
+        <button className="btn btnPrimary btnSm" onClick={handleSend} disabled={sending || !text.trim()}>
           Send
         </button>
       </div>

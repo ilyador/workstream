@@ -305,6 +305,7 @@ export interface SkillInfo {
   name: string;
   description: string;
   source: string; // 'global' | 'project' | plugin name
+  filePath: string;
 }
 
 function parseSkillFrontmatter(filePath: string): { description: string } | null {
@@ -334,7 +335,7 @@ export function discoverSkills(localPath?: string): SkillInfo[] {
         const meta = parseSkillFrontmatter(join(dir, file));
         if (!meta) continue;
         seen.add(name);
-        skills.push({ name, description: meta.description, source });
+        skills.push({ name, description: meta.description, source, filePath: join(dir, file) });
       }
     } catch { /* skip unreadable dirs */ }
   }
@@ -369,7 +370,8 @@ export function discoverSkills(localPath?: string): SkillInfo[] {
 dataRouter.get('/api/skills', requireAuth, (req, res) => {
   const localPath = req.query.local_path as string | undefined;
   const skills = discoverSkills(localPath);
-  res.json(skills);
+  // Strip filePath from API response — internal use only
+  res.json(skills.map(({ filePath, ...rest }) => rest));
 });
 
 // --- SSE: Realtime changes ---

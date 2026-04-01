@@ -133,18 +133,29 @@ Type: ${task.type}
 Description: ${task.description || 'No description provided.'}
 `;
 
-  // Skill references: parse /skillname from description, verify they exist, inject invocations
+  // Skill references: parse /skillname from description, verify they exist, inject content
   if (task.description) {
     const skillRefs = [...task.description.matchAll(/(?:^|[\s\n])\/([a-zA-Z0-9_][\w:-]*)/g)]
       .map(m => m[1]);
     if (skillRefs.length > 0) {
       const available = discoverSkills(localPath);
-      const availableNames = new Set(available.map(s => s.name));
-      const verified = skillRefs.filter(name => availableNames.has(name));
+      const skillMap = new Map(available.map(s => [s.name, s]));
+      const verified = skillRefs.filter(name => skillMap.has(name));
       if (verified.length > 0) {
-        prompt += '\n## Skills to Apply\nBefore starting your work, invoke the following skills using the Skill tool:\n';
+        prompt += '\n## Skills to Apply\n';
         for (const name of verified) {
-          prompt += `- /${name}\n`;
+          const skill = skillMap.get(name)!;
+          try {
+            let content = readFileSync(skill.filePath, 'utf-8');
+            // Strip YAML frontmatter
+            content = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '');
+            content = content.trim();
+            if (content.length > 8000) content = content.substring(0, 8000) + '\n...(truncated)';
+            prompt += `\n### Skill: /${name}\n${content}\n`;
+          } catch {
+            // File unreadable — fall back to invocation instruction
+            prompt += `\n### Skill: /${name}\nInvoke this skill using the Skill tool: /${name}\n`;
+          }
         }
         prompt += '\nApply the methodologies from these skills throughout this task.\n';
       }
@@ -287,7 +298,7 @@ export async function cleanupOrphanedJobs(): Promise<number> {
       await supabase.from('jobs').update({
         status: 'failed',
         completed_at: new Date().toISOString(),
-        question: `Job orphaned: server was restarted while this job was running (after ${elapsedMin}m). The claude process was lost. Click "Run" on the task to retry.`,
+        question: `Job failed: server was restarted while this job was running (after ${elapsedMin}m). The claude process was lost. Changes may need manual cleanup. Click "Run" on the task to retry.`,
       }).eq('id', job.id);
 
       await supabase.from('tasks').update({
@@ -345,7 +356,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
       const prompt = buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
 
       // Spawn claude -p (prompt piped via stdin to avoid arg length limits)
-      const args = ['-p', '--max-turns', '20'];
+      const args = ['-p', '--max-turns', '20', '--output-format', 'stream-json'];
       if (phaseConfig.tools.length > 0) {
         args.push('--allowedTools', phaseConfig.tools.join(','));
       }
@@ -422,10 +433,18 @@ export async function runJob(ctx: JobContext): Promise<void> {
       } catch (err: any) {
         onLog(`\nError in phase ${phase}: ${err.message}\n`);
         if (attempt >= maxAttempts) {
+          let failMessage = `Job failed: ${err.message}`;
+          try {
+            const { revertToCheckpoint } = await import('./checkpoint.js');
+            revertToCheckpoint(localPath, jobId);
+            onLog('[checkpoint] Auto-reverted changes after failure\n');
+            failMessage += '. Changes have been automatically reverted.';
+          } catch { /* ignore revert failure */ }
           await supabase.from('jobs').update({
             status: 'failed',
             phases_completed: phasesCompleted,
             completed_at: new Date().toISOString(),
+            question: failMessage,
           }).eq('id', jobId);
           onFail(err.message);
           return;
@@ -453,6 +472,46 @@ export async function runJob(ctx: JobContext): Promise<void> {
   onReview(reviewResult);
 }
 
+function formatStreamEvent(event: any): string | null {
+  // Handle assistant messages with content blocks
+  if (event.type === 'assistant' && event.message?.content) {
+    const parts: string[] = [];
+    for (const block of event.message.content) {
+      if (block.type === 'text' && block.text) {
+        parts.push(block.text);
+      }
+      if (block.type === 'tool_use') {
+        const toolName = block.name || 'unknown';
+        const input = block.input || {};
+        if (toolName === 'Read' || toolName === 'Glob' || toolName === 'Grep') {
+          parts.push(`[${toolName}] ${input.file_path || input.pattern || input.path || ''}`);
+        } else if (toolName === 'Edit' || toolName === 'Write') {
+          parts.push(`[${toolName}] ${input.file_path || ''}`);
+        } else if (toolName === 'Bash') {
+          const cmd = (input.command || '').substring(0, 100);
+          parts.push(`[Bash] ${cmd}`);
+        } else {
+          parts.push(`[${toolName}]`);
+        }
+      }
+    }
+    return parts.join('\n') || null;
+  }
+
+  // Handle result event (final summary)
+  if (event.type === 'result') {
+    const duration = event.duration_ms ? ` (${(event.duration_ms / 1000).toFixed(1)}s)` : '';
+    return `[done] Phase complete${duration}`;
+  }
+
+  // Skip tool_result / tool_output to avoid noise
+  if (event.type === 'tool_result' || event.type === 'tool_output') {
+    return null;
+  }
+
+  return null;
+}
+
 function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: string) => void, prompt?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn('claude', args, {
@@ -460,6 +519,10 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, TERM: 'dumb' },
     });
+
+    activeProcesses.set(jobId, proc);
+    let fullOutput = '';
+    let lineBuffer = '';
 
     // Pipe prompt via stdin to avoid arg length limits
     if (prompt) {
@@ -469,23 +532,52 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
       proc.stdin.end();
     }
 
-    activeProcesses.set(jobId, proc);
-    let stdout = '';
-
     proc.stdout.on('data', (data: Buffer) => {
       const text = data.toString();
-      stdout += text;
-      onLog(text);
+      lineBuffer += text;
+
+      // Process complete lines (stream-json sends one JSON object per line)
+      const lines = lineBuffer.split('\n');
+      lineBuffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          const formatted = formatStreamEvent(event);
+          if (formatted) {
+            fullOutput += formatted + '\n';
+            onLog(formatted + '\n');
+          }
+        } catch {
+          // Not JSON, log raw
+          fullOutput += line + '\n';
+          onLog(line + '\n');
+        }
+      }
     });
 
     proc.stderr.on('data', (data: Buffer) => {
-      onLog(data.toString());
+      const text = data.toString();
+      if (!text.includes('stdin') && !text.includes('Warning')) {
+        onLog(text);
+      }
     });
 
     proc.on('close', (code) => {
+      // Process remaining buffer
+      if (lineBuffer.trim()) {
+        try {
+          const event = JSON.parse(lineBuffer);
+          const formatted = formatStreamEvent(event);
+          if (formatted) fullOutput += formatted + '\n';
+        } catch {
+          fullOutput += lineBuffer;
+        }
+      }
       activeProcesses.delete(jobId);
       if (code === 0 || code === null) {
-        resolve(stdout);
+        resolve(fullOutput);
       } else {
         reject(new Error(`claude exited with code ${code}`));
       }

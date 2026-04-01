@@ -75,6 +75,14 @@ export function TaskForm({ milestones, members, existingTasks, localPath, onSubm
     sk.name.toLowerCase().includes(skillFilter.toLowerCase())
   );
 
+  // Validate skill references in the description
+  const skillNames = new Set(skills.map(sk => sk.name));
+  const referencedSkills = description
+    ? [...description.matchAll(/(?:^|[\s\n])\/([a-zA-Z0-9_][\w:-]*)/g)].map(m => m[1])
+    : [];
+  const invalidSkills = referencedSkills.filter(name => !skillNames.has(name));
+  const validSkills = referencedSkills.filter(name => skillNames.has(name));
+
   // Detect `/` trigger in textarea
   const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -214,6 +222,16 @@ export function TaskForm({ milestones, members, existingTasks, localPath, onSubm
                 ))}
               </div>
             )}
+            {referencedSkills.length > 0 && !showSkills && (
+              <div className={s.skillBadges}>
+                {validSkills.map(name => (
+                  <span key={name} className={s.skillBadgeValid}>/{name}</span>
+                ))}
+                {invalidSkills.map(name => (
+                  <span key={name} className={s.skillBadgeInvalid} title="Skill not found — will be ignored">/{name}</span>
+                ))}
+              </div>
+            )}
           </div>
           <div className={s.row}>
             <div className={s.field}>
@@ -285,8 +303,9 @@ export function TaskForm({ milestones, members, existingTasks, localPath, onSubm
 
           <button
             type="button"
-            className={s.moreToggle}
+            className="btn btnGhost"
             onClick={() => setShowMore(!showMore)}
+            style={{ alignSelf: 'flex-start', padding: '0' }}
           >
             {showMore ? '- Less options' : '+ More options'}
           </button>
@@ -355,10 +374,10 @@ export function TaskForm({ milestones, members, existingTasks, localPath, onSubm
           {error && <div className={s.error}>{error}</div>}
 
           <div className={s.actions}>
-            <button className={s.submit} type="submit" disabled={loading || !title.trim() || (isCustomType && !customType.trim())}>
+            <button className="btn btnPrimary" type="submit" disabled={loading || !title.trim() || (isCustomType && !customType.trim())}>
               {loading ? 'Creating...' : 'Create'}
             </button>
-            <button className={s.cancel} type="button" onClick={onClose}>Cancel</button>
+            <button className="btn btnSecondary" type="button" onClick={onClose}>Cancel</button>
           </div>
         </form>
       </div>

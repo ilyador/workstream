@@ -73,10 +73,10 @@ export function AddProjectModal({ onClose, onCreate }: Props) {
           />
           <p className={s.hint}>The absolute path to your project's root folder on this machine.</p>
           <div className={s.actions}>
-            <button className={s.cancelBtn} type="button" onClick={onClose}>
+            <button className="btn btnSecondary" type="button" onClick={onClose}>
               Cancel
             </button>
-            <button className={s.createBtn} type="submit" disabled={loading || !name.trim() || !localPath.trim()}>
+            <button className="btn btnPrimary" type="submit" disabled={loading || !name.trim() || !localPath.trim()}>
               {loading ? 'Creating...' : 'Create Project'}
             </button>
           </div>

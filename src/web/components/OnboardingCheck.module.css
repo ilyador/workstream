@@ -89,15 +89,4 @@
   margin-top: 6px;
   line-height: 1.6;
 }
-.retry {
-  padding: 10px 28px;
-  background: var(--text);
-  color: var(--bg);
-  border: none;
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.retry:hover { opacity: 0.8; }
+/* Retry button now uses global .btn .btnPrimary */

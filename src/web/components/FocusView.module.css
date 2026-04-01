@@ -29,32 +29,7 @@
   gap: 14px;
   margin-bottom: 48px;
 }
-.run {
-  padding: 11px 36px;
-  background: var(--text);
-  color: var(--bg);
-  border: none;
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-.run:hover { opacity: 0.8; }
-.skip {
-  padding: 11px 24px;
-  background: none;
-  color: var(--text-3);
-  border: 1.5px solid var(--divider);
-  border-radius: 8px;
-  font-family: var(--font);
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.skip:hover { color: var(--text-2); border-color: var(--text-4); }
+/* Button styles now use global .btn / .btnPrimary / .btnSecondary */
 .meta {
   font-size: 13px;
   color: var(--text-3);

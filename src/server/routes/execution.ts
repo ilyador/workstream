@@ -225,11 +225,29 @@ executionRouter.post('/api/jobs/:id/terminate', requireAuth, async (req, res) =>
   // Kill the child process
   cancelJob(jobId);
 
+  // Look up localPath for auto-revert
+  let failMessage = 'Job failed: terminated by user.';
+  const userId = (req as any).userId;
+  const { data: member } = await supabase
+    .from('project_members')
+    .select('local_path')
+    .eq('project_id', job.project_id)
+    .eq('user_id', userId)
+    .single();
+  const localPath = member?.local_path;
+
+  if (localPath) {
+    try {
+      revertToCheckpoint(localPath, jobId);
+      failMessage += ' Changes have been automatically reverted.';
+    } catch { /* ignore revert failure */ }
+  }
+
   // Mark job as failed
   await supabase.from('jobs').update({
     status: 'failed',
     completed_at: new Date().toISOString(),
-    question: 'Job terminated by user',
+    question: failMessage,
   }).eq('id', jobId);
 
   // Move task back to backlog
