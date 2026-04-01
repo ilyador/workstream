@@ -28,10 +28,19 @@
 .list {}
 .item {
   border-bottom: 1px solid var(--divider);
-  cursor: grab;
+  cursor: pointer;
   transition: background 0.12s, border-color 0.15s;
 }
-.item:active { cursor: grabbing; }
+.handle {
+  color: var(--text-4);
+  font-size: 14px;
+  cursor: grab;
+  user-select: none;
+  padding: 4px 2px;
+  flex-shrink: 0;
+}
+.handle:active { cursor: grabbing; }
+.handle:hover { color: var(--text-3); }
 .dragging {
   opacity: 0.4;
 }

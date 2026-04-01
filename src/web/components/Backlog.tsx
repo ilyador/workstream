@@ -81,21 +81,6 @@ export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteT
         {filteredTasks.map((task) => (
           <div
             key={task.id}
-            draggable
-            onDragStart={(e) => {
-              setDraggedId(task.id);
-              e.dataTransfer.effectAllowed = 'move';
-              if (e.currentTarget instanceof HTMLElement) {
-                e.currentTarget.style.opacity = '0.5';
-              }
-            }}
-            onDragEnd={(e) => {
-              setDraggedId(null);
-              setDropTarget(null);
-              if (e.currentTarget instanceof HTMLElement) {
-                e.currentTarget.style.opacity = '1';
-              }
-            }}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = 'move';
@@ -103,9 +88,7 @@ export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteT
                 setDropTarget(task.id);
               }
             }}
-            onDragLeave={() => {
-              setDropTarget(null);
-            }}
+            onDragLeave={() => setDropTarget(null)}
             onDrop={(e) => {
               e.preventDefault();
               if (draggedId && draggedId !== task.id) {
@@ -118,6 +101,28 @@ export function Backlog({ tasks, onAddTask, onUpdateTask, onSwapTasks, onDeleteT
             onClick={() => setExpanded(expanded === task.id ? null : task.id)}
           >
             <div className={s.row}>
+              <span
+                className={s.handle}
+                draggable
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  setDraggedId(task.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  // Find the parent item and dim it
+                  const item = (e.target as HTMLElement).closest(`.${s.item}`);
+                  if (item instanceof HTMLElement) item.style.opacity = '0.4';
+                }}
+                onDragEnd={() => {
+                  setDraggedId(null);
+                  setDropTarget(null);
+                  // Restore all items
+                  document.querySelectorAll(`.${s.item}`).forEach(el => {
+                    (el as HTMLElement).style.opacity = '';
+                  });
+                }}
+                onClick={(e) => e.stopPropagation()}
+                title="Drag to reorder"
+              >&#8942;&#8942;</span>
               <span className={s.title}>{task.title}</span>
               {task.blocked && <span className={s.tag + ' ' + s.tagRed}>blocked</span>}
               {task.mode === 'human' && <span className={s.tag + ' ' + s.tagGray}>human</span>}
