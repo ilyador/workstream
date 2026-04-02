@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { execFileSync } from 'child_process';
 import { loadTaskTypeConfig } from '../runner.js';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../auth-middleware.js';
@@ -205,15 +206,33 @@ executionRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => {
   try { deleteCheckpoint(localPath, jobId); } catch {}
   await supabase.from('jobs').update({ checkpoint_status: 'cleaned' }).eq('id', jobId);
 
-  // Auto-continue: queue next task in workstream
+  // Fetch task for auto-commit + auto-continue (single query)
+  let task: any = null;
   try {
-    const { data: task } = await supabase
+    const { data } = await supabase
       .from('tasks')
-      .select('id, auto_continue, workstream_id, position')
+      .select('id, type, title, auto_continue, workstream_id, position')
       .eq('id', job.task_id)
       .single();
+    task = data;
+  } catch {}
 
-    if (task?.auto_continue && task.workstream_id) {
+  // Auto-commit the changes
+  if (task) {
+    try {
+      const git = (args: string[]) => execFileSync('git', args, { cwd: localPath, encoding: 'utf-8', timeout: 15000 }).trim();
+      git(['add', '-A']);
+      try {
+        git(['commit', '-m', `codesync(${task.type}): ${task.title}`]);
+      } catch { /* nothing to commit is ok */ }
+    } catch (err: any) {
+      console.error('[approve] Auto-commit failed:', err.message);
+    }
+  }
+
+  // Auto-continue: queue next task in workstream
+  if (task?.auto_continue && task.workstream_id) {
+    try {
       await queueNextWorkstreamTask({
         completedTaskId: task.id,
         projectId: job.project_id,
@@ -221,9 +240,9 @@ executionRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => {
         workstreamId: task.workstream_id,
         completedPosition: task.position,
       });
+    } catch (err: any) {
+      console.error('[auto-continue] Error:', err.message);
     }
-  } catch (err: any) {
-    console.error('[auto-continue] Error:', err.message);
   }
 
   res.json({ ok: true });

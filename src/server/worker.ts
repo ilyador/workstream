@@ -1,8 +1,10 @@
 import 'dotenv/config';
+import { execFileSync } from 'child_process';
 import { runJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
 import { supabase } from './supabase.js';
 import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
 import { queueNextWorkstreamTask } from './auto-continue.js';
+import { ensureWorktree } from './worktree.js';
 
 // ---------------------------------------------------------------------------
 // DB logging with batching for high-throughput log events
@@ -97,7 +99,7 @@ function makeDbCallbacks(jobId: string) {
 
 async function startJob(job: any): Promise<void> {
   const jobId: string = job.id;
-  const localPath: string = job.local_path;
+  let localPath: string = job.local_path;
 
   // Mark running
   await supabase.from('jobs').update({ status: 'running', started_at: new Date().toISOString() }).eq('id', jobId);
@@ -113,6 +115,26 @@ async function startJob(job: any): Promise<void> {
     await writeLog(jobId, 'failed', { error: 'Task not found' });
     await supabase.from('jobs').update({ status: 'failed', completed_at: new Date().toISOString(), question: 'Job failed: task not found' }).eq('id', jobId);
     return;
+  }
+
+  // Resolve worktree path if task belongs to a workstream
+  if (task.workstream_id) {
+    try {
+      const { data: ws } = await supabase
+        .from('workstreams')
+        .select('name')
+        .eq('id', task.workstream_id)
+        .single();
+      if (ws) {
+        const slug = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 50);
+        localPath = ensureWorktree(localPath, slug);
+        await supabase.from('jobs').update({ local_path: localPath }).eq('id', jobId);
+        await writeLog(jobId, 'log', { text: `[worktree] Using worktree at ${localPath}` });
+      }
+    } catch (err: any) {
+      console.error(`[worker] Worktree setup failed, using project root:`, err.message);
+      await writeLog(jobId, 'log', { text: `[worktree] Setup failed, using project root: ${err.message}` });
+    }
   }
 
   // Update task status
@@ -153,6 +175,16 @@ async function startJob(job: any): Promise<void> {
         }).eq('id', task.id);
         try { deleteCheckpoint(localPath, jobId); } catch {}
         await supabase.from('jobs').update({ checkpoint_status: 'cleaned' }).eq('id', jobId);
+        // Auto-commit the changes
+        try {
+          const git = (args: string[]) => execFileSync('git', args, { cwd: localPath, encoding: 'utf-8', timeout: 15000 }).trim();
+          git(['add', '-A']);
+          try {
+            git(['commit', '-m', `codesync(${task.type}): ${task.title}`]);
+          } catch { /* nothing to commit is ok */ }
+        } catch (err: any) {
+          console.error('[worker] Auto-commit failed:', err.message);
+        }
         await writeLog(jobId, 'done', {});
         // Queue next task in workstream
         if (task.workstream_id) {
