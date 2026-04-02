@@ -57,6 +57,7 @@ interface WorkstreamColumnProps {
   onRevert?: (jobId: string) => void;
   onDeleteJob?: (jobId: string) => void;
   onCreatePr?: () => void;
+  onArchive?: () => void;
 }
 
 export function WorkstreamColumn({
@@ -85,9 +86,10 @@ export function WorkstreamColumn({
   onRevert,
   onDeleteJob,
   onCreatePr,
+  onArchive,
 }: WorkstreamColumnProps) {
   const modal = useModal();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(workstream?.name || '');
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -148,7 +150,11 @@ export function WorkstreamColumn({
   const prevActiveRef = useRef<string | null>(null);
   useEffect(() => {
     if (activeTaskId && activeTaskId !== prevActiveRef.current) {
-      setExpandedId(activeTaskId);
+      setExpandedIds(prev => {
+        const next = new Set(prev);
+        next.add(activeTaskId);
+        return next;
+      });
     }
     prevActiveRef.current = activeTaskId;
   }, [activeTaskId]);
@@ -262,10 +268,10 @@ export function WorkstreamColumn({
             </span>
           )}
 
-          {/* Status pill + count next to name */}
-          {!isBacklog && totalTasks > 0 && (
-            <span className={`${s.statusPill} ${wsStatus && wsStatus !== 'open' ? s[`statusPill--${wsStatus.replace(' ', '-')}`] : ''}`}>
-              {wsStatus && wsStatus !== 'open' ? `${wsStatus} \u00B7 ` : ''}{doneTasks}/{totalTasks}
+          {/* Status pill next to name (no count -- progress line shows progress) */}
+          {!isBacklog && totalTasks > 0 && wsStatus && wsStatus !== 'open' && (
+            <span className={`${s.statusPill} ${s[`statusPill--${wsStatus.replace(' ', '-')}`] || ''}`}>
+              {wsStatus}
             </span>
           )}
 
@@ -298,21 +304,6 @@ export function WorkstreamColumn({
               >
                 +
               </button>
-
-              {!isBacklog && workstream && onRenameWorkstream && (
-                <button
-                  className={s.actionBtn}
-                  onClick={() => {
-                    setEditName(workstream.name);
-                    setEditing(true);
-                  }}
-                  title="Rename workstream"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M17 3l4 4L7 21H3v-4L17 3z" />
-                  </svg>
-                </button>
-              )}
 
               {!isBacklog && workstream && onDeleteWorkstream && (
                 <button
@@ -353,6 +344,9 @@ export function WorkstreamColumn({
           if (draggedTaskId) updateDropIndicator(e.clientY);
         }}
       >
+        {tasks.length === 0 && draggedTaskId && (
+          <div className={s.emptyDropZone}>Drop here</div>
+        )}
         {tasks.length === 0 && !draggedTaskId && (
           <div className={s.empty}>
             {isBacklog ? 'No tasks in backlog' : 'Drop tasks here'}
@@ -368,9 +362,14 @@ export function WorkstreamColumn({
                 canRunAi={canRunAi}
                 showPriority={isBacklog}
                 projectId={projectId || undefined}
-                isExpanded={expandedId === task.id}
-                onToggleExpand={() => setExpandedId(expandedId === task.id ? null : task.id)}
-                onRun={onRunTask}
+                isExpanded={expandedIds.has(task.id)}
+                onToggleExpand={() => setExpandedIds(prev => {
+                  const next = new Set(prev);
+                  if (next.has(task.id)) next.delete(task.id);
+                  else next.add(task.id);
+                  return next;
+                })}
+                onRun={isBacklog ? undefined : onRunTask}
                 onEdit={onEditTask ? () => onEditTask(task) : undefined}
                 onDelete={onDeleteTask ? () => onDeleteTask(task.id) : undefined}
                 onUpdateTask={onUpdateTask}
@@ -420,11 +419,18 @@ export function WorkstreamColumn({
       {(wsStatus === 'done' || wsStatus === 'merged') && (
         <div className={s.completeBanner}>
           <span>&#10003; PR created</span>
-          {workstream?.pr_url && (
-            <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
-              View PR
-            </a>
-          )}
+          <div className={s.completeBannerActions}>
+            {workstream?.pr_url && (
+              <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
+                View PR
+              </a>
+            )}
+            {onArchive && (
+              <button className={s.archiveBtn} onClick={onArchive}>
+                Clear
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

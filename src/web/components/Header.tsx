@@ -78,7 +78,7 @@ export function Header({
   return (
     <header className={s.bar}>
       <div className={s.left}>
-        <span className={s.logo}>CodeSync</span>
+        <span className={s.logo}>WorkStream</span>
         <span className={s.sep}>/</span>
         <div className={s.switcher} ref={dropdownRef}>
           <button className={s.project} onClick={() => setOpen(prev => !prev)}>

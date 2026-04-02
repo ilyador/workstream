@@ -416,9 +416,6 @@ function IdleDetail({
 
       {task.assignee && task.assignee.type !== 'ai' && onUpdateTask && (
         <div className={s.humanActions}>
-          <button className="btn btnPrimary btnSm" onClick={() => onUpdateTask(task.id, { status: 'in_progress' })}>
-            Start
-          </button>
           <button className="btn btnSuccess btnSm" onClick={() => onUpdateTask(task.id, { status: 'done' })}>
             Done
           </button>

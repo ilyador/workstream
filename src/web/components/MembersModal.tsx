@@ -70,7 +70,7 @@ export function MembersModal({ projectId, currentUserId, onClose }: Props) {
             <div key={m.id} className={s.memberRow}>
               <div className={s.memberAvatar}>{m.initials}</div>
               <div className={s.memberInfo}>
-                <span className={s.memberName}>{m.name}{m.pending ? ' (pending)' : ''}</span>
+                <span className={s.memberName}>{m.pending ? `${m.email} (pending)` : m.name}</span>
                 <span className={s.memberRole}>{m.role}</span>
               </div>
               {m.id !== currentUserId && (

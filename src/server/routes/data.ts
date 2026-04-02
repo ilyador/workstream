@@ -134,10 +134,9 @@ dataRouter.get('/api/members', requireAuth, async (req, res) => {
     .eq('project_id', projectId);
 
   for (const inv of invites || []) {
-    const name = inv.email.split('@')[0];
-    const parts = name.split(/[.\-_]/);
+    const parts = inv.email.split('@')[0].split(/[.\-_]/);
     const initials = (parts[0][0] + (parts[parts.length - 1]?.[0] || '')).toUpperCase();
-    members.push({ id: inv.id, name, email: inv.email, initials, role: inv.role, pending: true });
+    members.push({ id: inv.id, name: inv.email, email: inv.email, initials, role: inv.role, pending: true });
   }
 
   res.json(members);
@@ -692,8 +691,8 @@ dataRouter.post('/api/projects/:id/invite', requireAuth, async (req, res) => {
       .single();
     if (error) return res.status(400).json({ error: error.message });
 
-    const { name, initials } = deriveNameFromEmail(email);
-    res.json({ ok: true, member: { id: invite.id, name, email, initials, role, pending: true } });
+    const { initials } = deriveNameFromEmail(email);
+    res.json({ ok: true, member: { id: invite.id, name: email, email, initials, role, pending: true } });
   }
 });
 
@@ -764,8 +763,8 @@ dataRouter.get('/api/projects/:id/members', requireAuth, async (req, res) => {
   // Include pending invites
 
   for (const inv of invites || []) {
-    const { name, initials } = deriveNameFromEmail(inv.email);
-    members.push({ id: inv.id, name, email: inv.email, initials, role: inv.role, pending: true });
+    const { initials } = deriveNameFromEmail(inv.email);
+    members.push({ id: inv.id, name: inv.email, email: inv.email, initials, role: inv.role, pending: true });
   }
 
   res.json(members);

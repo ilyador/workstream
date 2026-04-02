@@ -220,6 +220,7 @@ export function Board({
           onRevert={onRevert}
           onDeleteJob={onDeleteJob}
           onCreatePr={() => onCreatePr(ws.id)}
+          onArchive={() => onUpdateWorkstream(ws.id, { status: 'archived' })}
         />
       ))}
 

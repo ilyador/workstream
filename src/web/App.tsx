@@ -132,8 +132,8 @@ export default function App() {
 
   useEffect(() => {
     document.title = projects.current?.name
-      ? `${projects.current.name} - CodeSync`
-      : 'CodeSync';
+      ? `${projects.current.name} - WorkStream`
+      : 'WorkStream';
   }, [projects.current?.name]);
 
   // Build a member lookup from project members

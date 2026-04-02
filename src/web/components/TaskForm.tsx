@@ -385,15 +385,17 @@ export function TaskForm({ workstreams, members, existingTasks, customTypes = []
                 {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
-            <div className={s.field}>
-              <label className={s.label}>Effort</label>
-              <select className={s.select} value={effort} onChange={e => setEffort(e.target.value)}>
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-                <option value="max">max</option>
-              </select>
-            </div>
+            {!assignee && (
+              <div className={s.field}>
+                <label className={s.label}>Effort</label>
+                <select className={s.select} value={effort} onChange={e => setEffort(e.target.value)}>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                  <option value="max">max</option>
+                </select>
+              </div>
+            )}
           </div>
           <div className={s.row}>
             {workstreams.length > 0 && (
@@ -425,14 +427,16 @@ export function TaskForm({ workstreams, members, existingTasks, customTypes = []
           </div>
 
           <div className={s.checkboxes}>
-            <label className={s.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={multiagent === 'yes'}
-                onChange={e => setMultiagent(e.target.checked ? 'yes' : 'auto')}
-              />
-              <span>Use subagents</span>
-            </label>
+            {!assignee && (
+              <label className={s.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={multiagent === 'yes'}
+                  onChange={e => setMultiagent(e.target.checked ? 'yes' : 'auto')}
+                />
+                <span>Use subagents</span>
+              </label>
+            )}
             <label className={s.checkboxRow}>
               <input
                 type="checkbox"

@@ -233,6 +233,17 @@
   font-style: italic;
 }
 
+/* Empty drop zone: visible only during active drag over an empty column */
+.emptyDropZone {
+  padding: 24px 12px;
+  border: 2px dashed var(--divider);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-4);
+  transition: border-color 0.15s, background 0.15s;
+}
+
 /* Card wrapper */
 .cardWrap {
   position: relative;
@@ -262,13 +273,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  padding: 10px;
+  gap: 8px;
+  padding: 10px 14px;
   background: var(--green-bg);
   color: var(--green);
   font-size: 13px;
   font-weight: 600;
   border-top: 1px solid rgba(22, 163, 74, 0.12);
+}
+
+.completeBannerActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .reviewingBanner {
@@ -298,13 +316,44 @@
 }
 
 .prLink {
-  font-size: 13px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--blue);
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  border-radius: 6px;
   text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
 }
 .prLink:hover {
-  text-decoration: underline;
+  background: rgba(37, 99, 235, 0.14);
+  border-color: rgba(37, 99, 235, 0.25);
+  text-decoration: none;
+}
+
+.archiveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-4);
+  background: none;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.archiveBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-2);
+  border-color: var(--text-4);
 }
 
 /* Dark mode: bump status pill opacities */
