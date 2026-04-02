@@ -416,9 +416,20 @@ export function WorkstreamColumn({
         </div>
       )}
 
-      {(wsStatus === 'done' || wsStatus === 'merged') && (
+      {wsStatus === 'done' && (
         <div className={s.completeBanner}>
-          <span>&#10003; PR created</span>
+          <span>PR open</span>
+          {workstream?.pr_url && (
+            <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
+              View PR
+            </a>
+          )}
+        </div>
+      )}
+
+      {wsStatus === 'merged' && (
+        <div className={`${s.completeBanner} ${s.mergedBanner}`}>
+          <span>&#10003; PR merged</span>
           <div className={s.completeBannerActions}>
             {workstream?.pr_url && (
               <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
@@ -427,7 +438,7 @@ export function WorkstreamColumn({
             )}
             {onArchive && (
               <button className={s.archiveBtn} onClick={onArchive}>
-                Clear
+                Archive
               </button>
             )}
           </div>

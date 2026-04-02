@@ -1,10 +1,14 @@
 import 'dotenv/config';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { runJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
 import { supabase } from './supabase.js';
 import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
 import { queueNextWorkstreamTask } from './auto-continue.js';
 import { ensureWorktree } from './worktree.js';
 import { autoCommit, slugify } from './git-utils.js';
+
+const execFileAsync = promisify(execFile);
 
 // ---------------------------------------------------------------------------
 // DB logging with batching for high-throughput log events
@@ -373,6 +377,48 @@ setInterval(async () => {
     console.error('[worker] Cleanup failed:', err.message);
   }
 })();
+
+// ---------------------------------------------------------------------------
+// PR merge polling: check GitHub for merged PRs every 60 seconds
+// ---------------------------------------------------------------------------
+
+setInterval(async () => {
+  try {
+    const { data: workstreams } = await supabase
+      .from('workstreams')
+      .select('id, pr_url')
+      .eq('status', 'complete')
+      .not('pr_url', 'is', null);
+
+    if (!workstreams || workstreams.length === 0) return;
+
+    for (const ws of workstreams) {
+      try {
+        // Parse PR URL: https://github.com/owner/repo/pull/123
+        const match = ws.pr_url.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+        if (!match) continue;
+        const [, repo, prNumber] = match;
+
+        const { stdout } = await execFileAsync('gh', [
+          'pr', 'view', prNumber, '--repo', repo, '--json', 'state',
+        ], { encoding: 'utf-8', timeout: 10000, env: { ...process.env, PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}` } });
+
+        const pr = JSON.parse(stdout.trim());
+        if (pr.state === 'MERGED') {
+          await supabase.from('workstreams').update({ status: 'merged' }).eq('id', ws.id);
+          console.log(`[worker] PR merged for workstream ${ws.id}`);
+        } else if (pr.state === 'CLOSED') {
+          // PR was closed without merging -- reset to complete so user can re-create
+          await supabase.from('workstreams').update({ status: 'complete' }).eq('id', ws.id);
+        }
+      } catch {
+        // gh CLI error for this PR -- skip silently
+      }
+    }
+  } catch (err: any) {
+    console.error('[worker] PR poll error:', err.message);
+  }
+}, 60000);
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown

@@ -315,6 +315,11 @@
   border-top-color: rgba(185, 28, 28, 0.12);
 }
 
+.mergedBanner {
+  background: rgba(22, 163, 74, 0.08);
+  border-top-color: rgba(22, 163, 74, 0.15);
+}
+
 .prLink {
   display: inline-flex;
   align-items: center;

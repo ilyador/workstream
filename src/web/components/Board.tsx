@@ -220,7 +220,13 @@ export function Board({
           onRevert={onRevert}
           onDeleteJob={onDeleteJob}
           onCreatePr={() => onCreatePr(ws.id)}
-          onArchive={() => onUpdateWorkstream(ws.id, { status: 'archived' })}
+          onArchive={async () => {
+            try {
+              await onUpdateWorkstream(ws.id, { status: 'archived' });
+            } catch (err: any) {
+              console.error('Archive failed:', err);
+            }
+          }}
         />
       ))}
 

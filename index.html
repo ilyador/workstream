@@ -5,8 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WorkStream</title>
+    <style>
+      html { background: #FBFBFA; }
+      html[data-theme="dark"] { background: #141413; }
+    </style>
   </head>
   <body>
+    <script>
+      // Apply theme before paint to prevent flash
+      (function() {
+        var stored = localStorage.getItem('codesync-theme');
+        var theme = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/web/main.tsx"></script>
   </body>
