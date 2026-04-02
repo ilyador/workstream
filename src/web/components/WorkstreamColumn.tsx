@@ -262,10 +262,10 @@ export function WorkstreamColumn({
             </span>
           )}
 
-          {/* Status pill next to name */}
-          {wsStatus && wsStatus !== 'open' && !isBacklog && (
-            <span className={`${s.statusPill} ${s[`statusPill--${wsStatus.replace(' ', '-')}`]}`}>
-              {wsStatus}
+          {/* Status pill + count next to name */}
+          {!isBacklog && totalTasks > 0 && (
+            <span className={`${s.statusPill} ${wsStatus && wsStatus !== 'open' ? s[`statusPill--${wsStatus.replace(' ', '-')}`] : ''}`}>
+              {wsStatus && wsStatus !== 'open' ? `${wsStatus} \u00B7 ` : ''}{doneTasks}/{totalTasks}
             </span>
           )}
 
