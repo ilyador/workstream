@@ -14,6 +14,9 @@
 3. Each completed task is auto-committed to the workstream's branch
 4. When the workstream is done, click **Create PR**
 
+<img width="1365" height="1048" alt="Screenshot 2026-04-02 at 14 13 22" src="https://github.com/user-attachments/assets/31876ed3-1adf-48b2-8ad0-09930e60f781" />
+
+
 ## Two Ways to Run
 
 ### Local Development
