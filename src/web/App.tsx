@@ -19,7 +19,7 @@ import { AddProjectModal } from './components/AddProjectModal';
 import { MembersModal } from './components/MembersModal';
 import './styles/global.css';
 
-import { elapsed, timeAgo } from './lib/time';
+import { timeAgo } from './lib/time';
 
 /** Full phase pipeline per task type (mirrors server DEFAULT_TASK_TYPES + final). */
 const TASK_TYPE_PHASES: Record<string, string[]> = {
@@ -122,14 +122,7 @@ export default function App() {
     }
   }, [tasks.tasks, webNotifs.notify]);
 
-  // Tick counter for elapsed time updates on running jobs
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const hasRunning = jobs.jobs.some(j => j.status === 'running');
-    if (!hasRunning) return;
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
-    return () => clearInterval(interval);
-  }, [jobs.jobs]);
+  // Tick removed — elapsed is now computed locally inside TaskCard
 
   useEffect(() => {
     document.title = projects.current?.name
@@ -158,7 +151,7 @@ export default function App() {
       currentPhase: j.current_phase || undefined,
       attempt: j.attempt,
       maxAttempts: j.max_attempts,
-      elapsed: j.status === 'running' ? elapsed(j.started_at) : undefined,
+      startedAt: j.started_at || undefined,
       phases: buildPhases(j.phases_completed || [], j.current_phase, taskTypeMap[j.task_id] || 'feature'),
       question: j.question || undefined,
       review: j.review_result ? {
@@ -171,8 +164,7 @@ export default function App() {
       } : undefined,
       completedAgo: j.completed_at ? timeAgo(j.completed_at) : undefined,
     }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs.jobs, taskTitleMap, taskTypeMap, tick]);
+  }, [jobs.jobs, taskTitleMap, taskTypeMap]);
 
   // Step 1: Environment check
   if (!envReady) {

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Markdown from 'react-markdown';
 import { useComments } from '../hooks/useComments';
-import { timeAgo } from '../lib/time';
+import { timeAgo, elapsed } from '../lib/time';
 import { LiveLogs } from './LiveLogs';
 import { ReplyInput } from './ReplyInput';
 import type { JobView } from './job-types';
@@ -106,6 +106,20 @@ export function TaskCard({
   const tagStatusClass = jobStatus
     ? s[`tag${cap(jobStatus)}`] : '';
 
+  // Local elapsed timer — only ticks when this card's job is running
+  const [elapsedText, setElapsedText] = useState(
+    jobStatus === 'running' && job?.startedAt ? elapsed(job.startedAt) : ''
+  );
+  useEffect(() => {
+    if (jobStatus !== 'running' || !job?.startedAt) {
+      setElapsedText('');
+      return;
+    }
+    setElapsedText(elapsed(job.startedAt));
+    const interval = setInterval(() => setElapsedText(elapsed(job.startedAt!)), 1000);
+    return () => clearInterval(interval);
+  }, [jobStatus, job?.startedAt]);
+
   return (
     <div
       className={`${s.card} ${priorityBgClass} ${priorityBorderClass} ${statusClass} ${isDragging ? s.dragging : ''}`}
@@ -206,7 +220,7 @@ export function TaskCard({
               <div className={s.runMeta}>
                 <span>{job.currentPhase || 'Starting'}</span>
                 <span>attempt {job.attempt || 1}/{job.maxAttempts || 3}</span>
-                {job.elapsed && <strong>{job.elapsed}</strong>}
+                {elapsedText && <strong>{elapsedText}</strong>}
               </div>
               <LiveLogs jobId={job.id} />
               {onTerminate && (

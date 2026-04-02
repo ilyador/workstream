@@ -9,7 +9,7 @@ export type JobView = {
   currentPhase?: string;
   attempt?: number;
   maxAttempts?: number;
-  elapsed?: string;
+  startedAt?: string;
   question?: string;
   review?: {
     filesChanged: number;
