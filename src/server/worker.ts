@@ -134,10 +134,18 @@ async function startJob(job: any): Promise<void> {
       taskType,
       phasesAlreadyCompleted,
       ...callbacks,
+      // Override onDone when auto-approve is active (onReview already writes the done event)
+      ...(task.auto_continue ? { onDone: () => {} } : {}),
       onReview,
     });
   } catch (err: any) {
-    writeLog(jobId, 'failed', { error: err.message }).then().catch(() => {});
+    await writeLog(jobId, 'failed', { error: err.message });
+    await supabase.from('jobs').update({
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      question: `Job failed: ${err.message}`,
+    }).eq('id', jobId);
+    await supabase.from('tasks').update({ status: 'backlog' }).eq('id', task.id);
   }
 }
 
@@ -195,16 +203,20 @@ async function maybeQueueNextTask(completedTaskId: string, projectId: string, lo
   }
 
   // Insert a new queued job for the next task
+  const nextTaskType = loadTaskTypeConfig(localPath, nextTask.type);
   const { error: insertErr } = await supabase.from('jobs').insert({
     task_id: nextTask.id,
     project_id: projectId,
     status: 'queued',
     local_path: localPath,
+    current_phase: nextTaskType.phases[0],
+    max_attempts: nextTaskType.verify_retries + 1,
   });
 
   if (insertErr) {
     console.error(`[worker] Failed to queue next task ${nextTask.id}:`, insertErr.message);
   } else {
+    await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', nextTask.id);
     console.log(`[worker] Queued next task ${nextTask.id} in workstream`);
   }
 }
@@ -216,24 +228,28 @@ async function maybeQueueNextTask(completedTaskId: string, projectId: string, lo
 let busyJobId: string | null = null;
 
 setInterval(async () => {
-  if (busyJobId) return;
+  try {
+    if (busyJobId) return;
 
-  const { data: jobs } = await supabase
-    .from('jobs')
-    .select('*')
-    .eq('status', 'queued')
-    .order('created_at', { ascending: true })
-    .limit(1);
+    const { data: jobs } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('status', 'queued')
+      .order('started_at', { ascending: true })
+      .limit(1);
 
-  if (!jobs || jobs.length === 0) return;
+    if (!jobs || jobs.length === 0) return;
 
-  const job = jobs[0];
-  busyJobId = job.id;
-  console.log(`[worker] Picked up job ${job.id} for task ${job.task_id}`);
+    const job = jobs[0];
+    busyJobId = job.id;
+    console.log(`[worker] Picked up job ${job.id} for task ${job.task_id}`);
 
-  startJob(job)
-    .catch((err) => console.error(`[worker] startJob error: ${err.message}`))
-    .finally(() => { busyJobId = null; });
+    startJob(job)
+      .catch((err) => console.error(`[worker] startJob error: ${err.message}`))
+      .finally(() => { busyJobId = null; });
+  } catch (err: any) {
+    console.error('[worker] Poll error:', err.message);
+  }
 }, 1000);
 
 // ---------------------------------------------------------------------------
@@ -241,40 +257,38 @@ setInterval(async () => {
 // ---------------------------------------------------------------------------
 
 setInterval(async () => {
-  const { data: cancelingJobs } = await supabase
-    .from('jobs')
-    .select('*')
-    .eq('status', 'canceling');
+  try {
+    const { data: cancelingJobs } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('status', 'canceling');
 
-  if (!cancelingJobs || cancelingJobs.length === 0) return;
+    if (!cancelingJobs || cancelingJobs.length === 0) return;
 
-  for (const job of cancelingJobs) {
-    console.log(`[worker] Canceling job ${job.id}`);
-
-    // Kill the child process
-    cancelJob(job.id);
-
-    // Revert checkpoint if local_path exists
-    if (job.local_path) {
+    for (const job of cancelingJobs) {
       try {
-        revertToCheckpoint(job.local_path, job.id);
-        console.log(`[worker] Reverted checkpoint for job ${job.id}`);
+        console.log(`[worker] Canceling job ${job.id}`);
+        cancelJob(job.id);
+
+        if (job.local_path) {
+          try {
+            revertToCheckpoint(job.local_path, job.id);
+          } catch { /* checkpoint may not exist for queued jobs */ }
+        }
+
+        await supabase.from('jobs').update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          question: 'Job failed: canceled by user.',
+        }).eq('id', job.id);
+        await supabase.from('tasks').update({ status: 'backlog' }).eq('id', job.task_id);
+        await writeLog(job.id, 'failed', { error: 'Job canceled by user' });
       } catch (err: any) {
-        console.error(`[worker] Revert failed for job ${job.id}: ${err.message}`);
+        console.error(`[worker] Cancel error for job ${job.id}:`, err.message);
       }
     }
-
-    // Mark failed
-    await supabase.from('jobs').update({
-      status: 'failed',
-      completed_at: new Date().toISOString(),
-      question: 'Job failed: canceled by user. Changes have been reverted.',
-    }).eq('id', job.id);
-
-    // Move task back to backlog
-    await supabase.from('tasks').update({ status: 'backlog' }).eq('id', job.task_id);
-
-    await writeLog(job.id, 'failed', { error: 'Job canceled by user' });
+  } catch (err: any) {
+    console.error('[worker] Cancellation poll error:', err.message);
   }
 }, 1000);
 
@@ -282,11 +296,32 @@ setInterval(async () => {
 // Orphan cleanup on startup
 // ---------------------------------------------------------------------------
 
-cleanupOrphanedJobs().then((count) => {
-  if (count > 0) console.log(`[worker] Cleaned up ${count} orphaned jobs`);
-}).catch((err) => {
-  console.error('[worker] Orphan cleanup failed:', err.message);
-});
+// Clean up orphaned running jobs + stuck canceling jobs
+(async () => {
+  try {
+    const count = await cleanupOrphanedJobs();
+    if (count > 0) console.log(`[worker] Cleaned up ${count} orphaned jobs`);
+
+    // Also clean up any jobs stuck in 'canceling' state
+    const { data: stuck } = await supabase
+      .from('jobs')
+      .select('id, task_id')
+      .eq('status', 'canceling');
+    if (stuck && stuck.length > 0) {
+      for (const job of stuck) {
+        await supabase.from('jobs').update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          question: 'Job failed: canceled (cleaned up on worker restart).',
+        }).eq('id', job.id);
+        await supabase.from('tasks').update({ status: 'backlog' }).eq('id', job.task_id);
+      }
+      console.log(`[worker] Cleaned up ${stuck.length} stuck canceling job(s)`);
+    }
+  } catch (err: any) {
+    console.error('[worker] Cleanup failed:', err.message);
+  }
+})();
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown

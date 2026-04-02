@@ -102,10 +102,10 @@ executionRouter.get('/api/jobs/:id/events', async (req, res) => {
   res.write(`event: connected\ndata: ${JSON.stringify({ status: 'ok' })}\n\n`);
 
   let lastId = parseInt(req.headers['last-event-id'] as string) || 0;
-  let jobDone = false;
+  let closed = false;
 
-  // Poll job_logs every 500ms
   const pollInterval = setInterval(async () => {
+    if (closed) return;
     try {
       const { data: logs } = await supabase
         .from('job_logs')
@@ -115,31 +115,32 @@ executionRouter.get('/api/jobs/:id/events', async (req, res) => {
         .order('id', { ascending: true })
         .limit(100);
 
-      if (logs && logs.length > 0) {
-        for (const log of logs) {
-          res.write(`id: ${log.id}\nevent: ${log.event}\ndata: ${JSON.stringify(log.data)}\n\n`);
-          lastId = log.id;
+      if (closed || !logs || logs.length === 0) return;
 
-          if (log.event === 'done' || log.event === 'failed') {
-            jobDone = true;
-          }
+      for (const log of logs) {
+        if (closed) break;
+        res.write(`id: ${log.id}\nevent: ${log.event}\ndata: ${JSON.stringify(log.data)}\n\n`);
+        lastId = log.id;
+
+        if (log.event === 'done' || log.event === 'failed') {
+          closed = true;
+          clearInterval(pollInterval);
+          clearInterval(heartbeat);
+          res.end();
+          return;
         }
-      }
-
-      if (jobDone) {
-        clearInterval(pollInterval);
-        clearInterval(heartbeat);
-        res.end();
       }
     } catch {
       // Ignore poll errors — next tick will retry
     }
   }, 500);
 
-  // Heartbeat every 15s
-  const heartbeat = setInterval(() => res.write(':heartbeat\n\n'), 15000);
+  const heartbeat = setInterval(() => {
+    if (!closed) res.write(':heartbeat\n\n');
+  }, 15000);
 
   req.on('close', () => {
+    closed = true;
     clearInterval(pollInterval);
     clearInterval(heartbeat);
   });
@@ -188,7 +189,7 @@ executionRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => {
   }
 
   const now = new Date().toISOString();
-  const localPath = req.body.localPath || '';
+  const localPath = req.body.localPath || job.local_path || '';
 
   // Mark job and task done
   await Promise.all([

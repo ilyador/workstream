@@ -22,3 +22,6 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS local_path text;
 -- Expand status CHECK to include queued and canceling
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_status_check;
 ALTER TABLE jobs ADD CONSTRAINT jobs_status_check CHECK (status IN ('queued', 'running', 'paused', 'review', 'done', 'failed', 'canceling'));
+
+-- Index for worker polling (status='queued' and status='canceling')
+CREATE INDEX idx_jobs_status ON jobs(status, started_at);
