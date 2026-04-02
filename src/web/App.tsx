@@ -258,7 +258,8 @@ export default function App() {
       />
 
       <Board
-        workstreams={workstreams.workstreams}
+        workstreams={workstreams.active}
+        archivedWorkstreams={workstreams.workstreams.filter(w => w.status === 'archived')}
         tasks={tasks.tasks}
         jobs={jobViews}
         memberMap={memberMap}

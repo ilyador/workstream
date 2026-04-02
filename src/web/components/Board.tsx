@@ -25,10 +25,12 @@ interface Workstream {
   name: string;
   status: string;
   position: number;
+  pr_url?: string | null;
 }
 
 interface BoardProps {
   workstreams: Workstream[];
+  archivedWorkstreams: Workstream[];
   tasks: Task[];
   jobs: JobView[];
   memberMap: Record<string, { name: string; initials: string }>;
@@ -58,6 +60,7 @@ interface BoardProps {
 
 export function Board({
   workstreams,
+  archivedWorkstreams,
   tasks,
   jobs,
   memberMap,
@@ -84,6 +87,7 @@ export function Board({
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [addingWs, setAddingWs] = useState(false);
   const [newWsName, setNewWsName] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
   const taskJobMap = useMemo(() => {
     const priority: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
@@ -256,6 +260,42 @@ export function Board({
           </svg>
           Add workstream
         </button>
+      )}
+
+      {/* Archived workstreams */}
+      {archivedWorkstreams.length > 0 && (
+        <div className={s.archivedSection}>
+          <button
+            className={s.archivedToggle}
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: showArchived ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+            Archived ({archivedWorkstreams.length})
+          </button>
+          {showArchived && (
+            <div className={s.archivedList}>
+              {archivedWorkstreams.map(ws => (
+                <div key={ws.id} className={s.archivedItem}>
+                  <span className={s.archivedName}>{ws.name}</span>
+                  {ws.pr_url && (
+                    <a href={ws.pr_url} target="_blank" rel="noopener noreferrer" className={s.archivedPrLink}>
+                      PR
+                    </a>
+                  )}
+                  <button
+                    className={s.archivedRestore}
+                    onClick={() => onUpdateWorkstream(ws.id, { status: 'active' })}
+                    title="Restore workstream"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

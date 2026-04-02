@@ -102,3 +102,89 @@
 .addInput::placeholder {
   color: var(--text-4);
 }
+
+/* Archived section */
+.archivedSection {
+  flex: 0 0 auto;
+  min-width: 260px;
+  align-self: flex-start;
+}
+
+.archivedToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: none;
+  border: 1.5px dashed var(--divider);
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-4);
+  cursor: pointer;
+  width: 100%;
+  transition: color 0.15s, border-color 0.15s;
+}
+.archivedToggle:hover {
+  color: var(--text-3);
+  border-color: var(--text-4);
+}
+
+.archivedList {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.archivedItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--white);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  opacity: 0.7;
+}
+
+.archivedName {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archivedPrLink {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--blue);
+  text-decoration: none;
+  padding: 2px 6px;
+  background: var(--blue-bg);
+  border-radius: 4px;
+}
+.archivedPrLink:hover {
+  text-decoration: underline;
+}
+
+.archivedRestore {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-4);
+  background: none;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.archivedRestore:hover {
+  color: var(--text-2);
+  border-color: var(--text-4);
+}
