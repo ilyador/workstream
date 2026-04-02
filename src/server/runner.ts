@@ -849,7 +849,10 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
         }
       }
       activeProcesses.delete(jobId);
-      if (code === 0 || code === null) {
+      // If claude streamed a result event but exited non-zero, treat as success.
+      // The CLI sometimes exits 1 after completing successfully (e.g. max turns reached).
+      const hasResult = fullOutput.includes('[done] Phase complete');
+      if (code === 0 || code === null || hasResult) {
         resolve(fullOutput);
       } else {
         // Include stderr in error for diagnosability
