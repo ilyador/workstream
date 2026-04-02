@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import { useComments } from '../hooks/useComments';
+import { useMembers } from '../hooks/useMembers';
 import { useModal } from '../hooks/useModal';
 import { timeAgo, elapsed } from '../lib/time';
 import { LiveLogs } from './LiveLogs';
@@ -46,6 +47,7 @@ interface TaskCardProps {
   isDragging?: boolean;
   dragDisabled?: boolean;
   showPriority?: boolean;
+  projectId?: string;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -78,6 +80,7 @@ export function TaskCard({
   isDragging,
   dragDisabled,
   showPriority,
+  projectId,
 }: TaskCardProps) {
   const jobStatus = job?.status;
   const isActive = jobStatus === 'queued' || jobStatus === 'running' || jobStatus === 'paused' || jobStatus === 'review';
@@ -440,16 +443,24 @@ function IdleDetail({
         )}
       </div>
 
-      <CardComments taskId={task.id} />
+      <CardComments taskId={task.id} projectId={projectId} />
     </>
   );
 }
 
 /** Inline comments for a task card */
-function CardComments({ taskId }: { taskId: string }) {
+function CardComments({ taskId, projectId }: { taskId: string; projectId?: string }) {
   const { comments, addComment } = useComments(taskId);
+  const { members } = useMembers(projectId || null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIdx, setMentionIdx] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const mentionMatches = mentionQuery !== null
+    ? members.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5)
+    : [];
 
   const handleSend = async () => {
     const body = text.trim();
@@ -458,9 +469,51 @@ function CardComments({ taskId }: { taskId: string }) {
     try {
       await addComment(body);
       setText('');
+      setMentionQuery(null);
     } finally {
       setSending(false);
     }
+  };
+
+  const insertMention = (name: string) => {
+    const input = inputRef.current;
+    if (!input) return;
+    const cursor = input.selectionStart || 0;
+    // Find the @ that started this mention
+    const before = text.slice(0, cursor);
+    const atIdx = before.lastIndexOf('@');
+    if (atIdx < 0) return;
+    const after = text.slice(cursor);
+    setText(before.slice(0, atIdx) + `@${name} ` + after);
+    setMentionQuery(null);
+    setTimeout(() => {
+      const newPos = atIdx + name.length + 2;
+      input.focus();
+      input.setSelectionRange(newPos, newPos);
+    }, 0);
+  };
+
+  const handleChange = (val: string) => {
+    setText(val);
+    const cursor = inputRef.current?.selectionStart || val.length;
+    const before = val.slice(0, cursor);
+    const atMatch = before.match(/@(\w*)$/);
+    if (atMatch) {
+      setMentionQuery(atMatch[1]);
+      setMentionIdx(0);
+    } else {
+      setMentionQuery(null);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (mentionMatches.length > 0 && mentionQuery !== null) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIdx(i => Math.min(i + 1, mentionMatches.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIdx(i => Math.max(i - 1, 0)); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionMatches[mentionIdx].name); return; }
+      if (e.key === 'Escape') { setMentionQuery(null); return; }
+    }
+    if (e.key === 'Enter') handleSend();
   };
 
   return (
@@ -485,21 +538,49 @@ function CardComments({ taskId }: { taskId: string }) {
           </div>
         </div>
       ))}
-      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-        <input
-          style={{
-            flex: 1, padding: '4px 10px', background: 'var(--white)', border: '1.5px solid var(--divider)',
-            borderRadius: 6, fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', outline: 'none',
-          }}
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
-          placeholder="Add a comment..."
-          disabled={sending}
-        />
-        <button className="btn btnPrimary btnSm" style={{ padding: '3px 10px', fontSize: 11 }} onClick={handleSend} disabled={sending || !text.trim()}>
-          Send
-        </button>
+      <div style={{ position: 'relative' }}>
+        {mentionMatches.length > 0 && (
+          <div style={{
+            position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4,
+            background: 'var(--white)', border: '1px solid var(--divider)', borderRadius: 8,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden', zIndex: 10,
+          }}>
+            {mentionMatches.map((m, i) => (
+              <div
+                key={m.id}
+                onMouseDown={(e) => { e.preventDefault(); insertMention(m.name); }}
+                style={{
+                  padding: '6px 10px', cursor: 'pointer', fontSize: 12,
+                  background: i === mentionIdx ? 'var(--bg-hover)' : 'transparent',
+                  color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <span style={{
+                  width: 18, height: 18, borderRadius: '50%', background: 'var(--bg-active)', color: 'var(--text-3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 600, flexShrink: 0,
+                }}>{m.initials}</span>
+                {m.name}
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            ref={inputRef}
+            style={{
+              flex: 1, padding: '4px 10px', background: 'var(--white)', border: '1.5px solid var(--divider)',
+              borderRadius: 6, fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', outline: 'none',
+            }}
+            value={text}
+            onChange={e => handleChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Add a comment... (@mention)"
+            disabled={sending}
+          />
+          <button className="btn btnPrimary btnSm" style={{ padding: '3px 10px', fontSize: 11 }} onClick={handleSend} disabled={sending || !text.trim()}>
+            Send
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -46,6 +46,9 @@ async function writeLog(jobId: string, event: string, data: Record<string, any> 
   }
   // Non-critical events (log, phase_start, phase_complete) are batched
   logBuffer.push({ job_id: jobId, event, data });
+  // Cap buffer to prevent OOM if Supabase is unreachable
+  const MAX_BUFFER = 1000;
+  while (logBuffer.length > MAX_BUFFER) logBuffer.shift();
   if (logBuffer.length >= FLUSH_SIZE) {
     if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
     await flushLogs();
@@ -295,7 +298,7 @@ setInterval(async () => {
     for (const job of cancelingJobs) {
       try {
         console.log(`[worker] Canceling job ${job.id}`);
-        cancelJob(job.id);
+        await cancelJob(job.id);
 
         if (job.local_path) {
           try {

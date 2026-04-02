@@ -259,6 +259,7 @@ export default function App() {
         jobs={jobViews}
         memberMap={memberMap}
         userRole={projects.current?.role || 'dev'}
+        projectId={projects.current?.id || null}
         onCreateWorkstream={async (name) => {
           await workstreams.createWorkstream(name);
         }}

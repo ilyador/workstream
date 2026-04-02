@@ -358,17 +358,27 @@ export const claudeEnv = {
 // Active processes for cancellation
 const activeProcesses = new Map<string, ChildProcess>();
 
-export function cancelJob(jobId: string) {
+export function cancelJob(jobId: string): Promise<void> {
   const proc = activeProcesses.get(jobId);
-  if (proc) {
+  if (!proc) return Promise.resolve();
+  activeProcesses.delete(jobId);
+  return new Promise((resolve) => {
     proc.kill('SIGTERM');
-    activeProcesses.delete(jobId);
-  }
+    const escalate = setTimeout(() => {
+      try { if (!proc.killed) proc.kill('SIGKILL'); } catch { /* already dead */ }
+    }, 5000);
+    proc.on('close', () => { clearTimeout(escalate); resolve(); });
+    // Resolve after 6s regardless to avoid hanging forever
+    setTimeout(resolve, 6000);
+  });
 }
 
 export function cancelAllJobs() {
   for (const [jobId, proc] of activeProcesses) {
     proc.kill('SIGTERM');
+    setTimeout(() => {
+      try { if (!proc.killed) proc.kill('SIGKILL'); } catch { /* already dead */ }
+    }, 5000);
     activeProcesses.delete(jobId);
   }
 }
@@ -427,6 +437,15 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
   // Build the set of phase names already done, so we can skip them
   const completedPhaseNames = new Set(phasesAlreadyCompleted.map((p: any) => p.phase));
+
+  // On resume with a human answer, remove the paused phase from completed
+  // so it re-executes with fresh retries instead of looping back to pause
+  if (phasesAlreadyCompleted.length > 0 && task.answer) {
+    const lastPhase = phasesAlreadyCompleted[phasesAlreadyCompleted.length - 1]?.phase;
+    if (lastPhase) {
+      completedPhaseNames.delete(lastPhase);
+    }
+  }
 
   // Run through phases
   const allPhases = [...taskType.phases, taskType.final];
@@ -514,6 +533,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
         // Verify phase: check if tests passed
         if (phase === 'verify') {
           const verdict = extractVerdict(output);
+          if (!verdict) console.warn(`[runner] Job ${jobId}: verify phase returned no structured verdict, using legacy heuristics`);
           const failed = verdict ? !verdict.passed : legacyVerifyCheck(output);
           const reason = verdict?.reason || 'verification failed (see output)';
           if (failed && attempt < maxAttempts) {
@@ -522,6 +542,10 @@ export async function runJob(ctx: JobContext): Promise<void> {
             if (jumpIndex >= 0 && jumpIndex < i) {
               onLog(`\nVerify failed: ${reason}. Jumping back to '${jumpTarget}'...\n`);
               completedPhaseNames.delete(jumpTarget);
+              // Remove stale phase output so Claude doesn't see duplicate context
+              for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
+                if (phasesCompleted[pi].phase === jumpTarget) { phasesCompleted.splice(pi, 1); break; }
+              }
               i = jumpIndex;
               break;
             } else {
@@ -547,6 +571,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
         // Review/final phase: check if review passed
         if (phase === taskType.final) {
           const verdict = extractVerdict(output);
+          if (!verdict) console.warn(`[runner] Job ${jobId}: review phase returned no structured verdict, using legacy heuristics`);
           const failed = verdict ? !verdict.passed : legacyReviewCheck(output);
           const reason = verdict?.reason || 'review found issues (see output)';
           if (failed && attempt < maxAttempts) {
@@ -555,6 +580,10 @@ export async function runJob(ctx: JobContext): Promise<void> {
             if (jumpIndex >= 0 && jumpIndex < i) {
               onLog(`\nReview failed: ${reason}. Jumping back to '${jumpTarget}'...\n`);
               completedPhaseNames.delete(jumpTarget);
+              // Remove stale phase output so Claude doesn't see duplicate context
+              for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
+                if (phasesCompleted[pi].phase === jumpTarget) { phasesCompleted.splice(pi, 1); break; }
+              }
               i = jumpIndex;
               break;
             } else {

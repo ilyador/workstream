@@ -28,11 +28,12 @@ export async function queueNextWorkstreamTask(params: {
 
   if (!nextTask) {
     // No more tasks — check if workstream is fully complete
+    // Only mark complete when all tasks are done or canceled (not paused/in_progress)
     const { data: remaining } = await supabase
       .from('tasks')
       .select('id')
       .eq('workstream_id', workstreamId)
-      .not('status', 'eq', 'done')
+      .not('status', 'in', '("done","canceled")')
       .limit(1);
 
     if (!remaining || remaining.length === 0) {
