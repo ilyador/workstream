@@ -34,8 +34,8 @@ interface JobContext {
   onPhaseStart: (phase: string, attempt: number) => void;
   onPhaseComplete: (phase: string, output: any) => void;
   onPause: (question: string) => void;
-  onReview: (result: any) => void;
-  onDone: () => void;
+  onReview: (result: any) => Promise<void> | void;
+  onDone: () => Promise<void> | void;
   onFail: (error: string) => void;
 }
 
@@ -317,15 +317,23 @@ export async function cleanupOrphanedJobs(): Promise<number> {
       const elapsed = Date.now() - new Date(job.started_at).getTime();
       const elapsedMin = Math.round(elapsed / 60000);
 
+      const failMsg = `Job failed: worker was restarted while this job was running (after ${elapsedMin}m). Click "Run" on the task to retry.`;
       await supabase.from('jobs').update({
         status: 'failed',
         completed_at: new Date().toISOString(),
-        question: `Job failed: server was restarted while this job was running (after ${elapsedMin}m). The claude process was lost. Changes may need manual cleanup. Click "Run" on the task to retry.`,
+        question: failMsg,
       }).eq('id', job.id);
 
       await supabase.from('tasks').update({
         status: 'backlog',
       }).eq('id', job.task_id);
+
+      // Write to job_logs so SSE clients see the terminal event
+      await supabase.from('job_logs').insert({
+        job_id: job.id,
+        event: 'failed',
+        data: { error: failMsg },
+      });
 
       cleaned++;
       console.log(`Cleaned orphaned job ${job.id} (was running for ${elapsedMin}m)`);
@@ -558,8 +566,8 @@ export async function runJob(ctx: JobContext): Promise<void> {
     review_result: reviewResult,
   }).eq('id', jobId);
   await supabase.from('tasks').update({ status: 'review' }).eq('id', ctx.taskId);
-  onReview(reviewResult);
-  onDone();
+  await onReview(reviewResult);
+  await onDone();
 }
 
 function formatStreamEvent(event: any): string | null {

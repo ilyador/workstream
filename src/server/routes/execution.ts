@@ -198,6 +198,9 @@ executionRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => {
     supabase.from('tasks').update({ status: 'done', completed_at: now }).eq('id', job.task_id),
   ]);
 
+  // Write done event so SSE clients see the terminal event
+  await supabase.from('job_logs').insert({ job_id: jobId, event: 'done', data: {} });
+
   // Clean checkpoint
   try { deleteCheckpoint(localPath, jobId); } catch {}
   await supabase.from('jobs').update({ checkpoint_status: 'cleaned' }).eq('id', jobId);
@@ -243,6 +246,8 @@ executionRouter.post('/api/jobs/:id/reject', requireAuth, async (req, res) => {
     status: 'backlog',
     followup_notes: note || null,
   }).eq('id', job.task_id);
+
+  await supabase.from('job_logs').insert({ job_id: jobId, event: 'done', data: {} });
 
   res.json({ ok: true });
 });

@@ -15,9 +15,15 @@ const FLUSH_SIZE = 20;
 
 async function flushLogs(): Promise<void> {
   if (logBuffer.length === 0) return;
-  const batch = logBuffer.splice(0, logBuffer.length);
+  const batch = logBuffer.slice();
   const { error } = await supabase.from('job_logs').insert(batch);
-  if (error) console.error('[worker] Batch log write error:', error.message);
+  if (error) {
+    console.error('[worker] Batch log write error:', error.message);
+    // Keep entries in buffer for next flush attempt
+    return;
+  }
+  // Only remove on success
+  logBuffer.splice(0, batch.length);
 }
 
 function scheduleFlush() {
@@ -150,13 +156,18 @@ async function startJob(job: any): Promise<void> {
         await writeLog(jobId, 'done', {});
         // Queue next task in workstream
         if (task.workstream_id) {
-          queueNextWorkstreamTask({
-            completedTaskId: task.id,
-            projectId: job.project_id,
-            localPath,
-            workstreamId: task.workstream_id,
-            completedPosition: task.position,
-          }).catch((err: any) => console.error('[worker] auto-continue error:', err.message));
+          try {
+            await queueNextWorkstreamTask({
+              completedTaskId: task.id,
+              projectId: job.project_id,
+              localPath,
+              workstreamId: task.workstream_id,
+              completedPosition: task.position,
+            });
+          } catch (err: any) {
+            console.error('[worker] auto-continue error:', err.message);
+            await writeLog(jobId, 'log', { text: `[auto-continue] Failed to queue next task: ${err.message}` });
+          }
         }
       }
     : async (result: any) => {
@@ -175,8 +186,10 @@ async function startJob(job: any): Promise<void> {
       taskType,
       phasesAlreadyCompleted,
       ...callbacks,
-      // Override onDone when auto-approve is active (onReview already writes the done event)
-      ...(task.auto_continue ? { onDone: () => {} } : {}),
+      // Always override onDone — runner calls it after onReview for all paths.
+      // For auto-continue: onReview already wrote the 'done' event.
+      // For manual review: job is in 'review' status, not done — no terminal event yet.
+      onDone: () => {},
       onReview,
     });
   } catch (err: any) {
@@ -278,12 +291,14 @@ setInterval(async () => {
       .eq('status', 'canceling');
     if (stuck && stuck.length > 0) {
       for (const job of stuck) {
+        const msg = 'Job failed: canceled (cleaned up on worker restart).';
         await supabase.from('jobs').update({
           status: 'failed',
           completed_at: new Date().toISOString(),
-          question: 'Job failed: canceled (cleaned up on worker restart).',
+          question: msg,
         }).eq('id', job.id);
         await supabase.from('tasks').update({ status: 'backlog' }).eq('id', job.task_id);
+        await supabase.from('job_logs').insert({ job_id: job.id, event: 'failed', data: { error: msg } });
       }
       console.log(`[worker] Cleaned up ${stuck.length} stuck canceling job(s)`);
     }
@@ -296,9 +311,10 @@ setInterval(async () => {
 // Graceful shutdown
 // ---------------------------------------------------------------------------
 
-function shutdown() {
+async function shutdown() {
   console.log('[worker] Shutting down...');
   cancelAllJobs();
+  await flushLogs();
   process.exit(0);
 }
 
