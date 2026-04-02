@@ -30,8 +30,7 @@ Each workstream gets its own git worktree at `.worktrees/<name>`, so your main c
 - **AI execution** — spawns Claude Code per task with configurable phase pipelines (plan → implement → verify → review)
 - **Pause & resume** — jobs pause when Claude has a question, you answer inline
 - **Auto-revert** — git checkpoint before each task, auto-revert on failure
-- **Git integration** — each task = commit, each workstream = branch, completion = PR
-- **Worktree isolation** — each workstream runs in its own git worktree
+- **Git integration** — each workstream gets a worktree, each task = commit, completion = PR
 - **Human tasks** — toggle to human mode for design reviews, manual QA, etc.
 - **MCP server** — `project_focus`, `task_create`, `task_update`, `job_reply`, `job_approve` and more from CLI
 - **Comments & notifications** — per-task threads, @mentions, status change alerts

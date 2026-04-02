@@ -295,12 +295,12 @@ footer a:hover { color: var(--text-2); }
     <div class="feat">
       <span class="feat-n">04</span>
       <div class="feat-t">Git without the footgun</div>
-      <div class="feat-d">Each workstream gets a branch. Each task gets a commit. When the workstream is done, you click "Create PR." No git action choices, no footguns. AI never improvises with your repo.</div>
+      <div class="feat-d">Each workstream gets its own git worktree — isolated from main, isolated from each other. Each task auto-commits on completion. When the workstream is done, click "Create PR." No git choices to make. It's all automatic. AI never improvises with your repo.</div>
     </div>
     <div class="feat">
       <span class="feat-n">05</span>
       <div class="feat-t">Auto-revert on failure</div>
-      <div class="feat-d">Every task gets a git checkpoint before execution. If something breaks, files revert to exactly where they were. Failed tasks clean up after themselves.</div>
+      <div class="feat-d">Every task gets a git checkpoint inside its worktree before execution. If something breaks, the worktree reverts to exactly where it was. Your main checkout is never touched. Failed tasks clean up after themselves.</div>
     </div>
     <div class="feat">
       <span class="feat-n">06</span>
