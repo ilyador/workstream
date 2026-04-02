@@ -84,6 +84,16 @@ export function runChecks(localPath?: string): Check[] {
     });
   }
 
+  // Telegram bot
+  const botToken = !!process.env.TELEGRAM_BOT_TOKEN;
+  checks.push({
+    id: 'telegram',
+    label: 'Telegram bot',
+    ok: botToken,
+    help: 'Set TELEGRAM_BOT_TOKEN in .env to enable the Telegram bot. Create one via @BotFather in Telegram.',
+    required: false,
+  });
+
   // Project git repo
   if (localPath) {
     const repo = run('git', ['-C', localPath, 'rev-parse', '--git-dir']);

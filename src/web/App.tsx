@@ -99,14 +99,18 @@ export default function App() {
     const prev = prevJobStatuses.current;
     for (const job of jobs.jobs) {
       const oldStatus = prev[job.id];
-      if (oldStatus && oldStatus !== job.status) {
+      if (oldStatus !== job.status) {
         const title = taskTitleMap[job.task_id] || 'Task';
-        if (job.status === 'paused') {
-          webNotifs.notify('Question asked', `${title} needs your input`);
-        } else if (job.status === 'done') {
-          webNotifs.notify('Task completed', `${title} finished successfully`);
-        } else if (job.status === 'failed') {
+        // Failed notifications fire even on first sight (no oldStatus guard)
+        if (job.status === 'failed') {
           webNotifs.notify('Task failed', `${title}: ${job.question || 'unknown error'}`);
+        } else if (oldStatus) {
+          // Other notifications only fire on status transitions (not initial load)
+          if (job.status === 'paused') {
+            webNotifs.notify('Question asked', `${title} needs your input`);
+          } else if (job.status === 'done') {
+            webNotifs.notify('Task completed', `${title} finished successfully`);
+          }
         }
       }
       prev[job.id] = job.status;

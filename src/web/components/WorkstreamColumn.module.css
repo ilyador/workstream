@@ -43,7 +43,7 @@
 /* ─── Column header ─── */
 .headerWrap {
   border-bottom: 1px solid var(--divider);
-  padding: 0;
+  position: relative;
 }
 
 .header {
@@ -89,130 +89,46 @@
   border-radius: 10px;
 }
 
-/* ─── Status strip: inline after name, fills remaining width ─── */
-.statusStrip {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex: 1;
-  min-width: 0;
-  padding: 3px 10px;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--bg-hover);
-}
-
-.statusStripLabel {
-  font-size: 11px;
+/* ─── Status pill: compact badge next to stream name ─── */
+.statusPill {
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   text-transform: lowercase;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
   color: var(--text-3);
-  position: relative;
-  z-index: 1;
+  background: var(--bg-hover);
 }
+.statusPill--in-progress { color: var(--blue); background: var(--blue-bg); }
+.statusPill--pending-review { color: var(--amber); background: var(--amber-bg); }
+.statusPill--reviewing { color: #7850A0; background: rgba(120, 80, 160, 0.08); }
+.statusPill--review-failed { color: var(--red); background: var(--red-bg); }
+.statusPill--failed { color: var(--red); background: var(--red-bg); }
+.statusPill--done, .statusPill--merged { color: var(--green); background: var(--green-bg); }
 
-.statusStripCount {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-4);
-  position: relative;
-  z-index: 1;
+/* ─── Progress line: full-width bar on the header separator ─── */
+.progressLine {
+  height: 2px;
+  background: transparent;
 }
-
-/* Progress fill behind the strip text */
-.statusStripFill {
-  position: absolute;
-  top: 0;
-  left: 0;
+.progressLineFill {
   height: 100%;
-  border-radius: 6px;
   transition: width 0.3s ease;
+  min-width: 0;
 }
-
-/* Status strip color variants */
-.statusStrip--open {
-  background: var(--bg-hover);
-}
-.statusStrip--open .statusStripFill {
-  background: var(--bg-hover);
-}
-.statusStrip--open .statusStripLabel {
-  color: var(--text-4);
-}
-
-.statusStrip--in-progress {
-  background: rgba(37, 99, 235, 0.03);
-}
-.statusStrip--in-progress .statusStripFill {
-  background: rgba(37, 99, 235, 0.06);
-}
-.statusStrip--in-progress .statusStripLabel {
-  color: var(--blue);
-}
-
-.statusStrip--pending-review {
-  background: rgba(180, 83, 9, 0.03);
-}
-.statusStrip--pending-review .statusStripFill {
-  background: rgba(180, 83, 9, 0.06);
-}
-.statusStrip--pending-review .statusStripLabel {
-  color: var(--amber);
-}
-
-.statusStrip--done,
-.statusStrip--merged {
-  background: rgba(22, 163, 74, 0.03);
-}
-.statusStrip--done .statusStripFill,
-.statusStrip--merged .statusStripFill {
-  background: rgba(22, 163, 74, 0.06);
-}
-.statusStrip--done .statusStripLabel,
-.statusStrip--merged .statusStripLabel {
-  color: var(--green);
-}
-.statusStrip--done .statusStripCount,
-.statusStrip--merged .statusStripCount {
-  color: var(--green);
-}
-
-.statusStrip--reviewing {
-  background: rgba(120, 80, 160, 0.04);
-}
-.statusStrip--reviewing .statusStripFill {
-  background: rgba(120, 80, 160, 0.08);
-  animation: reviewPulse 2s ease-in-out infinite;
-}
-.statusStrip--reviewing .statusStripLabel {
-  color: #7850A0;
-}
+.progressLine--in-progress { background: var(--blue); }
+.progressLine--pending-review { background: var(--amber); }
+.progressLine--reviewing { background: #7850A0; animation: reviewPulse 2s ease-in-out infinite; }
+.progressLine--review-failed { background: var(--red); }
+.progressLine--failed { background: var(--red); }
+.progressLine--done, .progressLine--merged { background: var(--green); }
 
 @keyframes reviewPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
-}
-
-.statusStrip--review-failed {
-  background: rgba(185, 28, 28, 0.03);
-}
-.statusStrip--review-failed .statusStripFill {
-  background: rgba(185, 28, 28, 0.06);
-}
-.statusStrip--review-failed .statusStripLabel {
-  color: var(--red);
-}
-
-.statusStrip--failed {
-  background: rgba(185, 28, 28, 0.03);
-}
-.statusStrip--failed .statusStripFill {
-  background: rgba(185, 28, 28, 0.06);
-}
-.statusStrip--failed .statusStripLabel {
-  color: var(--red);
 }
 
 /* Column actions */
@@ -390,51 +306,19 @@
   text-decoration: underline;
 }
 
-/* Dark mode: bump status strip opacities so they read on dark surfaces */
-:global([data-theme="dark"]) .statusStrip--in-progress {
-  background: rgba(37, 99, 235, 0.08);
-}
-:global([data-theme="dark"]) .statusStrip--in-progress .statusStripFill {
-  background: rgba(37, 99, 235, 0.14);
-}
-:global([data-theme="dark"]) .statusStrip--pending-review {
-  background: rgba(180, 83, 9, 0.08);
-}
-:global([data-theme="dark"]) .statusStrip--pending-review .statusStripFill {
-  background: rgba(180, 83, 9, 0.14);
-}
-:global([data-theme="dark"]) .statusStrip--done,
-:global([data-theme="dark"]) .statusStrip--merged {
-  background: rgba(22, 163, 74, 0.08);
-}
-:global([data-theme="dark"]) .statusStrip--done .statusStripFill,
-:global([data-theme="dark"]) .statusStrip--merged .statusStripFill {
-  background: rgba(22, 163, 74, 0.14);
-}
-:global([data-theme="dark"]) .statusStrip--reviewing {
-  background: rgba(120, 80, 160, 0.1);
-}
-:global([data-theme="dark"]) .statusStrip--reviewing .statusStripFill {
-  background: rgba(120, 80, 160, 0.18);
-}
-:global([data-theme="dark"]) .statusStrip--review-failed {
-  background: rgba(185, 28, 28, 0.08);
-}
-:global([data-theme="dark"]) .statusStrip--review-failed .statusStripFill {
-  background: rgba(185, 28, 28, 0.14);
-}
-:global([data-theme="dark"]) .statusStrip--failed {
-  background: rgba(185, 28, 28, 0.08);
-}
-:global([data-theme="dark"]) .statusStrip--failed .statusStripFill {
-  background: rgba(185, 28, 28, 0.14);
-}
+/* Dark mode: bump status pill opacities */
+:global([data-theme="dark"]) .statusPill--in-progress { background: rgba(37, 99, 235, 0.15); }
+:global([data-theme="dark"]) .statusPill--pending-review { background: rgba(180, 83, 9, 0.15); }
+:global([data-theme="dark"]) .statusPill--done,
+:global([data-theme="dark"]) .statusPill--merged { background: rgba(22, 163, 74, 0.15); }
+:global([data-theme="dark"]) .statusPill--reviewing { background: rgba(120, 80, 160, 0.15); }
+:global([data-theme="dark"]) .statusPill--review-failed,
+:global([data-theme="dark"]) .statusPill--failed { background: rgba(185, 28, 28, 0.15); }
 
 @media (max-width: 768px) {
   .header { padding: 10px 12px; }
   .name { font-size: 13px; }
   .tasks { padding: 6px 6px; gap: 4px; }
   .completeBanner { padding: 8px; font-size: 12px; }
-  .statusStripLabel { font-size: 10px; }
-  .statusStripCount { font-size: 10px; }
+  .statusPill { font-size: 9px; padding: 1px 6px; }
 }

@@ -262,6 +262,20 @@ export function WorkstreamColumn({
             </span>
           )}
 
+          {/* Status pill next to name */}
+          {wsStatus && wsStatus !== 'open' && !isBacklog && (
+            <span className={`${s.statusPill} ${s[`statusPill--${wsStatus.replace(' ', '-')}`]}`}>
+              {wsStatus}
+            </span>
+          )}
+
+          {/* Backlog shows count inline */}
+          {isBacklog && (
+            <span className={s.backlogCount}>
+              {doneTasks}/{totalTasks}
+            </span>
+          )}
+
           {/* Run button: only when idle (open status) with tasks */}
           {!isBacklog && canRunAi && onRunWorkstream && wsStatus === 'open' && totalTasks > 0 && (
             <button
@@ -274,26 +288,7 @@ export function WorkstreamColumn({
             </button>
           )}
 
-          {/* Status strip: only after work starts (not 'open') */}
-          {wsStatus && wsStatus !== 'open' && totalTasks > 0 && (
-            <div className={`${s.statusStrip} ${s[`statusStrip--${wsStatus.replace(' ', '-')}`]}`}>
-              <div
-                className={s.statusStripFill}
-                style={{ width: `${progressPct}%` }}
-              />
-              <span className={s.statusStripLabel}>{wsStatus}</span>
-              <span className={s.statusStripCount}>{doneTasks}/{totalTasks}</span>
-            </div>
-          )}
-
-          {/* Backlog shows count inline */}
-          {isBacklog && (
-            <span className={s.backlogCount}>
-              {doneTasks}/{totalTasks}
-            </span>
-          )}
-
-          {/* Add/delete buttons: only before work starts */}
+          {/* Add/rename/delete buttons: only before work starts */}
           {(isBacklog || wsStatus === 'open' || !wsStatus) && (
             <>
               <button
@@ -303,6 +298,21 @@ export function WorkstreamColumn({
               >
                 +
               </button>
+
+              {!isBacklog && workstream && onRenameWorkstream && (
+                <button
+                  className={s.actionBtn}
+                  onClick={() => {
+                    setEditName(workstream.name);
+                    setEditing(true);
+                  }}
+                  title="Rename workstream"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M17 3l4 4L7 21H3v-4L17 3z" />
+                  </svg>
+                </button>
+              )}
 
               {!isBacklog && workstream && onDeleteWorkstream && (
                 <button
@@ -322,6 +332,16 @@ export function WorkstreamColumn({
             </>
           )}
         </div>
+
+        {/* Progress line on the separator — full width, colored by state */}
+        {!isBacklog && totalTasks > 0 && wsStatus && wsStatus !== 'open' && (
+          <div className={s.progressLine}>
+            <div
+              className={`${s.progressLineFill} ${s[`progressLine--${wsStatus.replace(' ', '-')}`]}`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Task list */}

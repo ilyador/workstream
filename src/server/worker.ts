@@ -61,7 +61,7 @@ async function writeLog(jobId: string, event: string, data: Record<string, any> 
 // Callbacks that the runner uses — fire-and-forget so we never block the runner
 // ---------------------------------------------------------------------------
 
-function makeDbCallbacks(jobId: string) {
+function makeDbCallbacks(jobId: string, task?: any) {
   return {
     onLog: (text: string) => {
       writeLog(jobId, 'log', { text }).then().catch((err) => {
@@ -92,8 +92,26 @@ function makeDbCallbacks(jobId: string) {
       writeLog(jobId, 'failed', { error }).then().catch((err) => {
         console.error(`[worker] writeLog error (failed): ${err.message}`);
       });
+      if (task) notifyTaskFailure(task, error).catch(() => {});
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Failure notification helper
+// ---------------------------------------------------------------------------
+
+async function notifyTaskFailure(task: any, errorMsg: string): Promise<void> {
+  const userId = task.assignee || task.created_by;
+  if (!userId) return;
+  try {
+    await supabase.from('notifications').insert({
+      user_id: userId,
+      type: 'task_failed',
+      task_id: task.id,
+      message: `Task failed: ${task.title} -- ${errorMsg.substring(0, 200)}`,
+    });
+  } catch { /* best effort */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +236,7 @@ async function startJob(job: any): Promise<void> {
         await writeLog(jobId, 'review', result);
       };
 
-  const callbacks = makeDbCallbacks(jobId);
+  const callbacks = makeDbCallbacks(jobId, task);
 
   try {
     await runJob({
@@ -248,6 +266,7 @@ async function startJob(job: any): Promise<void> {
       question: `Unexpected error: ${err.message}`,
     }).eq('id', jobId);
     await supabase.from('tasks').update({ status: 'backlog' }).eq('id', task.id);
+    await notifyTaskFailure(task, err.message);
   }
 }
 

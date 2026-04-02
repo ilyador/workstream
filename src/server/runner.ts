@@ -483,7 +483,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
       const prompt = buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
 
       // Spawn claude -p (prompt piped via stdin to avoid arg length limits)
-      const args = ['-p', '--verbose', '--max-turns', '20', '--output-format', 'stream-json'];
+      const args = ['-p', '--verbose', '--output-format', 'stream-json'];
       if (phaseConfig.tools.length > 0) {
         args.push('--allowedTools', phaseConfig.tools.join(','));
         // Explicitly block write tools for read-only phases
