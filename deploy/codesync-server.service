@@ -1,0 +1,16 @@
+[Unit]
+Description=CodeSync API Server + Worker
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/sixbox/Dev/codesync
+EnvironmentFile=-/home/sixbox/Dev/codesync/.env
+ExecStart=/home/sixbox/Dev/codesync/scripts/systemd-start.sh
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

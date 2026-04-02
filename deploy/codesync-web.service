@@ -1,0 +1,17 @@
+[Unit]
+Description=CodeSync Web UI
+After=network.target codesync-server.service
+Wants=codesync-server.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/sixbox/Dev/codesync
+EnvironmentFile=-/home/sixbox/Dev/codesync/.env
+ExecStart=/home/sixbox/Dev/codesync/scripts/systemd-web-start.sh
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

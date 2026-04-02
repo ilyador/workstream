@@ -1,0 +1,16 @@
+[Unit]
+Description=CodeSync Telegram Bot
+After=network.target codesync-server.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/sixbox/Dev/codesync
+EnvironmentFile=-/home/sixbox/Dev/codesync/.env
+ExecStart=/home/sixbox/Dev/codesync/scripts/systemd-bot-start.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
