@@ -18,7 +18,7 @@ export async function queueNextWorkstreamTask(params: {
   // Find next incomplete task in workstream by position
   const { data: nextTask } = await supabase
     .from('tasks')
-    .select('id, type, mode')
+    .select('id, type, mode, title, assignee')
     .eq('workstream_id', workstreamId)
     .in('status', ['backlog', 'todo'])
     .gt('position', completedPosition)
@@ -41,8 +41,20 @@ export async function queueNextWorkstreamTask(params: {
     return null;
   }
 
-  // Human tasks pause the chain
+  // Human tasks pause the chain — mark in_progress and notify assignee
   if (nextTask.mode === 'human') {
+    await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', nextTask.id);
+
+    if (nextTask.assignee) {
+      await supabase.from('notifications').insert({
+        user_id: nextTask.assignee,
+        type: 'human_task',
+        task_id: nextTask.id,
+        message: `A task needs your attention: ${nextTask.title}`,
+      });
+    }
+
+    console.log(`[auto-continue] Workstream ${workstreamId} paused — waiting for human task "${nextTask.title}" (${nextTask.id})`);
     return null;
   }
 
