@@ -320,19 +320,30 @@
   border-top-color: rgba(22, 163, 74, 0.15);
 }
 
-.prLink {
+/* Shared banner pill button base */
+.bannerBtn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 3px 10px;
+  padding: 4px 12px;
+  font-family: var(--font);
   font-size: 12px;
   font-weight: 600;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  line-height: 1.3;
+}
+
+/* View PR variant */
+.prLink {
+  composes: bannerBtn;
   color: var(--blue);
   background: rgba(37, 99, 235, 0.08);
-  border: 1px solid rgba(37, 99, 235, 0.15);
-  border-radius: 6px;
-  text-decoration: none;
-  transition: background 0.15s, border-color 0.15s;
+  border-color: rgba(37, 99, 235, 0.15);
 }
 .prLink:hover {
   background: rgba(37, 99, 235, 0.14);
@@ -340,20 +351,11 @@
   text-decoration: none;
 }
 
+/* Archive variant */
 .archiveBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
-  font-family: var(--font);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-4);
+  composes: bannerBtn;
+  color: var(--text-3);
   background: none;
-  border: 1px solid var(--divider);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .archiveBtn:hover {
   background: var(--bg-hover);
