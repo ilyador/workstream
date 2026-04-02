@@ -1,10 +1,6 @@
-import { execFileSync } from 'child_process';
-import { existsSync } from 'fs';
+import { mkdirSync, existsSync } from 'fs';
 import path from 'path';
-
-function git(args: string[], cwd: string): string {
-  return execFileSync('git', args, { cwd, encoding: 'utf-8', timeout: 15000 }).trim();
-}
+import { gitSync } from './git-utils.js';
 
 /**
  * Ensure a git worktree exists for the given workstream slug.
@@ -21,20 +17,18 @@ export function ensureWorktree(projectPath: string, workstreamSlug: string): str
     return worktreePath;
   }
 
-  // Ensure .worktrees directory exists
-  if (!existsSync(worktreeDir)) {
-    execFileSync('mkdir', ['-p', worktreeDir]);
-  }
+  // Ensure .worktrees directory exists (recursive avoids TOCTOU race)
+  mkdirSync(worktreeDir, { recursive: true });
 
   // Create the branch if it doesn't exist (based off current HEAD)
   try {
-    git(['rev-parse', '--verify', branch], projectPath);
+    gitSync(['branch', branch], projectPath);
   } catch {
-    git(['branch', branch], projectPath);
+    // branch already exists — that's fine
   }
 
   // Create the worktree
-  git(['worktree', 'add', worktreePath, branch], projectPath);
+  gitSync(['worktree', 'add', worktreePath, branch], projectPath);
 
   return worktreePath;
 }
@@ -48,14 +42,14 @@ export function cleanupWorktree(projectPath: string, workstreamSlug: string): vo
 
   // Remove the worktree
   try {
-    git(['worktree', 'remove', worktreePath, '--force'], projectPath);
+    gitSync(['worktree', 'remove', worktreePath, '--force'], projectPath);
   } catch {
     // Worktree may already be gone
   }
 
   // Delete the local branch (merged into main by now via PR)
   try {
-    git(['branch', '-d', branch], projectPath);
+    gitSync(['branch', '-d', branch], projectPath);
   } catch {
     // Branch may not exist or may not be fully merged — that's ok
   }

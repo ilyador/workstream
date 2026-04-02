@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { execFileSync } from 'child_process';
 import { loadTaskTypeConfig } from '../runner.js';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../auth-middleware.js';
 import { revertToCheckpoint, deleteCheckpoint } from '../checkpoint.js';
 import { queueNextWorkstreamTask } from '../auto-continue.js';
+import { autoCommit } from '../git-utils.js';
 
 export const executionRouter = Router();
 
@@ -193,38 +193,35 @@ executionRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => {
   const now = new Date().toISOString();
   const localPath = req.body.localPath || job.local_path || '';
 
-  // Mark job and task done
+  // Clean checkpoint
+  try { deleteCheckpoint(localPath, jobId); } catch {}
+
+  // Mark job done + checkpoint cleaned in one update
   await Promise.all([
-    supabase.from('jobs').update({ status: 'done', completed_at: now }).eq('id', jobId),
+    supabase.from('jobs').update({ status: 'done', completed_at: now, checkpoint_status: 'cleaned' }).eq('id', jobId),
     supabase.from('tasks').update({ status: 'done', completed_at: now }).eq('id', job.task_id),
   ]);
 
   // Write done event so SSE clients see the terminal event
   await supabase.from('job_logs').insert({ job_id: jobId, event: 'done', data: {} });
 
-  // Clean checkpoint
-  try { deleteCheckpoint(localPath, jobId); } catch {}
-  await supabase.from('jobs').update({ checkpoint_status: 'cleaned' }).eq('id', jobId);
-
   // Fetch task for auto-commit + auto-continue (single query)
   let task: any = null;
-  try {
-    const { data } = await supabase
-      .from('tasks')
-      .select('id, type, title, auto_continue, workstream_id, position')
-      .eq('id', job.task_id)
-      .single();
-    task = data;
-  } catch {}
+  const { data: taskData, error: taskFetchErr } = await supabase
+    .from('tasks')
+    .select('id, type, title, auto_continue, workstream_id, position')
+    .eq('id', job.task_id)
+    .single();
+  if (taskFetchErr) {
+    console.error('[approve] Task fetch failed:', taskFetchErr.message);
+  } else {
+    task = taskData;
+  }
 
   // Auto-commit the changes
   if (task) {
     try {
-      const git = (args: string[]) => execFileSync('git', args, { cwd: localPath, encoding: 'utf-8', timeout: 15000 }).trim();
-      git(['add', '-A']);
-      try {
-        git(['commit', '-m', `codesync(${task.type}): ${task.title}`]);
-      } catch { /* nothing to commit is ok */ }
+      await autoCommit(localPath, task.type, task.title);
     } catch (err: any) {
       console.error('[approve] Auto-commit failed:', err.message);
     }

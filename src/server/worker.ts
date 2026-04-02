@@ -1,10 +1,10 @@
 import 'dotenv/config';
-import { execFileSync } from 'child_process';
 import { runJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
 import { supabase } from './supabase.js';
 import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
 import { queueNextWorkstreamTask } from './auto-continue.js';
 import { ensureWorktree } from './worktree.js';
+import { autoCommit, slugify } from './git-utils.js';
 
 // ---------------------------------------------------------------------------
 // DB logging with batching for high-throughput log events
@@ -126,7 +126,7 @@ async function startJob(job: any): Promise<void> {
         .eq('id', task.workstream_id)
         .single();
       if (ws) {
-        const slug = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 50);
+        const slug = slugify(ws.name);
         localPath = ensureWorktree(localPath, slug);
         await supabase.from('jobs').update({ local_path: localPath }).eq('id', jobId);
         await writeLog(jobId, 'log', { text: `[worktree] Using worktree at ${localPath}` });
@@ -164,24 +164,16 @@ async function startJob(job: any): Promise<void> {
   const onReview = task.auto_continue === true
     ? async (result: any) => {
         await writeLog(jobId, 'review', result);
-        // Auto-approve: mark job done, task done, clean checkpoint
-        await supabase.from('jobs').update({
-          status: 'done',
-          completed_at: new Date().toISOString(),
-        }).eq('id', jobId);
-        await supabase.from('tasks').update({
-          status: 'done',
-          completed_at: new Date().toISOString(),
-        }).eq('id', task.id);
+        // Auto-approve: mark job done + checkpoint cleaned, task done, clean checkpoint
+        const now = new Date().toISOString();
         try { deleteCheckpoint(localPath, jobId); } catch {}
-        await supabase.from('jobs').update({ checkpoint_status: 'cleaned' }).eq('id', jobId);
+        await Promise.all([
+          supabase.from('jobs').update({ status: 'done', completed_at: now, checkpoint_status: 'cleaned' }).eq('id', jobId),
+          supabase.from('tasks').update({ status: 'done', completed_at: now }).eq('id', task.id),
+        ]);
         // Auto-commit the changes
         try {
-          const git = (args: string[]) => execFileSync('git', args, { cwd: localPath, encoding: 'utf-8', timeout: 15000 }).trim();
-          git(['add', '-A']);
-          try {
-            git(['commit', '-m', `codesync(${task.type}): ${task.title}`]);
-          } catch { /* nothing to commit is ok */ }
+          await autoCommit(localPath, task.type, task.title);
         } catch (err: any) {
           console.error('[worker] Auto-commit failed:', err.message);
         }

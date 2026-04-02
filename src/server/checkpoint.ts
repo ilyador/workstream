@@ -1,8 +1,4 @@
-import { execFileSync } from 'child_process';
-
-function git(args: string[], cwd: string): string {
-  return execFileSync('git', args, { cwd, encoding: 'utf-8', timeout: 15000 }).trim();
-}
+import { gitSync as git } from './git-utils.js';
 
 export interface CheckpointInfo {
   jobId: string;
