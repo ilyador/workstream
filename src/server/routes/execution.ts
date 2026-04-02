@@ -3,6 +3,7 @@ import { loadTaskTypeConfig } from '../runner.js';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../auth-middleware.js';
 import { revertToCheckpoint, deleteCheckpoint } from '../checkpoint.js';
+import { queueNextWorkstreamTask } from '../auto-continue.js';
 
 export const executionRouter = Router();
 
@@ -201,41 +202,22 @@ executionRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => {
   try { deleteCheckpoint(localPath, jobId); } catch {}
   await supabase.from('jobs').update({ checkpoint_status: 'cleaned' }).eq('id', jobId);
 
-  // Lightweight auto-continue: if task has auto_continue and belongs to a workstream,
-  // queue the next incomplete AI task
+  // Auto-continue: queue next task in workstream
   try {
     const { data: task } = await supabase
       .from('tasks')
-      .select('id, auto_continue, workstream_id, position, mode')
+      .select('id, auto_continue, workstream_id, position')
       .eq('id', job.task_id)
       .single();
 
-    if (task && task.auto_continue && task.workstream_id != null) {
-      const { data: nextTask } = await supabase
-        .from('tasks')
-        .select('id, type, mode')
-        .eq('workstream_id', task.workstream_id)
-        .in('status', ['backlog', 'todo'])
-        .neq('mode', 'human')
-        .gt('position', task.position)
-        .order('position', { ascending: true })
-        .limit(1)
-        .single();
-
-      if (nextTask) {
-        const nextTaskType = loadTaskTypeConfig(localPath, nextTask.type);
-
-        await supabase.from('jobs').insert({
-          task_id: nextTask.id,
-          project_id: job.project_id,
-          local_path: localPath,
-          status: 'queued',
-          current_phase: nextTaskType.phases[0],
-          max_attempts: nextTaskType.verify_retries + 1,
-        });
-
-        await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', nextTask.id);
-      }
+    if (task?.auto_continue && task.workstream_id) {
+      await queueNextWorkstreamTask({
+        completedTaskId: task.id,
+        projectId: job.project_id,
+        localPath,
+        workstreamId: task.workstream_id,
+        completedPosition: task.position,
+      });
     }
   } catch (err: any) {
     console.error('[auto-continue] Error:', err.message);

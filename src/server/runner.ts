@@ -296,9 +296,7 @@ export function cancelAllJobs() {
   }
 }
 
-export function isJobActive(jobId: string): boolean {
-  return activeProcesses.has(jobId);
-}
+
 
 /**
  * Clean up orphaned jobs on server startup.

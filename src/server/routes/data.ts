@@ -4,7 +4,7 @@ import { resolve, join, basename } from 'path';
 import { homedir } from 'os';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../auth-middleware.js';
-import { loadTaskTypeConfig } from '../runner.js';
+import { queueNextWorkstreamTask } from '../auto-continue.js';
 
 export const dataRouter = Router();
 
@@ -263,29 +263,13 @@ dataRouter.patch('/api/tasks/:id', requireAuth, async (req, res) => {
         .eq('user_id', userId)
         .single();
       if (member?.local_path) {
-        const { data: nextTask } = await supabase
-          .from('tasks')
-          .select('id, type, mode')
-          .eq('workstream_id', data.workstream_id)
-          .in('status', ['backlog', 'todo'])
-          .neq('mode', 'human')
-          .gt('position', data.position)
-          .order('position', { ascending: true })
-          .limit(1)
-          .single();
-
-        if (nextTask) {
-          const nextTaskType = loadTaskTypeConfig(member.local_path, nextTask.type);
-          await supabase.from('jobs').insert({
-            task_id: nextTask.id,
-            project_id: data.project_id,
-            local_path: member.local_path,
-            status: 'queued',
-            current_phase: nextTaskType.phases[0],
-            max_attempts: nextTaskType.verify_retries + 1,
-          });
-          await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', nextTask.id);
-        }
+        await queueNextWorkstreamTask({
+          completedTaskId: data.id,
+          projectId: data.project_id,
+          localPath: member.local_path,
+          workstreamId: data.workstream_id,
+          completedPosition: data.position,
+        });
       }
     } catch (err: any) {
       console.error('[auto-continue] Error:', err.message);

@@ -2,13 +2,48 @@ import 'dotenv/config';
 import { runJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
 import { supabase } from './supabase.js';
 import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
+import { queueNextWorkstreamTask } from './auto-continue.js';
 
 // ---------------------------------------------------------------------------
-// DB logging
+// DB logging with batching for high-throughput log events
 // ---------------------------------------------------------------------------
+
+const logBuffer: Array<{ job_id: string; event: string; data: Record<string, any> }> = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const FLUSH_INTERVAL = 100; // ms
+const FLUSH_SIZE = 20;
+
+async function flushLogs(): Promise<void> {
+  if (logBuffer.length === 0) return;
+  const batch = logBuffer.splice(0, logBuffer.length);
+  const { error } = await supabase.from('job_logs').insert(batch);
+  if (error) console.error('[worker] Batch log write error:', error.message);
+}
+
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(async () => {
+    flushTimer = null;
+    await flushLogs();
+  }, FLUSH_INTERVAL);
+}
 
 async function writeLog(jobId: string, event: string, data: Record<string, any> = {}): Promise<void> {
-  await supabase.from('job_logs').insert({ job_id: jobId, event, data });
+  // Critical events (done, failed, review, paused) flush immediately
+  if (event === 'done' || event === 'failed' || event === 'review' || event === 'paused') {
+    // Flush any buffered logs first to maintain ordering
+    await flushLogs();
+    await supabase.from('job_logs').insert({ job_id: jobId, event, data });
+    return;
+  }
+  // Non-critical events (log, phase_start, phase_complete) are batched
+  logBuffer.push({ job_id: jobId, event, data });
+  if (logBuffer.length >= FLUSH_SIZE) {
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+    await flushLogs();
+  } else {
+    scheduleFlush();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -114,9 +149,15 @@ async function startJob(job: any): Promise<void> {
         await supabase.from('jobs').update({ checkpoint_status: 'cleaned' }).eq('id', jobId);
         await writeLog(jobId, 'done', {});
         // Queue next task in workstream
-        maybeQueueNextTask(task.id, job.project_id, localPath).catch((err: any) => {
-          console.error('[worker] maybeQueueNextTask error:', err.message);
-        });
+        if (task.workstream_id) {
+          queueNextWorkstreamTask({
+            completedTaskId: task.id,
+            projectId: job.project_id,
+            localPath,
+            workstreamId: task.workstream_id,
+            completedPosition: task.position,
+          }).catch((err: any) => console.error('[worker] auto-continue error:', err.message));
+        }
       }
     : async (result: any) => {
         await writeLog(jobId, 'review', result);
@@ -146,78 +187,6 @@ async function startJob(job: any): Promise<void> {
       question: `Job failed: ${err.message}`,
     }).eq('id', jobId);
     await supabase.from('tasks').update({ status: 'backlog' }).eq('id', task.id);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Auto-continue: queue next task in workstream
-// ---------------------------------------------------------------------------
-
-async function maybeQueueNextTask(completedTaskId: string, projectId: string, localPath: string): Promise<void> {
-  const { data: task } = await supabase
-    .from('tasks')
-    .select('id, auto_continue, workstream_id, position, mode')
-    .eq('id', completedTaskId)
-    .single();
-
-  if (!task) return;
-  if (task.auto_continue !== true) return;
-  if (task.workstream_id == null) return;
-
-  // Find next task in the workstream by position
-  const { data: nextTask } = await supabase
-    .from('tasks')
-    .select('id, type, mode, auto_continue')
-    .eq('workstream_id', task.workstream_id)
-    .in('status', ['backlog', 'todo'])
-    .gt('position', task.position)
-    .order('position', { ascending: true })
-    .limit(1)
-    .single();
-
-  if (!nextTask) {
-    // No more tasks — check if workstream is fully complete
-    const { data: remaining } = await supabase
-      .from('tasks')
-      .select('id')
-      .eq('workstream_id', task.workstream_id)
-      .not('status', 'eq', 'done')
-      .limit(1);
-
-    if (!remaining || remaining.length === 0) {
-      await supabase.from('workstreams').update({ status: 'complete' }).eq('id', task.workstream_id);
-      console.log(`[worker] Workstream ${task.workstream_id} complete`);
-    }
-    return;
-  }
-
-  // If next task is human mode, pause the chain
-  if (nextTask.mode === 'human') {
-    await writeLog(completedTaskId, 'workstream_paused', {
-      workstreamId: task.workstream_id,
-      nextTaskId: nextTask.id,
-      reason: 'Next task requires human action',
-    });
-    console.log(`[worker] Workstream paused — next task ${nextTask.id} is human mode`);
-    return;
-  }
-
-  // Insert a new queued job for the next task
-  const nextTaskType = loadTaskTypeConfig(localPath, nextTask.type);
-  const { error: insertErr } = await supabase.from('jobs').insert({
-    task_id: nextTask.id,
-    project_id: projectId,
-    status: 'queued',
-    local_path: localPath,
-    current_phase: nextTaskType.phases[0],
-    max_attempts: nextTaskType.verify_retries + 1,
-  });
-
-  if (insertErr) {
-    console.error(`[worker] Failed to queue next task ${nextTask.id}:`, insertErr.message);
-  } else {
-    await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', nextTask.id);
-    console.log(`[worker] Queued next task ${nextTask.id} in workstream`);
   }
 }
 
