@@ -33,6 +33,7 @@ interface WorkstreamColumnProps {
   taskJobMap: Record<string, JobView>;
   isBacklog: boolean;
   canRunAi: boolean;
+  projectId: string | null;
   // Drag
   draggedTaskId: string | null;
   onDragTaskStart: (taskId: string) => void;
@@ -64,6 +65,7 @@ export function WorkstreamColumn({
   taskJobMap,
   isBacklog,
   canRunAi,
+  projectId,
   draggedTaskId,
   onDragTaskStart,
   onDragTaskEnd,
@@ -345,6 +347,7 @@ export function WorkstreamColumn({
                 job={job}
                 canRunAi={canRunAi}
                 showPriority={isBacklog}
+                projectId={projectId || undefined}
                 isExpanded={expandedId === task.id}
                 onToggleExpand={() => setExpandedId(expandedId === task.id ? null : task.id)}
                 onRun={onRunTask}
