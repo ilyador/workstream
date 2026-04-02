@@ -50,7 +50,11 @@ async function refreshSession(): Promise<boolean> {
 async function parseResponse(res: Response): Promise<any> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || 'Request failed');
+    const msg = typeof err?.error === 'string' ? err.error
+      : typeof err?.message === 'string' ? err.message
+      : typeof err?.msg === 'string' ? err.msg
+      : res.statusText || 'Request failed';
+    throw new Error(msg);
   }
   if (res.status === 204) return { ok: true };
   return res.json();

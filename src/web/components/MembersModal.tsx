@@ -12,7 +12,7 @@ interface Props {
 export function MembersModal({ projectId, currentUserId, onClose }: Props) {
   const { members, reload } = useMembers(projectId);
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('member');
+  const [role, setRole] = useState('dev');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -97,7 +97,8 @@ export function MembersModal({ projectId, currentUserId, onClose }: Props) {
             value={role}
             onChange={e => setRole(e.target.value)}
           >
-            <option value="member">Member</option>
+            <option value="dev">Dev</option>
+            <option value="manager">Manager</option>
             <option value="admin">Admin</option>
           </select>
           <button className="btn btnPrimary btnSm" type="submit" disabled={loading || !email.trim()}>

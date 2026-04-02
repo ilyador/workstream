@@ -104,7 +104,7 @@ export default function App() {
         } else if (job.status === 'done') {
           webNotifs.notify('Task completed', `${title} finished successfully`);
         } else if (job.status === 'failed') {
-          webNotifs.notify('Task failed', `${title} failed`);
+          webNotifs.notify('Task failed', `${title}: ${job.question || 'unknown error'}`);
         }
       }
       prev[job.id] = job.status;
@@ -263,6 +263,7 @@ export default function App() {
         tasks={tasks.tasks}
         jobs={jobViews}
         memberMap={memberMap}
+        userRole={projects.current?.role || 'dev'}
         onCreateWorkstream={async (name) => {
           await workstreams.createWorkstream(name);
         }}

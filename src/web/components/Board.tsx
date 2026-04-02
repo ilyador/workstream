@@ -32,6 +32,7 @@ interface BoardProps {
   tasks: Task[];
   jobs: JobView[];
   memberMap: Record<string, { name: string; initials: string }>;
+  userRole: string;
   // Workstream actions
   onCreateWorkstream: (name: string) => Promise<void>;
   onUpdateWorkstream: (id: string, data: Record<string, unknown>) => Promise<void>;
@@ -59,6 +60,7 @@ export function Board({
   tasks,
   jobs,
   memberMap,
+  userRole,
   onCreateWorkstream,
   onUpdateWorkstream,
   onDeleteWorkstream,
@@ -168,6 +170,7 @@ export function Board({
         tasks={tasksByWorkstream.__backlog__ || []}
         taskJobMap={taskJobMap}
         isBacklog
+        canRunAi={userRole !== 'manager'}
         draggedTaskId={draggedTaskId}
         onDragTaskStart={setDraggedTaskId}
         onDragTaskEnd={() => setDraggedTaskId(null)}
@@ -193,6 +196,7 @@ export function Board({
           tasks={tasksByWorkstream[ws.id] || []}
           taskJobMap={taskJobMap}
           isBacklog={false}
+          canRunAi={userRole !== 'manager'}
           draggedTaskId={draggedTaskId}
           onDragTaskStart={setDraggedTaskId}
           onDragTaskEnd={() => setDraggedTaskId(null)}

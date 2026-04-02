@@ -30,6 +30,7 @@ interface WorkstreamColumnProps {
   tasks: Task[];
   taskJobMap: Record<string, JobView>;
   isBacklog: boolean;
+  canRunAi: boolean;
   // Drag
   draggedTaskId: string | null;
   onDragTaskStart: (taskId: string) => void;
@@ -60,6 +61,7 @@ export function WorkstreamColumn({
   tasks,
   taskJobMap,
   isBacklog,
+  canRunAi,
   draggedTaskId,
   onDragTaskStart,
   onDragTaskEnd,
@@ -254,7 +256,7 @@ export function WorkstreamColumn({
           )}
 
           {/* Run button: only when idle (open status) with tasks */}
-          {!isBacklog && onRunWorkstream && wsStatus === 'open' && totalTasks > 0 && (
+          {!isBacklog && canRunAi && onRunWorkstream && wsStatus === 'open' && totalTasks > 0 && (
             <button
               className={s.runBtn}
               onClick={onRunWorkstream}
@@ -336,6 +338,7 @@ export function WorkstreamColumn({
               <TaskCard
                 task={task}
                 job={job}
+                canRunAi={canRunAi}
                 isExpanded={expandedId === task.id}
                 onToggleExpand={() => setExpandedId(expandedId === task.id ? null : task.id)}
                 onRun={onRunTask}

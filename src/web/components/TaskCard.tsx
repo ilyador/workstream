@@ -27,6 +27,7 @@ interface Task {
 interface TaskCardProps {
   task: Task;
   job: JobView | null;
+  canRunAi: boolean;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onRun?: (taskId: string) => void;
@@ -57,6 +58,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function TaskCard({
   task,
   job,
+  canRunAi,
   isExpanded,
   onToggleExpand,
   onRun,
@@ -308,7 +310,7 @@ export function TaskCard({
             <div className={s.failedSection}>
               {job.question && <div className={s.errorMsg}>{job.question}</div>}
               <div className={s.failActions}>
-                {onRun && (!task.assignee || task.assignee.type === 'ai') && (
+                {canRunAi && onRun && (!task.assignee || task.assignee.type === 'ai') && (
                   <button className="btn btnDanger btnSm" onClick={() => onRun(task.id)}>
                     Restart
                   </button>
@@ -343,6 +345,7 @@ export function TaskCard({
           {!isActive && !taskDone && jobStatus !== 'failed' && (
             <IdleDetail
               task={task}
+              canRunAi={canRunAi}
               onRun={onRun}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -358,12 +361,14 @@ export function TaskCard({
 /** Detail view for idle (backlog) tasks */
 function IdleDetail({
   task,
+  canRunAi,
   onRun,
   onEdit,
   onDelete,
   onUpdateTask,
 }: {
   task: TaskCardProps['task'];
+  canRunAi: boolean;
   onRun?: (taskId: string) => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -407,7 +412,7 @@ function IdleDetail({
       )}
 
       <div className={s.idleActions}>
-        {(!task.assignee || task.assignee.type === 'ai') && onRun && (
+        {(!task.assignee || task.assignee.type === 'ai') && canRunAi && onRun && (
           <button className="btn btnPrimary btnSm" onClick={() => onRun(task.id)}>
             Run
           </button>

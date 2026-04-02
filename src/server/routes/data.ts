@@ -606,7 +606,7 @@ dataRouter.post('/api/projects/:id/invite', requireAuth, async (req, res) => {
   const { email, role } = req.body;
 
   if (!email || !role) return res.status(400).json({ error: 'email and role required' });
-  if (role !== 'admin' && role !== 'dev') return res.status(400).json({ error: 'role must be admin or dev' });
+  if (role !== 'admin' && role !== 'dev' && role !== 'manager') return res.status(400).json({ error: 'role must be admin, dev, or manager' });
 
   // Check caller is admin
   const { data: callerMember } = await supabase
@@ -620,14 +620,40 @@ dataRouter.post('/api/projects/:id/invite', requireAuth, async (req, res) => {
   }
 
   // Look up profile by email
-  const { data: profile } = await supabase
+  let { data: profile } = await supabase
     .from('profiles')
     .select('id, name, email, initials')
     .eq('email', email)
     .single();
+
+  // If no account exists, create one via admin API (sends invite email)
   if (!profile) {
-    return res.status(404).json({ error: 'User not found. They need to create an account first.' });
+    const name = email.split('@')[0];
+    const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
+      email,
+      user_metadata: { name },
+      email_confirm: true,
+    });
+    if (createErr) return res.status(400).json({ error: `Could not invite user: ${createErr.message}` });
+
+    // The handle_new_user trigger creates the profile, but fetch it to be safe
+    const { data: newProfile } = await supabase
+      .from('profiles')
+      .select('id, name, email, initials')
+      .eq('id', newUser.user.id)
+      .single();
+    if (!newProfile) return res.status(500).json({ error: 'Account created but profile not found' });
+    profile = newProfile;
   }
+
+  // Check not already a member
+  const { data: existing } = await supabase
+    .from('project_members')
+    .select('user_id')
+    .eq('project_id', projectId)
+    .eq('user_id', profile.id)
+    .single();
+  if (existing) return res.status(400).json({ error: 'User is already a member of this project' });
 
   // Add to project_members
   const { data: member, error } = await supabase
