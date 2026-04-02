@@ -6,7 +6,6 @@ import { executionRouter } from './routes/execution.js';
 import { gitRouter } from './routes/git.js';
 import { authRouter } from './routes/auth.js';
 import { dataRouter } from './routes/data.js';
-import { cleanupOrphanedJobs, cancelJob, cancelAllJobs } from './runner.js';
 
 const PORT = process.env.PORT || 3001;
 const app = express();
@@ -61,29 +60,6 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-// Graceful shutdown: kill all active claude processes on SIGTERM/SIGINT
-function gracefulShutdown(signal: string) {
-  console.log(`Received ${signal}, shutting down...`);
-  cancelAllJobs();
-  process.exit(0);
-}
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// NOTE: Express 5 (>=5.x) natively handles async route errors -- rejected promises
-// are forwarded to the error handler automatically. No asyncHandler wrapper needed.
-// This project uses express ^5.2.1.
-
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log(`CodeSync server running on port ${PORT}`);
-
-  // Clean up orphaned jobs from previous server run
-  try {
-    const cleaned = await cleanupOrphanedJobs();
-    if (cleaned > 0) {
-      console.log(`Cleaned ${cleaned} orphaned job(s) from previous run`);
-    }
-  } catch (err) {
-    console.error('Failed to clean orphaned jobs:', err);
-  }
 });
