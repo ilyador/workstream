@@ -80,9 +80,24 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
       maxAttempts = taskType.verify_retries + 1;
     }
   } else {
-    const taskType = loadTaskTypeConfig(localPath, task.type);
-    firstPhase = taskType.phases[0];
-    maxAttempts = taskType.verify_retries + 1;
+    // No flow_id on task -- try to find a matching default flow by task type
+    const typeToFlow: Record<string, string> = {
+      'bug-fix': 'AI Bug Hunter', 'feature': 'AI Developer', 'ui-fix': 'AI Developer',
+      'design': 'AI Developer', 'chore': 'AI Developer', 'refactor': 'AI Refactorer', 'test': 'AI Tester',
+    };
+    const flowName = typeToFlow[task.type];
+    const { data: flow } = flowName
+      ? await supabase.from('flows').select('*, flow_steps(*)').eq('project_id', projectId).eq('name', flowName).single()
+      : { data: null };
+    if (flow) {
+      flowSnapshot = buildFlowSnapshot(flow);
+      firstPhase = flowSnapshot.steps[0]?.name || 'plan';
+      maxAttempts = flowSnapshot.steps.length > 0 ? Math.max(...flowSnapshot.steps.map((s: any) => s.max_retries + 1)) : 1;
+    } else {
+      const taskType = loadTaskTypeConfig(localPath, task.type);
+      firstPhase = taskType.phases[0];
+      maxAttempts = taskType.verify_retries + 1;
+    }
   }
 
   // Create job with queued status — worker picks it up
