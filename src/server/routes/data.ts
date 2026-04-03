@@ -396,6 +396,17 @@ dataRouter.post('/api/comments', requireAuth, async (req, res) => {
   res.json(data);
 });
 
+dataRouter.delete('/api/comments/:id', requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // Only allow deleting your own comments
+  const { data: comment } = await supabase.from('comments').select('user_id').eq('id', req.params.id).single();
+  if (!comment) return res.status(404).json({ error: 'Comment not found' });
+  if (comment.user_id !== userId) return res.status(403).json({ error: 'Can only delete your own comments' });
+  const { error } = await supabase.from('comments').delete().eq('id', req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
 // --- Notifications ---
 
 dataRouter.get('/api/notifications', requireAuth, async (req, res) => {

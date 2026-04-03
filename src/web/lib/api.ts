@@ -272,6 +272,10 @@ export async function addComment(taskId: string, body: string) {
   return apiFetch('/api/comments', { method: 'POST', body: JSON.stringify({ task_id: taskId, body }) });
 }
 
+export async function deleteComment(commentId: string) {
+  return apiFetch(`/api/comments/${commentId}`, { method: 'DELETE' });
+}
+
 // --- Notifications ---
 export async function getNotifications() {
   return apiFetch('/api/notifications');

@@ -456,7 +456,7 @@ function IdleDetail({
 
 /** Inline comments for a task card */
 function CardComments({ taskId, projectId }: { taskId: string; projectId?: string }) {
-  const { comments, addComment } = useComments(taskId);
+  const { comments, addComment, removeComment } = useComments(taskId);
   const { members } = useMembers(projectId || null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -544,15 +544,20 @@ function CardComments({ taskId, projectId }: { taskId: string; projectId?: strin
         </span>
       )}
       {comments.map(c => (
-        <div key={c.id} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'flex-start' }}>
+        <div key={c.id} className={s.comment}>
           <span style={{
             width: 22, height: 22, borderRadius: '50%', background: 'var(--bg-active)', color: 'var(--text-3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, flexShrink: 0,
           }}>{c.profiles?.initials || '??'}</span>
-          <div>
-            <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.4, display: 'block' }}>{c.body}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.4, display: 'block', whiteSpace: 'pre-wrap' }}>{c.body}</span>
             <span style={{ fontSize: 10, color: 'var(--text-4)' }}>{timeAgo(c.created_at)}</span>
           </div>
+          <button
+            className={s.commentDelete}
+            onClick={() => removeComment(c.id)}
+            title="Delete comment"
+          >&times;</button>
         </div>
       ))}
       <div style={{ position: 'relative' }}>

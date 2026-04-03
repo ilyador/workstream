@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getComments, addComment as apiAddComment } from '../lib/api';
+import { getComments, addComment as apiAddComment, deleteComment as apiDeleteComment } from '../lib/api';
 
 interface Comment {
   id: string;
@@ -27,5 +27,10 @@ export function useComments(taskId: string | null) {
     await load();
   }
 
-  return { comments, addComment };
+  async function removeComment(commentId: string) {
+    await apiDeleteComment(commentId);
+    await load();
+  }
+
+  return { comments, addComment, removeComment };
 }

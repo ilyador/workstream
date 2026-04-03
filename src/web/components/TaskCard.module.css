@@ -521,6 +521,40 @@
   font-weight: 600;
 }
 
+/* Comment row with hover-reveal delete */
+.comment {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: flex-start;
+  position: relative;
+}
+.commentDelete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-4);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+.comment:hover .commentDelete {
+  opacity: 1;
+}
+.commentDelete:hover {
+  color: var(--red);
+  background: var(--red-bg);
+}
+
 /* Dark mode: bump phase pill opacities for readability */
 :global([data-theme="dark"]) .pnPlan {
   background: rgba(120, 113, 148, 0.18);
