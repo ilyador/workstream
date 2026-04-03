@@ -252,10 +252,10 @@
 
 /* Task highlight animation (triggered by ?task= URL param) */
 .highlight {
-  animation: highlightPulse 1.5s ease-out;
+  animation: highlightPulse 5s ease-out;
 }
 @keyframes highlightPulse {
-  0% { box-shadow: 0 0 0 3px var(--blue); }
+  0%, 60% { box-shadow: 0 0 0 3px var(--blue); }
   100% { box-shadow: none; }
 }
 
