@@ -10,8 +10,8 @@ export function useFlows(projectId: string | null) {
     try {
       const data = await getFlows(projectId);
       setFlows(data);
-    } catch {
-      // Silently handle
+    } catch (err: any) {
+      console.error('[useFlows] Failed to load flows:', err.message);
     } finally {
       setLoading(false);
     }

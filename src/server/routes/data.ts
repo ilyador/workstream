@@ -777,11 +777,16 @@ dataRouter.get('/api/flows', requireAuth, async (req, res) => {
   const projectId = req.query.project_id as string;
   if (!projectId) return res.status(400).json({ error: 'project_id required' });
 
-  const { data } = await supabase
+  const { data, error: flowErr } = await supabase
     .from('flows')
     .select('*, flow_steps(*)')
     .eq('project_id', projectId)
     .order('name');
+
+  if (flowErr) {
+    console.error('[flows] Error fetching flows:', flowErr.message);
+    return res.status(500).json({ error: flowErr.message });
+  }
 
   // Sort steps by position within each flow
   const flows = (data || []).map((f: any) => ({
