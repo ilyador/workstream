@@ -155,8 +155,8 @@ export async function getWorkstreams(projectId: string) {
   return apiFetch(`/api/workstreams?project_id=${projectId}`);
 }
 
-export async function createWorkstream(projectId: string, name: string) {
-  return apiFetch('/api/workstreams', { method: 'POST', body: JSON.stringify({ project_id: projectId, name }) });
+export async function createWorkstream(projectId: string, name: string, description?: string, has_code?: boolean) {
+  return apiFetch('/api/workstreams', { method: 'POST', body: JSON.stringify({ project_id: projectId, name, description, has_code }) });
 }
 
 export async function updateWorkstream(id: string, data: Record<string, unknown>) {

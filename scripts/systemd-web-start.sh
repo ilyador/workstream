@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /home/sixbox/Dev/codesync
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
 
 # Load nvm so pnpm/node resolve in systemd's non-interactive shell.
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"

@@ -6,6 +6,8 @@ interface Workstream {
   id: string;
   project_id: string;
   name: string;
+  description: string;
+  has_code: boolean;
   status: string;
   position: number;
   pr_url: string | null;
@@ -44,9 +46,9 @@ export function useWorkstreams(projectId: string | null) {
     return unsub;
   }, [projectId, load]);
 
-  async function createWs(name: string) {
+  async function createWs(name: string, description?: string, has_code?: boolean) {
     if (!projectId) return;
-    await apiCreate(projectId, name);
+    await apiCreate(projectId, name, description, has_code);
     await load();
   }
 

@@ -5,9 +5,9 @@ Wants=codesync-server.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/sixbox/Dev/codesync
-EnvironmentFile=-/home/sixbox/Dev/codesync/.env
-ExecStart=/home/sixbox/Dev/codesync/scripts/systemd-web-start.sh
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=-__PROJECT_DIR__/.env
+ExecStart=__PROJECT_DIR__/scripts/systemd-web-start.sh
 Restart=always
 RestartSec=2
 StandardOutput=journal

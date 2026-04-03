@@ -8,7 +8,7 @@ import { useMembers } from './hooks/useMembers';
 import { useNotifications } from './hooks/useNotifications';
 import { useWebNotifications } from './hooks/useWebNotifications';
 import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, revertJob, terminateJob, deleteJob, updateTask, reviewAndCreatePr } from './lib/api';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
 import { NewProject } from './components/NewProject';
@@ -78,6 +78,25 @@ export default function App() {
   const notifs = useNotifications(auth.profile?.id);
   const webNotifs = useWebNotifications();
   const modal = useModal();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusTaskId = searchParams.get('task');
+
+  // Compute which tasks have unread @mentions
+  const mentionedTaskIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const n of notifs.notifications) {
+      if (!n.read && n.type === 'mention' && n.task_id) ids.add(n.task_id);
+    }
+    return ids;
+  }, [notifs.notifications]);
+
+  // Clear ?task= param after a short delay so it doesn't stick
+  useEffect(() => {
+    if (focusTaskId) {
+      const timer = setTimeout(() => setSearchParams({}, { replace: true }), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [focusTaskId, setSearchParams]);
 
   // Build a task-title lookup from all tasks
   const taskTitleMap = useMemo(() => {
@@ -268,8 +287,10 @@ export default function App() {
             memberMap={memberMap}
             userRole={projects.current?.role || 'dev'}
             projectId={projects.current?.id || null}
-            onCreateWorkstream={async (name) => {
-              await workstreams.createWorkstream(name);
+            mentionedTaskIds={mentionedTaskIds}
+            focusTaskId={focusTaskId}
+            onCreateWorkstream={async (name, description, has_code) => {
+              await workstreams.createWorkstream(name, description, has_code);
             }}
             onUpdateWorkstream={async (id, data) => {
               await workstreams.updateWorkstream(id, data);

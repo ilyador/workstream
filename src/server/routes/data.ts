@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { writeFileSync, readFileSync, existsSync, readdirSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { resolve, join, basename } from 'path';
 import { homedir } from 'os';
 import { supabase } from '../supabase.js';
@@ -157,7 +157,7 @@ dataRouter.get('/api/workstreams', requireAuth, async (req, res) => {
 });
 
 dataRouter.post('/api/workstreams', requireAuth, async (req, res) => {
-  const { project_id, name } = req.body;
+  const { project_id, name, description, has_code } = req.body;
 
   // Auto-assign position: max position + 1 for this project
   const { data: maxWs } = await supabase
@@ -168,9 +168,17 @@ dataRouter.post('/api/workstreams', requireAuth, async (req, res) => {
     .limit(1)
     .single();
 
+  const insert: Record<string, any> = {
+    project_id,
+    name,
+    position: (maxWs?.position || 0) + 1,
+  };
+  if (description !== undefined) insert.description = description;
+  if (has_code !== undefined) insert.has_code = has_code;
+
   const { data, error } = await supabase
     .from('workstreams')
-    .insert({ project_id, name, position: (maxWs?.position || 0) + 1 })
+    .insert(insert)
     .select()
     .single();
   if (error) return res.status(400).json({ error: error.message });
@@ -178,7 +186,7 @@ dataRouter.post('/api/workstreams', requireAuth, async (req, res) => {
 });
 
 dataRouter.patch('/api/workstreams/:id', requireAuth, async (req, res) => {
-  const allowed = ['name', 'position', 'status'];
+  const allowed = ['name', 'position', 'status', 'description', 'has_code'];
   const updates: Record<string, any> = {};
   for (const key of allowed) {
     if (key in req.body) updates[key] = req.body[key];
@@ -473,6 +481,36 @@ export function discoverSkills(localPath?: string): SkillInfo[] {
         for (const plugin of readdirSync(mpPlugins)) {
           const cmdDir = join(mpPlugins, plugin, 'commands');
           addFromDir(cmdDir, plugin);
+
+          // Also scan skills/ subdirectory for each plugin
+          const skillsDir = join(mpPlugins, plugin, 'skills');
+          if (existsSync(skillsDir)) {
+            try {
+              for (const skillName of readdirSync(skillsDir)) {
+                const skillDir = join(skillsDir, skillName);
+                try { if (!statSync(skillDir).isDirectory()) continue; } catch { continue; }
+                if (seen.has(skillName)) continue;
+                // Look for the main skill file: skillName.md, SKILL.md, or first .md
+                const candidateFiles = [
+                  join(skillDir, `${skillName}.md`),
+                  join(skillDir, 'SKILL.md'),
+                ];
+                let filePath: string | null = null;
+                for (const cf of candidateFiles) {
+                  if (existsSync(cf)) { filePath = cf; break; }
+                }
+                if (!filePath) {
+                  const altFile = readdirSync(skillDir).find(f => f.endsWith('.md'));
+                  if (altFile) filePath = join(skillDir, altFile);
+                }
+                if (!filePath) continue;
+                const meta = parseSkillFrontmatter(filePath);
+                if (!meta) continue;
+                seen.add(skillName);
+                skills.push({ name: `${plugin}:${skillName}`, description: meta.description, source: plugin, filePath });
+              }
+            } catch { /* skip */ }
+          }
         }
       }
     } catch { /* skip */ }

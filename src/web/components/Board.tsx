@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { WorkstreamColumn } from './WorkstreamColumn';
 import type { JobView } from './job-types';
 import s from './Board.module.css';
@@ -23,6 +23,8 @@ interface Task {
 interface Workstream {
   id: string;
   name: string;
+  description?: string;
+  has_code?: boolean;
   status: string;
   position: number;
   pr_url?: string | null;
@@ -35,8 +37,10 @@ interface BoardProps {
   memberMap: Record<string, { name: string; initials: string }>;
   userRole: string;
   projectId: string | null;
+  mentionedTaskIds: Set<string>;
+  focusTaskId: string | null;
   // Workstream actions
-  onCreateWorkstream: (name: string) => Promise<void>;
+  onCreateWorkstream: (name: string, description?: string, has_code?: boolean) => Promise<void>;
   onUpdateWorkstream: (id: string, data: Record<string, unknown>) => Promise<void>;
   onDeleteWorkstream: (id: string) => Promise<void>;
   // Task actions
@@ -64,6 +68,8 @@ export function Board({
   memberMap,
   userRole,
   projectId,
+  mentionedTaskIds,
+  focusTaskId,
   onCreateWorkstream,
   onUpdateWorkstream,
   onDeleteWorkstream,
@@ -83,8 +89,14 @@ export function Board({
   onCreatePr,
 }: BoardProps) {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [draggedWsId, setDraggedWsId] = useState<string | null>(null);
   const [addingWs, setAddingWs] = useState(false);
   const [newWsName, setNewWsName] = useState('');
+  const [newWsDesc, setNewWsDesc] = useState('');
+  const [newWsHasCode, setNewWsHasCode] = useState(true);
+
+  const boardRef = useRef<HTMLDivElement>(null);
+  const scrollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const taskJobMap = useMemo(() => {
     const priority: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
@@ -157,16 +169,69 @@ export function Board({
     setDraggedTaskId(null);
   };
 
+  const handleBoardDragOver = (e: React.DragEvent) => {
+    const board = boardRef.current;
+    if (!board || (!draggedTaskId && !draggedWsId)) return;
+
+    const rect = board.getBoundingClientRect();
+    const edgeZone = 80;
+    const scrollSpeed = 12;
+
+    if (e.clientX < rect.left + edgeZone) {
+      if (!scrollInterval.current) {
+        scrollInterval.current = setInterval(() => {
+          board.scrollLeft -= scrollSpeed;
+        }, 16);
+      }
+    } else if (e.clientX > rect.right - edgeZone) {
+      if (!scrollInterval.current) {
+        scrollInterval.current = setInterval(() => {
+          board.scrollLeft += scrollSpeed;
+        }, 16);
+      }
+    } else {
+      if (scrollInterval.current) {
+        clearInterval(scrollInterval.current);
+        scrollInterval.current = null;
+      }
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTaskId(null);
+    setDraggedWsId(null);
+    if (scrollInterval.current) {
+      clearInterval(scrollInterval.current);
+      scrollInterval.current = null;
+    }
+  };
+
+  const handleColumnDrop = async (targetWsId: string) => {
+    if (!draggedWsId || draggedWsId === targetWsId) return;
+    const dragged = workstreams.find(w => w.id === draggedWsId);
+    const target = workstreams.find(w => w.id === targetWsId);
+    if (!dragged || !target) return;
+    await onUpdateWorkstream(draggedWsId, { position: target.position });
+    await onUpdateWorkstream(targetWsId, { position: dragged.position });
+    setDraggedWsId(null);
+  };
+
   const handleCreateWorkstream = async () => {
     const name = newWsName.trim();
     if (!name) return;
-    await onCreateWorkstream(name);
+    await onCreateWorkstream(name, newWsDesc.trim() || undefined, newWsHasCode);
     setNewWsName('');
+    setNewWsDesc('');
+    setNewWsHasCode(true);
     setAddingWs(false);
   };
 
   return (
-    <div className={s.board}>
+    <div
+      className={`${s.board} ${(draggedTaskId || draggedWsId) ? s.boardDragging : ''}`}
+      ref={boardRef}
+      onDragOver={handleBoardDragOver}
+    >
       {/* Backlog column */}
       <WorkstreamColumn
         workstream={null}
@@ -175,9 +240,11 @@ export function Board({
         isBacklog
         canRunAi={userRole !== 'manager'}
         projectId={projectId}
+        mentionedTaskIds={mentionedTaskIds}
+        focusTaskId={focusTaskId}
         draggedTaskId={draggedTaskId}
         onDragTaskStart={setDraggedTaskId}
-        onDragTaskEnd={() => setDraggedTaskId(null)}
+        onDragTaskEnd={handleDragEnd}
         onDropTask={handleDropTask}
         onAddTask={() => onAddTask(null)}
         onRunTask={onRunTask}
@@ -202,10 +269,15 @@ export function Board({
           isBacklog={false}
           canRunAi={userRole !== 'manager'}
           projectId={projectId}
+          mentionedTaskIds={mentionedTaskIds}
+          focusTaskId={focusTaskId}
           draggedTaskId={draggedTaskId}
+          draggedWsId={draggedWsId}
           onDragTaskStart={setDraggedTaskId}
-          onDragTaskEnd={() => setDraggedTaskId(null)}
+          onDragTaskEnd={handleDragEnd}
           onDropTask={handleDropTask}
+          onColumnDragStart={setDraggedWsId}
+          onColumnDrop={handleColumnDrop}
           onRenameWorkstream={(id, name) => onUpdateWorkstream(id, { name })}
           onDeleteWorkstream={onDeleteWorkstream}
           onAddTask={() => onAddTask(ws.id)}
@@ -240,13 +312,28 @@ export function Board({
             onChange={(e) => setNewWsName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleCreateWorkstream();
-              if (e.key === 'Escape') { setAddingWs(false); setNewWsName(''); }
+              if (e.key === 'Escape') { setAddingWs(false); setNewWsName(''); setNewWsDesc(''); setNewWsHasCode(true); }
             }}
             placeholder="Workstream name..."
             autoFocus
           />
+          <input
+            className={s.addInput}
+            value={newWsDesc}
+            onChange={(e) => setNewWsDesc(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCreateWorkstream();
+              if (e.key === 'Escape') { setAddingWs(false); setNewWsName(''); setNewWsDesc(''); setNewWsHasCode(true); }
+            }}
+            placeholder="Goal (optional, max 100 chars)"
+            maxLength={100}
+          />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-2)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={newWsHasCode} onChange={e => setNewWsHasCode(e.target.checked)} />
+            Code (PR flow on completion)
+          </label>
           <button className="btn btnPrimary btnSm" onClick={handleCreateWorkstream}>Add</button>
-          <button className="btn btnGhost btnSm" onClick={() => { setAddingWs(false); setNewWsName(''); }}>
+          <button className="btn btnGhost btnSm" onClick={() => { setAddingWs(false); setNewWsName(''); setNewWsDesc(''); setNewWsHasCode(true); }}>
             Cancel
           </button>
         </div>

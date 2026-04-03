@@ -3,6 +3,7 @@ import { useModal } from '../hooks/useModal';
 import { TaskCard } from './TaskCard';
 import type { JobView } from './job-types';
 import s from './WorkstreamColumn.module.css';
+import taskStyles from './TaskCard.module.css';
 
 interface Task {
   id: string;
@@ -22,6 +23,8 @@ interface Task {
 interface Workstream {
   id: string;
   name: string;
+  description?: string;
+  has_code?: boolean;
   status: string;
   position: number;
   pr_url?: string | null;
@@ -34,11 +37,17 @@ interface WorkstreamColumnProps {
   isBacklog: boolean;
   canRunAi: boolean;
   projectId: string | null;
-  // Drag
+  mentionedTaskIds: Set<string>;
+  focusTaskId: string | null;
+  // Task drag
   draggedTaskId: string | null;
   onDragTaskStart: (taskId: string) => void;
   onDragTaskEnd: () => void;
   onDropTask: (workstreamId: string | null, dropIndex: number) => void;
+  // Column drag
+  draggedWsId?: string | null;
+  onColumnDragStart?: (wsId: string) => void;
+  onColumnDrop?: (targetWsId: string) => void;
   // Column actions
   onRenameWorkstream?: (id: string, name: string) => void;
   onDeleteWorkstream?: (id: string) => void;
@@ -67,10 +76,15 @@ export function WorkstreamColumn({
   isBacklog,
   canRunAi,
   projectId,
+  mentionedTaskIds,
+  focusTaskId,
   draggedTaskId,
   onDragTaskStart,
   onDragTaskEnd,
   onDropTask,
+  draggedWsId,
+  onColumnDragStart,
+  onColumnDrop,
   onRenameWorkstream,
   onDeleteWorkstream,
   onAddTask,
@@ -92,10 +106,13 @@ export function WorkstreamColumn({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(workstream?.name || '');
+  const [columnDropSide, setColumnDropSide] = useState<'left' | 'right' | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const tasksRef = useRef<HTMLDivElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
   const dropIndexRef = useRef<number | null>(null);
   const dragCountRef = useRef(0); // track enter/leave balance to handle child elements
+  const colDragCountRef = useRef(0);
 
   const wsId = workstream?.id || null;
   const doneTasks = tasks.filter(t => t.status === 'done').length;
@@ -159,6 +176,37 @@ export function WorkstreamColumn({
     prevActiveRef.current = activeTaskId;
   }, [activeTaskId]);
 
+  // Focus a task from ?task= URL param: expand, scroll into view, highlight
+  const focusedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusTaskId || focusedRef.current === focusTaskId) return;
+    const match = tasks.find(t => t.id === focusTaskId);
+    if (!match) return;
+    focusedRef.current = focusTaskId;
+    // Expand the card
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      next.add(focusTaskId);
+      return next;
+    });
+    // Scroll into view and apply highlight after a tick (DOM needs to update)
+    requestAnimationFrame(() => {
+      const container = tasksRef.current;
+      if (!container) return;
+      const wraps = Array.from(container.querySelectorAll<HTMLElement>(`.${s.cardWrap}`));
+      const idx = tasks.findIndex(t => t.id === focusTaskId);
+      const el = wraps[idx];
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // Apply highlight animation class to the card inside the wrapper
+      const card = el.querySelector<HTMLElement>(`.${taskStyles.card}`);
+      if (card) {
+        card.classList.add(taskStyles.highlight);
+        card.addEventListener('animationend', () => card.classList.remove(taskStyles.highlight), { once: true });
+      }
+    });
+  }, [focusTaskId, tasks]);
+
   // Focus name input when editing
   useEffect(() => {
     if (editing && nameInputRef.current) {
@@ -209,33 +257,66 @@ export function WorkstreamColumn({
     }
   }, [draggedTaskId, clearDropIndicator]);
 
+  // Column drag-over: detect which side the cursor is on for the drop indicator
+  const handleColumnDragOver = useCallback((e: React.DragEvent) => {
+    if (!draggedWsId || !workstream || draggedWsId === workstream.id) return;
+    const col = columnRef.current;
+    if (!col) return;
+    const rect = col.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    setColumnDropSide(e.clientX < midX ? 'left' : 'right');
+  }, [draggedWsId, workstream]);
+
   return (
     <div
-      className={`${s.column} ${isBacklog ? s.backlog : ''}`}
+      ref={columnRef}
+      className={`${s.column} ${isBacklog ? s.backlog : ''} ${draggedWsId && workstream && draggedWsId !== workstream.id ? (columnDropSide === 'left' ? s.columnDropLeft : columnDropSide === 'right' ? s.columnDropRight : '') : ''}`}
       onDragEnter={(e) => {
         e.preventDefault();
-        dragCountRef.current++;
+        if (draggedTaskId) {
+          dragCountRef.current++;
+        }
+        if (draggedWsId && workstream && draggedWsId !== workstream.id) {
+          colDragCountRef.current++;
+        }
       }}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
+        if (draggedWsId) handleColumnDragOver(e);
       }}
       onDragLeave={() => {
-        dragCountRef.current--;
-        if (dragCountRef.current <= 0) {
-          dragCountRef.current = 0;
-          clearDropIndicator();
-          dropIndexRef.current = null;
+        if (draggedTaskId) {
+          dragCountRef.current--;
+          if (dragCountRef.current <= 0) {
+            dragCountRef.current = 0;
+            clearDropIndicator();
+            dropIndexRef.current = null;
+          }
+        }
+        if (draggedWsId && workstream) {
+          colDragCountRef.current--;
+          if (colDragCountRef.current <= 0) {
+            colDragCountRef.current = 0;
+            setColumnDropSide(null);
+          }
         }
       }}
       onDrop={(e) => {
         e.preventDefault();
-        clearDropIndicator();
-        dragCountRef.current = 0;
+        // Handle task drop
         if (draggedTaskId && dropIndexRef.current !== null) {
+          clearDropIndicator();
+          dragCountRef.current = 0;
           onDropTask(wsId, dropIndexRef.current);
+          dropIndexRef.current = null;
         }
-        dropIndexRef.current = null;
+        // Handle column drop
+        if (draggedWsId && workstream && onColumnDrop && draggedWsId !== workstream.id) {
+          colDragCountRef.current = 0;
+          setColumnDropSide(null);
+          onColumnDrop(workstream.id);
+        }
       }}
     >
       {/* Header */}
@@ -256,13 +337,23 @@ export function WorkstreamColumn({
           ) : (
             <span
               className={s.name}
+              draggable={!isBacklog && !!onColumnDragStart && !!workstream}
+              onDragStart={(e) => {
+                if (isBacklog || !workstream || !onColumnDragStart) return;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', workstream.id);
+                onColumnDragStart(workstream.id);
+                // Prevent task drag handlers from interfering
+                e.stopPropagation();
+              }}
               onDoubleClick={() => {
                 if (!isBacklog && workstream) {
                   setEditName(workstream.name);
                   setEditing(true);
                 }
               }}
-              title={isBacklog ? undefined : 'Double-click to rename'}
+              title={isBacklog ? undefined : 'Drag to reorder, double-click to rename'}
+              style={!isBacklog && onColumnDragStart ? { cursor: 'grab' } : undefined}
             >
               {isBacklog ? 'Backlog' : workstream?.name}
             </span>
@@ -324,7 +415,7 @@ export function WorkstreamColumn({
           )}
         </div>
 
-        {/* Progress line on the separator — full width, colored by state */}
+        {/* Progress line on the separator -- full width, colored by state */}
         {!isBacklog && totalTasks > 0 && (
           <div className={s.progressLine}>
             <div
@@ -362,6 +453,7 @@ export function WorkstreamColumn({
                 canRunAi={canRunAi}
                 showPriority={isBacklog}
                 projectId={projectId || undefined}
+                hasUnreadMention={mentionedTaskIds.has(task.id)}
                 isExpanded={expandedIds.has(task.id)}
                 onToggleExpand={() => setExpandedIds(prev => {
                   const next = new Set(prev);
@@ -392,7 +484,7 @@ export function WorkstreamColumn({
       {allDone && !isBacklog && wsStatus === 'pending review' && (
         <div className={s.completeBanner}>
           <span>&#10003; All tasks complete</span>
-          {onCreatePr && (
+          {workstream?.has_code !== false && onCreatePr && (
             <button className="btn btnPrimary btnSm" onClick={onCreatePr}>Review &amp; Create PR</button>
           )}
         </div>

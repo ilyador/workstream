@@ -11,6 +11,11 @@
   scroll-behavior: smooth;
 }
 
+/* Disable smooth scroll during drag to prevent jittery auto-scroll */
+.boardDragging {
+  scroll-behavior: auto;
+}
+
 @media (max-width: 768px) {
   .board {
     gap: 12px;

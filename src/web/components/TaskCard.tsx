@@ -48,6 +48,7 @@ interface TaskCardProps {
   dragDisabled?: boolean;
   showPriority?: boolean;
   projectId?: string;
+  hasUnreadMention?: boolean;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -81,6 +82,7 @@ export function TaskCard({
   dragDisabled,
   showPriority,
   projectId,
+  hasUnreadMention,
 }: TaskCardProps) {
   const jobStatus = job?.status;
   const isActive = jobStatus === 'queued' || jobStatus === 'running' || jobStatus === 'paused' || jobStatus === 'review';
@@ -167,6 +169,7 @@ export function TaskCard({
         )}
 
         {(jobStatus || taskDone || isHumanWaiting) && <span className={`${s.statusDot} ${dotClass}`} />}
+        {hasUnreadMention && <span className={s.mentionDot} />}
 
         <span className={s.title}>{task.title}</span>
 
@@ -414,33 +417,36 @@ function IdleDetail({
         </div>
       )}
 
-      {task.assignee && task.assignee.type !== 'ai' && onUpdateTask && (
-        <div className={s.humanActions}>
-          <button className="btn btnSuccess btnSm" onClick={() => onUpdateTask(task.id, { status: 'done' })}>
-            Done
-          </button>
-          <button className="btn btnSecondary btnSm" onClick={() => onUpdateTask(task.id, { status: 'canceled' })}>
-            Cancel
-          </button>
+      <div className={s.actions}>
+        <div className={s.actionsLeft}>
+          {task.assignee && task.assignee.type !== 'ai' && onUpdateTask && (
+            <>
+              <button className="btn btnSuccess btnSm" onClick={() => onUpdateTask(task.id, { status: 'done' })}>
+                Done
+              </button>
+              <button className="btn btnSecondary btnSm" onClick={() => onUpdateTask(task.id, { status: 'canceled' })}>
+                Cancel
+              </button>
+            </>
+          )}
+          {(!task.assignee || task.assignee.type === 'ai') && canRunAi && onRun && (
+            <button className="btn btnPrimary btnSm" onClick={() => onRun(task.id)}>
+              Run
+            </button>
+          )}
         </div>
-      )}
-
-      <div className={s.idleActions}>
-        {(!task.assignee || task.assignee.type === 'ai') && canRunAi && onRun && (
-          <button className="btn btnPrimary btnSm" onClick={() => onRun(task.id)}>
-            Run
-          </button>
-        )}
-        {onEdit && (
-          <button className="btn btnGhost btnSm" onClick={onEdit}>Edit</button>
-        )}
-        {onDelete && (
-          <button
-            className="btn btnGhost btnSm"
-            style={{ color: 'var(--red)' }}
-            onClick={async () => { if (await modal.confirm('Delete task', 'Delete this task?', { label: 'Delete', danger: true })) onDelete(); }}
-          >Delete</button>
-        )}
+        <div className={s.actionsRight}>
+          {onEdit && (
+            <button className="btn btnGhost btnSm" onClick={onEdit}>Edit</button>
+          )}
+          {onDelete && (
+            <button
+              className="btn btnGhost btnSm"
+              style={{ color: 'var(--red)' }}
+              onClick={async () => { if (await modal.confirm('Delete task', 'Delete this task?', { label: 'Delete', danger: true })) onDelete(); }}
+            >Delete</button>
+          )}
+        </div>
       </div>
 
       <CardComments taskId={task.id} projectId={projectId} />
@@ -456,7 +462,7 @@ function CardComments({ taskId, projectId }: { taskId: string; projectId?: strin
   const [sending, setSending] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIdx, setMentionIdx] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const mentionMatches = mentionQuery !== null
     ? members.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5)
@@ -470,6 +476,7 @@ function CardComments({ taskId, projectId }: { taskId: string; projectId?: strin
       await addComment(body);
       setText('');
       setMentionQuery(null);
+      if (inputRef.current) { inputRef.current.style.height = 'auto'; }
     } finally {
       setSending(false);
     }
@@ -493,6 +500,16 @@ function CardComments({ taskId, projectId }: { taskId: string; projectId?: strin
     }, 0);
   };
 
+  const adjustHeight = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  };
+
+  // Auto-resize textarea after text changes
+  useEffect(() => { adjustHeight(); }, [text]);
+
   const handleChange = (val: string) => {
     setText(val);
     const cursor = inputRef.current?.selectionStart || val.length;
@@ -513,7 +530,7 @@ function CardComments({ taskId, projectId }: { taskId: string; projectId?: strin
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionMatches[mentionIdx].name); return; }
       if (e.key === 'Escape') { setMentionQuery(null); return; }
     }
-    if (e.key === 'Enter') handleSend();
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   return (
@@ -565,11 +582,13 @@ function CardComments({ taskId, projectId }: { taskId: string; projectId?: strin
           </div>
         )}
         <div style={{ display: 'flex', gap: 6 }}>
-          <input
+          <textarea
             ref={inputRef}
+            rows={1}
             style={{
               flex: 1, padding: '4px 10px', background: 'var(--white)', border: '1.5px solid var(--divider)',
               borderRadius: 6, fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', outline: 'none',
+              resize: 'none', minHeight: 28,
             }}
             value={text}
             onChange={e => handleChange(e.target.value)}

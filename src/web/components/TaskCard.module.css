@@ -229,6 +229,25 @@
   50% { opacity: 0.4; }
 }
 
+/* Unread @mention red dot */
+.mentionDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  flex-shrink: 0;
+  margin-top: 7px;
+}
+
+/* Task highlight animation (triggered by ?task= URL param) */
+.highlight {
+  animation: highlightPulse 1.5s ease-out;
+}
+@keyframes highlightPulse {
+  0% { box-shadow: 0 0 0 3px var(--blue); }
+  100% { box-shadow: none; }
+}
+
 /* ─── Expanded detail area ─── */
 .detail {
   padding: 0 12px 14px;
@@ -448,12 +467,15 @@
   color: var(--text-3);
   padding: 4px 0;
 }
-.idleActions {
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+}
+.actionsLeft, .actionsRight {
   display: flex;
   gap: 8px;
-  padding-top: 10px;
-  flex-wrap: wrap;
-  align-items: center;
 }
 .images {
   display: flex;
@@ -472,12 +494,7 @@
   border-color: var(--blue);
 }
 
-/* Human task buttons */
-.humanActions {
-  display: flex;
-  gap: 8px;
-  padding-top: 8px;
-}
+/* (humanActions and idleActions merged into .actions / .actionsLeft / .actionsRight) */
 
 /* Terminate button area */
 .terminateWrap {

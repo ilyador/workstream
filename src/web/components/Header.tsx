@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { timeAgo } from '../lib/time';
 import { useTheme } from '../hooks/useTheme';
 import s from './Header.module.css';
@@ -51,6 +51,7 @@ export function Header({
   onSignOut,
   onManageMembers,
 }: Props) {
+  const navigate = useNavigate();
   const { theme, toggle: toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -168,6 +169,8 @@ export function Header({
                       className={`${s.notifItem} ${!n.read ? s.notifUnread : ''}`}
                       onClick={() => {
                         if (!n.read) onMarkRead?.(n.id);
+                        if (n.task_id) navigate(`/?task=${n.task_id}`);
+                        setNotifOpen(false);
                       }}
                     >
                       <span className={s.notifMsg}>{n.message}</span>

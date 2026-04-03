@@ -34,10 +34,18 @@
   border-style: dashed;
 }
 
-/* Drop target highlight — subtle tint, not harsh ring */
+/* Drop target highlight -- subtle tint, not harsh ring */
 .dropOver {
   background: color-mix(in srgb, var(--blue-bg) 50%, var(--white));
   border-color: var(--blue-soft);
+}
+
+/* Column reorder drop indicators */
+.columnDropLeft {
+  box-shadow: -3px 0 0 0 var(--blue);
+}
+.columnDropRight {
+  box-shadow: 3px 0 0 0 var(--blue);
 }
 
 /* ─── Column header ─── */

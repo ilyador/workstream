@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /home/sixbox/Dev/codesync
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
 
 # Add ~/.local/bin for claude CLI
 export PATH="$HOME/.local/bin:$PATH"
