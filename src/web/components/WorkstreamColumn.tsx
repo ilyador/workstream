@@ -288,7 +288,12 @@ export function WorkstreamColumn({
     setColumnDropSide(e.clientX < midX ? 'left' : 'right');
   }, [draggedWsId, workstream]);
 
+  const showDropLeft = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'left';
+  const showDropRight = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'right';
+
   return (
+    <div className={s.columnOuter}>
+      {showDropLeft && <div className={s.columnDropLine} />}
     <div
       ref={columnRef}
       className={`${s.column} ${isBacklog ? s.backlog : ''}`}
@@ -610,6 +615,8 @@ export function WorkstreamColumn({
           </div>
         </div>
       )}
+    </div>
+      {showDropRight && <div className={s.columnDropLine} />}
     </div>
   );
 }
