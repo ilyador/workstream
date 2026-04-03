@@ -128,7 +128,7 @@ export function Board({
       const key = task.workstream_id || '__backlog__';
       if (!groups[key]) groups[key] = [];
       const member = task.assignee ? memberMap[task.assignee] : null;
-      const flowName = task.flow_id ? flowMap[task.flow_id] : null;
+      const flowName = task.flow_id && flowMap ? flowMap[task.flow_id] : null;
       groups[key].push({
         ...task,
         assignee: member
