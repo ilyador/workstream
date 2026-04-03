@@ -749,15 +749,17 @@ Read the codebase to understand what needs testing. Follow existing test pattern
 ];
 
 async function createDefaultFlows(projectId: string): Promise<void> {
+  // Check which default flows already exist for this project
   const { data: existing } = await supabase
     .from('flows')
-    .select('id')
+    .select('name')
     .eq('project_id', projectId)
-    .eq('is_builtin', true)
-    .limit(1);
-  if (existing && existing.length > 0) return; // already seeded
+    .eq('is_builtin', true);
+  const existingNames = new Set((existing || []).map((f: any) => f.name));
 
   for (const def of DEFAULT_FLOWS) {
+    if (existingNames.has(def.name)) continue; // already exists
+
     const { data: flow, error } = await supabase
       .from('flows')
       .insert({ project_id: projectId, name: def.name, description: def.description, is_builtin: true })
@@ -853,9 +855,16 @@ dataRouter.delete('/api/flows/:id', requireAuth, async (req, res) => {
 
 // Replace all steps for a flow (bulk upsert)
 dataRouter.put('/api/flows/:id/steps', requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
   const flowId = req.params.id;
   const { steps } = req.body;
   if (!Array.isArray(steps)) return res.status(400).json({ error: 'steps array required' });
+
+  // Verify user is a member of the flow's project
+  const { data: flow } = await supabase.from('flows').select('project_id').eq('id', flowId).single();
+  if (!flow) return res.status(404).json({ error: 'Flow not found' });
+  const { data: member } = await supabase.from('project_members').select('role').eq('project_id', flow.project_id).eq('user_id', userId).single();
+  if (!member) return res.status(403).json({ error: 'Not a member of this project' });
 
   // Delete existing steps and insert new ones
   await supabase.from('flow_steps').delete().eq('flow_id', flowId);

@@ -165,7 +165,7 @@ export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteF
         context_sources: st.context_sources,
         is_gate: st.is_gate,
         on_fail_jump_to: st.is_gate ? st.on_fail_jump_to : null,
-        max_retries: st.is_gate ? st.max_retries : 1,
+        max_retries: st.is_gate ? st.max_retries : 0,
         on_max_retries: st.is_gate ? st.on_max_retries : 'pause',
         include_agents_md: st.include_agents_md,
       }));
@@ -193,6 +193,7 @@ export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteF
   // ---- Delete flow ----
   const handleDeleteFlow = useCallback(async () => {
     if (!selectedFlow || selectedFlow.is_builtin) return;
+    if (!confirm(`Delete flow "${selectedFlow.name}" and all its steps? This cannot be undone.`)) return;
     setSaving(true);
     setError('');
     try {
