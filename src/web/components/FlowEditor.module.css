@@ -27,9 +27,9 @@
 
 /* ─── Column: one flow = one column (mirrors WorkstreamColumn.module.css) ─── */
 .column {
-  flex: 0 0 380px;
-  min-width: 380px;
-  max-width: 380px;
+  flex: 1 1 500px;
+  min-width: 500px;
+  max-width: 700px;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 120px);
