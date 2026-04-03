@@ -6,10 +6,10 @@ interface FlowEditorProps {
   flows: Flow[];
   onSave: (flowId: string, updates: { name?: string; description?: string; agents_md?: string }) => Promise<void>;
   onSaveSteps: (flowId: string, steps: any[]) => Promise<void>;
-  onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: any[] }) => Promise<void>;
+  onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: any[] }) => Promise<Flow>;
   onDeleteFlow: (flowId: string) => Promise<void>;
   projectId: string;
-  onClose: () => void;
+  onClose?: () => void;
 }
 
 const ALL_TOOLS = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'Agent'];
@@ -182,7 +182,8 @@ export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteF
     setSaving(true);
     setError('');
     try {
-      await onCreateFlow({ project_id: projectId, name: 'New Flow', description: '', steps: [] });
+      const created = await onCreateFlow({ project_id: projectId, name: 'New Flow', description: '', steps: [] });
+      if (created?.id) setSelectedId(created.id);
     } catch (err: any) {
       setError(err.message || 'Failed to create flow');
     } finally {
@@ -214,8 +215,7 @@ export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteF
   }, []);
 
   return (
-    <div className={s.overlay} onClick={onClose}>
-      <div className={s.modal} onClick={e => e.stopPropagation()}>
+    <div className={s.page}>
         {/* ---- Sidebar ---- */}
         <div className={s.sidebar}>
           <div className={s.sidebarHeader}>Flows</div>
@@ -548,7 +548,6 @@ export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteF
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }
