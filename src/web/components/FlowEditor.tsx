@@ -1,6 +1,55 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import Markdown from 'react-markdown';
 import type { Flow, FlowStep } from '../lib/api';
 import s from './FlowEditor.module.css';
+
+/** Markdown field: shows rendered preview, switches to textarea on click. */
+function MdField({ value, onChange, placeholder, autoResizeFn }: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  autoResizeFn?: (el: HTMLTextAreaElement) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing && taRef.current) {
+      taRef.current.focus();
+      if (autoResizeFn) autoResizeFn(taRef.current);
+    }
+  }, [editing, autoResizeFn]);
+
+  if (editing) {
+    return (
+      <textarea
+        ref={taRef}
+        className={s.textarea}
+        value={value}
+        onChange={e => {
+          onChange(e.target.value);
+          if (autoResizeFn) autoResizeFn(e.target);
+        }}
+        onBlur={() => setEditing(false)}
+        placeholder={placeholder}
+      />
+    );
+  }
+
+  if (!value) {
+    return (
+      <div className={s.mdPreviewEmpty} onClick={() => setEditing(true)}>
+        {placeholder || 'Click to edit...'}
+      </div>
+    );
+  }
+
+  return (
+    <div className={s.mdPreview} onClick={() => setEditing(true)}>
+      <Markdown>{value}</Markdown>
+    </div>
+  );
+}
 
 interface FlowEditorProps {
   flows: Flow[];
@@ -377,22 +426,11 @@ function FlowColumn({
                   {/* Instructions */}
                   <div className={s.field}>
                     <label className={s.label}>Instructions</label>
-                    <textarea
-                      ref={el => {
-                        if (el) {
-                          instructionsRefs.current.set(idx, el);
-                          autoResize(el);
-                        } else {
-                          instructionsRefs.current.delete(idx);
-                        }
-                      }}
-                      className={s.textarea}
+                    <MdField
                       value={step.instructions}
-                      onChange={e => {
-                        updateStep(idx, { instructions: e.target.value });
-                        autoResize(e.target);
-                      }}
+                      onChange={val => updateStep(idx, { instructions: val })}
                       placeholder="What should the AI do in this step..."
+                      autoResizeFn={autoResize}
                     />
                   </div>
 
