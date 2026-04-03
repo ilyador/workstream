@@ -93,6 +93,7 @@ export function TaskCard({
 
   const statusClass = jobStatus
     ? s[`status${cap(jobStatus)}`]
+    : isHumanWaiting ? s.statusPaused
     : taskDone ? s.statusDone : '';
 
   // Priority visuals controlled by parent (backlog shows priority, workstreams don't)
