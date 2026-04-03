@@ -181,6 +181,7 @@ export async function createTask(data: {
   effort?: string;
   multiagent?: string;
   assignee?: string | null;
+  flow_id?: string | null;
   auto_continue?: boolean;
   images?: string[];
   workstream_id?: string | null;
@@ -316,6 +317,54 @@ export async function createCustomType(projectId: string, name: string, pipeline
 
 export async function deleteCustomType(id: string) {
   return apiFetch(`/api/custom-types/${id}`, { method: 'DELETE' });
+}
+
+// --- Flows ---
+export interface FlowStep {
+  id: string;
+  name: string;
+  position: number;
+  instructions: string;
+  model: string;
+  tools: string[];
+  context_sources: string[];
+  is_gate: boolean;
+  on_fail_jump_to: number | null;
+  max_retries: number;
+  on_max_retries: string;
+  include_agents_md: boolean;
+}
+
+export interface Flow {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string;
+  icon: string;
+  is_builtin: boolean;
+  agents_md: string | null;
+  flow_steps: FlowStep[];
+  created_at: string;
+}
+
+export async function getFlows(projectId: string): Promise<Flow[]> {
+  return apiFetch(`/api/flows?project_id=${projectId}`);
+}
+
+export async function createFlow(data: { project_id: string; name: string; description?: string; icon?: string; agents_md?: string; steps?: any[] }): Promise<Flow> {
+  return apiFetch('/api/flows', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateFlow(id: string, data: Record<string, unknown>): Promise<Flow> {
+  return apiFetch(`/api/flows/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deleteFlow(id: string) {
+  return apiFetch(`/api/flows/${id}`, { method: 'DELETE' });
+}
+
+export async function updateFlowSteps(flowId: string, steps: any[]) {
+  return apiFetch(`/api/flows/${flowId}/steps`, { method: 'PUT', body: JSON.stringify({ steps }) });
 }
 
 // --- Skills ---

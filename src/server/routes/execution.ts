@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { loadTaskTypeConfig } from '../runner.js';
+import { loadTaskTypeConfig, buildFlowSnapshot } from '../runner.js';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../auth-middleware.js';
 import { revertToCheckpoint, deleteCheckpoint } from '../checkpoint.js';
@@ -58,8 +58,31 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Only AI tasks can be run' });
   }
 
-  // Load task type config to get initial phase/max_attempts
-  const taskType = loadTaskTypeConfig(localPath, task.type);
+  // Build flow snapshot if task has a flow, otherwise fall back to legacy task type
+  let flowSnapshot: any = null;
+  let firstPhase: string;
+  let maxAttempts: number;
+
+  if (task.flow_id) {
+    const { data: flow } = await supabase
+      .from('flows')
+      .select('*, flow_steps(*)')
+      .eq('id', task.flow_id)
+      .single();
+    if (flow) {
+      flowSnapshot = buildFlowSnapshot(flow);
+      firstPhase = flowSnapshot.steps[0]?.name || 'plan';
+      maxAttempts = Math.max(...flowSnapshot.steps.map((s: any) => s.max_retries + 1));
+    } else {
+      const taskType = loadTaskTypeConfig(localPath, task.type);
+      firstPhase = taskType.phases[0];
+      maxAttempts = taskType.verify_retries + 1;
+    }
+  } else {
+    const taskType = loadTaskTypeConfig(localPath, task.type);
+    firstPhase = taskType.phases[0];
+    maxAttempts = taskType.verify_retries + 1;
+  }
 
   // Create job with queued status — worker picks it up
   const { data: job, error: jobErr } = await supabase
@@ -69,8 +92,10 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
       project_id: projectId,
       local_path: localPath,
       status: 'queued',
-      current_phase: taskType.phases[0],
-      max_attempts: taskType.verify_retries + 1,
+      current_phase: firstPhase,
+      max_attempts: maxAttempts,
+      flow_id: task.flow_id || null,
+      flow_snapshot: flowSnapshot,
     })
     .select()
     .single();

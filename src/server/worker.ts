@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { runJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
+import { runJob, runFlowJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
+import type { FlowConfig } from './runner.js';
 import { supabase } from './supabase.js';
 import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
 import { queueNextWorkstreamTask } from './auto-continue.js';
@@ -170,7 +171,9 @@ async function startJob(job: any): Promise<void> {
   // Update task status
   await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', task.id);
 
-  const taskType = loadTaskTypeConfig(localPath, task.type);
+  // Determine execution path: flow-based (new) or type-based (legacy)
+  const flowSnapshot: FlowConfig | null = job.flow_snapshot || null;
+  const taskType = flowSnapshot ? null : loadTaskTypeConfig(localPath, task.type);
 
   // Determine fresh start vs resume
   const phasesAlreadyCompleted: any[] = (job.phases_completed as any[]) || [];
@@ -243,21 +246,33 @@ async function startJob(job: any): Promise<void> {
   const callbacks = makeDbCallbacks(jobId, task);
 
   try {
-    await runJob({
+    const taskWithAnswer = isResume ? { ...task, answer: job.answer } : task;
+    const sharedCtx = {
       jobId,
       taskId: task.id,
       projectId: job.project_id,
       localPath,
-      task: isResume ? { ...task, answer: job.answer } : task,
-      taskType,
       phasesAlreadyCompleted,
       ...callbacks,
-      // Always override onDone — runner calls it after onReview for all paths.
-      // For auto-continue: onReview already wrote the 'done' event.
-      // For manual review: job is in 'review' status, not done — no terminal event yet.
       onDone: () => {},
       onReview,
-    });
+    };
+
+    if (flowSnapshot) {
+      // New flow-based execution
+      await runFlowJob({
+        ...sharedCtx,
+        task: taskWithAnswer,
+        flow: flowSnapshot,
+      });
+    } else {
+      // Legacy type-based execution
+      await runJob({
+        ...sharedCtx,
+        task: taskWithAnswer,
+        taskType: taskType!,
+      });
+    }
   } catch (err: any) {
     // This catch only fires if runJob() itself throws an unhandled error
     // (e.g., a bug in the runner code). Phase failures are handled inside

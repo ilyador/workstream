@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { getSkills, type SkillInfo } from '../lib/api';
+import { getSkills, type SkillInfo, type Flow } from '../lib/api';
 import s from './TaskForm.module.css';
 
 interface Workstream {
@@ -32,6 +32,7 @@ export interface TaskFormData {
   effort: string;
   multiagent: string;
   assignee: string | null;
+  flow_id: string | null;
   auto_continue: boolean;
   images: string[];
   workstream_id: string | null;
@@ -47,6 +48,7 @@ export interface EditTaskData {
   effort: string;
   multiagent?: string;
   assignee?: string | null;
+  flow_id?: string | null;
   auto_continue?: boolean;
   images?: string[];
   workstream_id?: string | null;
@@ -57,6 +59,7 @@ interface Props {
   workstreams: Workstream[];
   members: Member[];
   existingTasks: TaskOption[];
+  flows?: Flow[];
   customTypes?: CustomType[];
   onSaveCustomType?: (name: string, pipeline: string) => Promise<void>;
   localPath?: string;
@@ -75,7 +78,7 @@ const PIPELINE_OPTIONS = [
   { value: 'test', label: 'test (plan → write-tests → verify → review)' },
 ];
 
-export function TaskForm({ workstreams, members, existingTasks, customTypes = [], onSaveCustomType, localPath, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
+export function TaskForm({ workstreams, members, existingTasks, flows = [], customTypes = [], onSaveCustomType, localPath, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
   const isEdit = !!editTask;
 
   // Determine if the editTask type is a custom (non-built-in) type
@@ -91,6 +94,7 @@ export function TaskForm({ workstreams, members, existingTasks, customTypes = []
   const [effort, setEffort] = useState(editTask?.effort || 'max');
   const [workstreamId, setWorkstreamId] = useState(editTask?.workstream_id || defaultWorkstreamId || '');
   const [assignee, setAssignee] = useState(editTask?.assignee || '');
+  const [flowId, setFlowId] = useState(editTask?.flow_id || (flows.length > 0 ? flows[0].id : ''));
   const [multiagent, setMultiagent] = useState(editTask?.multiagent || 'auto');
   const [autoContinue, setAutoContinue] = useState(editTask?.auto_continue ?? true);
   const [priority, setPriority] = useState(editTask?.priority || 'backlog');
@@ -265,6 +269,7 @@ export function TaskForm({ workstreams, members, existingTasks, customTypes = []
         effort,
         multiagent,
         assignee: assignee || null,
+        flow_id: flowId || null,
         auto_continue: autoContinue,
         images,
         workstream_id: workstreamId || null,
@@ -375,14 +380,34 @@ export function TaskForm({ workstreams, members, existingTasks, customTypes = []
             </div>
             <div className={s.field}>
               <label className={s.label}>Assignee</label>
-              <select className={s.select} value={assignee} onChange={e => {
+              <select className={s.select} value={assignee ? `human:${assignee}` : (flowId ? `flow:${flowId}` : '')} onChange={e => {
                 const val = e.target.value;
-                setAssignee(val);
-                setMode(val ? 'human' : 'ai');
-                if (val) setAutoContinue(false);
+                if (val.startsWith('flow:')) {
+                  setFlowId(val.slice(5));
+                  setAssignee('');
+                  setMode('ai');
+                } else if (val.startsWith('human:')) {
+                  setAssignee(val.slice(6));
+                  setFlowId('');
+                  setMode('human');
+                  setAutoContinue(false);
+                } else {
+                  setAssignee('');
+                  setFlowId('');
+                  setMode('ai');
+                }
               }}>
-                <option value="">AI</option>
-                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                {flows.length > 0 && (
+                  <optgroup label="AI Flows">
+                    {flows.map(f => <option key={f.id} value={`flow:${f.id}`}>{f.name}</option>)}
+                  </optgroup>
+                )}
+                {flows.length === 0 && <option value="">AI</option>}
+                {members.length > 0 && (
+                  <optgroup label="Team">
+                    {members.map(m => <option key={m.id} value={`human:${m.id}`}>{m.name}</option>)}
+                  </optgroup>
+                )}
               </select>
             </div>
             {!assignee && (

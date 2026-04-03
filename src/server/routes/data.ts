@@ -91,6 +91,11 @@ dataRouter.post('/api/projects', requireAuth, async (req, res) => {
     local_path: local_path || null,
   });
 
+  // Seed default AI flows for the new project
+  try { await createDefaultFlows(project.id); } catch (e: any) {
+    console.warn('Failed to seed default flows:', e.message);
+  }
+
   res.json(project);
 });
 
@@ -224,7 +229,7 @@ dataRouter.get('/api/tasks', requireAuth, async (req, res) => {
 
 dataRouter.post('/api/tasks', requireAuth, async (req, res) => {
   const userId = (req as any).userId;
-  const { project_id, title, description, type, mode, effort, workstream_id, multiagent, assignee, auto_continue, images, priority } = req.body;
+  const { project_id, title, description, type, mode, effort, workstream_id, multiagent, assignee, auto_continue, images, priority, flow_id } = req.body;
 
   // Get max position, scoped to workstream
   let posQuery = supabase
@@ -255,6 +260,7 @@ dataRouter.post('/api/tasks', requireAuth, async (req, res) => {
       auto_continue: auto_continue !== undefined ? auto_continue : true,
       images: images || [],
       workstream_id: workstream_id || null,
+      flow_id: flow_id || null,
       priority: priority || 'backlog',
       position: (maxTask?.position || 0) + 1,
       created_by: userId,
@@ -266,7 +272,7 @@ dataRouter.post('/api/tasks', requireAuth, async (req, res) => {
 });
 
 dataRouter.patch('/api/tasks/:id', requireAuth, async (req, res) => {
-  const allowed = ['title', 'description', 'type', 'mode', 'effort', 'multiagent', 'status', 'assignee', 'workstream_id', 'position', 'images', 'followup_notes', 'auto_continue', 'priority'];
+  const allowed = ['title', 'description', 'type', 'mode', 'effort', 'multiagent', 'status', 'assignee', 'workstream_id', 'position', 'images', 'followup_notes', 'auto_continue', 'priority', 'flow_id'];
   const updates: Record<string, any> = {};
   for (const key of allowed) {
     if (key in req.body) updates[key] = req.body[key];
@@ -624,6 +630,139 @@ dataRouter.delete('/api/custom-types/:id', requireAuth, async (req, res) => {
   const { error } = await supabase.from('custom_task_types').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ error: error.message });
   res.json({ ok: true });
+});
+
+// --- Flows ---
+
+const DEFAULT_FLOW_STEPS = [
+  { name: 'plan', position: 1, instructions: 'Read the codebase to understand the relevant files and architecture. Create a step-by-step implementation plan. List which files need to be created or modified and what changes are needed. Do NOT make any changes yet — only plan.', model: 'opus', tools: ['Read','Grep','Glob'], context_sources: ['claude_md','task_description','skills','task_images','followup_notes'], is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true },
+  { name: 'analyze', position: 2, instructions: 'Analyze the codebase to understand the problem. Identify the root cause and location. Output a structured summary of your findings.', model: 'opus', tools: ['Read','Grep','Bash'], context_sources: ['claude_md','task_description','skills','task_images','followup_notes'], is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true },
+  { name: 'fix', position: 3, instructions: 'Fix the issue based on the analysis. Make the minimal changes needed. Run tests if available.', model: 'opus', tools: ['Read','Edit','Bash'], context_sources: ['claude_md','task_description','skills','followup_notes'], is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true },
+  { name: 'verify', position: 4, instructions: 'Run the test suite and verify the changes work. Report any issues found.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if tests fail:\n```json\n{"passed": false, "reason": "Brief description of what failed"}\n```', model: 'sonnet', tools: ['Bash','Read'], context_sources: ['task_description'], is_gate: true, on_fail_jump_to: 3, max_retries: 2, on_max_retries: 'pause', include_agents_md: false },
+  { name: 'review', position: 5, instructions: 'Review the changes made. Check code quality, architecture alignment, and completeness.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if issues found:\n```json\n{"passed": false, "reason": "Brief description of issues"}\n```', model: 'sonnet', tools: ['Read','Grep'], context_sources: ['task_description','architecture_md','review_criteria','git_diff'], is_gate: true, on_fail_jump_to: 3, max_retries: 1, on_max_retries: 'pause', include_agents_md: false },
+];
+
+async function createDefaultFlows(projectId: string): Promise<void> {
+  const { data: existing } = await supabase
+    .from('flows')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('is_builtin', true)
+    .limit(1);
+  if (existing && existing.length > 0) return; // already seeded
+
+  const { data: flow, error } = await supabase
+    .from('flows')
+    .insert({ project_id: projectId, name: 'AI Bug Fixer', description: 'Plan, analyze, fix, verify, review.', is_builtin: true })
+    .select()
+    .single();
+  if (error || !flow) return;
+
+  await supabase.from('flow_steps').insert(
+    DEFAULT_FLOW_STEPS.map(s => ({ ...s, flow_id: flow.id }))
+  );
+}
+
+dataRouter.get('/api/flows', requireAuth, async (req, res) => {
+  const projectId = req.query.project_id as string;
+  if (!projectId) return res.status(400).json({ error: 'project_id required' });
+
+  const { data } = await supabase
+    .from('flows')
+    .select('*, flow_steps(*)')
+    .eq('project_id', projectId)
+    .order('name');
+
+  // Sort steps by position within each flow
+  const flows = (data || []).map((f: any) => ({
+    ...f,
+    flow_steps: (f.flow_steps || []).sort((a: any, b: any) => a.position - b.position),
+  }));
+  res.json(flows);
+});
+
+dataRouter.post('/api/flows', requireAuth, async (req, res) => {
+  const { project_id, name, description, icon, agents_md, steps } = req.body;
+  if (!project_id || !name?.trim()) return res.status(400).json({ error: 'project_id and name required' });
+
+  const { data: flow, error } = await supabase
+    .from('flows')
+    .insert({ project_id, name: name.trim(), description: description || '', icon: icon || 'bot', agents_md: agents_md || null })
+    .select()
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  if (Array.isArray(steps) && steps.length > 0) {
+    await supabase.from('flow_steps').insert(
+      steps.map((s: any, i: number) => ({ ...s, flow_id: flow.id, position: s.position ?? i + 1 }))
+    );
+  }
+
+  const { data: full } = await supabase
+    .from('flows')
+    .select('*, flow_steps(*)')
+    .eq('id', flow.id)
+    .single();
+  res.json(full);
+});
+
+dataRouter.patch('/api/flows/:id', requireAuth, async (req, res) => {
+  const allowed = ['name', 'description', 'icon', 'agents_md'];
+  const updates: Record<string, any> = {};
+  for (const key of allowed) {
+    if (key in req.body) updates[key] = req.body[key];
+  }
+  updates.updated_at = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('flows')
+    .update(updates)
+    .eq('id', req.params.id)
+    .select('*, flow_steps(*)')
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
+dataRouter.delete('/api/flows/:id', requireAuth, async (req, res) => {
+  const { error } = await supabase.from('flows').delete().eq('id', req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+// Replace all steps for a flow (bulk upsert)
+dataRouter.put('/api/flows/:id/steps', requireAuth, async (req, res) => {
+  const flowId = req.params.id;
+  const { steps } = req.body;
+  if (!Array.isArray(steps)) return res.status(400).json({ error: 'steps array required' });
+
+  // Delete existing steps and insert new ones
+  await supabase.from('flow_steps').delete().eq('flow_id', flowId);
+  if (steps.length > 0) {
+    const { error } = await supabase.from('flow_steps').insert(
+      steps.map((s: any, i: number) => ({
+        flow_id: flowId,
+        name: s.name,
+        position: s.position ?? i + 1,
+        instructions: s.instructions || '',
+        model: s.model || 'opus',
+        tools: s.tools || [],
+        context_sources: s.context_sources || ['task_description', 'previous_step'],
+        is_gate: s.is_gate || false,
+        on_fail_jump_to: s.on_fail_jump_to ?? null,
+        max_retries: s.max_retries ?? 0,
+        on_max_retries: s.on_max_retries || 'pause',
+        include_agents_md: s.include_agents_md !== false,
+      }))
+    );
+    if (error) return res.status(400).json({ error: error.message });
+  }
+
+  const { data } = await supabase
+    .from('flows')
+    .select('*, flow_steps(*)')
+    .eq('id', flowId)
+    .single();
+  res.json(data);
 });
 
 // --- Focus ---

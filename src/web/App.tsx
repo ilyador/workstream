@@ -8,6 +8,7 @@ import { useMembers } from './hooks/useMembers';
 import { useNotifications } from './hooks/useNotifications';
 import { useCommentCounts } from './hooks/useCommentCounts';
 import { useWebNotifications } from './hooks/useWebNotifications';
+import { useFlows } from './hooks/useFlows';
 import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, revertJob, terminateJob, deleteJob, updateTask, reviewAndCreatePr } from './lib/api';
 import { Routes, Route, useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
@@ -50,13 +51,16 @@ function cleanSummary(raw: string): string {
     .trim();
 }
 
-function buildPhases(phasesCompleted: any[], currentPhase: string | null, taskType: string): { name: string; status: string }[] {
+function buildPhases(phasesCompleted: any[], currentPhase: string | null, taskType: string, flowSnapshot?: any): { name: string; status: string }[] {
   const completed = new Set(
     (phasesCompleted || []).map((p: any) => typeof p === 'string' ? p : p.name || p.phase)
   );
-  const allPhases = TASK_TYPE_PHASES[taskType] || TASK_TYPE_PHASES['feature'];
+  // Use flow_snapshot steps if available, otherwise fall back to legacy type mapping
+  const allPhases = flowSnapshot?.steps
+    ? flowSnapshot.steps.map((s: any) => s.name)
+    : (TASK_TYPE_PHASES[taskType] || TASK_TYPE_PHASES['feature']);
 
-  return allPhases.map(name => {
+  return allPhases.map((name: string) => {
     if (completed.has(name)) return { name, status: 'completed' };
     if (name === currentPhase) return { name, status: 'current' };
     return { name, status: 'pending' };
@@ -76,6 +80,7 @@ export default function App() {
   const jobs = useJobs(projects.current?.id || null);
   const workstreams = useWorkstreams(projects.current?.id || null);
   const members = useMembers(projects.current?.id || null);
+  const aiFlows = useFlows(projects.current?.id || null);
   const notifs = useNotifications(auth.profile?.id);
   const commentCounts = useCommentCounts(projects.current?.id || null);
   const webNotifs = useWebNotifications();
@@ -181,7 +186,7 @@ export default function App() {
       attempt: j.attempt,
       maxAttempts: j.max_attempts,
       startedAt: j.started_at || undefined,
-      phases: buildPhases(j.phases_completed || [], j.current_phase, taskTypeMap[j.task_id] || 'feature'),
+      phases: buildPhases(j.phases_completed || [], j.current_phase, taskTypeMap[j.task_id] || 'feature', j.flow_snapshot),
       question: j.question || undefined,
       review: j.review_result ? {
         filesChanged: j.review_result.files_changed ?? j.review_result.filesChanged ?? 0,
@@ -350,6 +355,7 @@ export default function App() {
                 effort: task.effort,
                 multiagent: task.multiagent,
                 assignee: rawTask?.assignee ?? null,
+                flow_id: (rawTask as any)?.flow_id ?? null,
                 images: task.images,
                 workstream_id: task.workstream_id,
                 auto_continue: task.auto_continue,
@@ -447,6 +453,7 @@ export default function App() {
           workstreams={workstreams.active.map(w => ({ id: w.id, name: w.name }))}
           defaultWorkstreamId={taskFormWorkstream}
           members={members.members.map(m => ({ id: m.id, name: m.name, initials: m.initials }))}
+          flows={aiFlows.flows}
           existingTasks={tasks.tasks
             .filter(t => t.status !== 'done' && t.status !== 'canceled')
             .map(t => ({ id: t.id, title: t.title }))
@@ -461,6 +468,7 @@ export default function App() {
               effort: data.effort as any,
               multiagent: data.multiagent,
               assignee: data.assignee,
+              flow_id: data.flow_id,
               auto_continue: data.auto_continue,
               images: data.images,
               workstream_id: data.workstream_id,
@@ -476,6 +484,7 @@ export default function App() {
           localPath={projects.current?.local_path}
           workstreams={workstreams.active.map(w => ({ id: w.id, name: w.name }))}
           members={members.members.map(m => ({ id: m.id, name: m.name, initials: m.initials }))}
+          flows={aiFlows.flows}
           existingTasks={tasks.tasks
             .filter(t => t.status !== 'done' && t.status !== 'canceled' && t.id !== editingTask.id)
             .map(t => ({ id: t.id, title: t.title }))
@@ -490,6 +499,7 @@ export default function App() {
               effort: data.effort,
               multiagent: data.multiagent,
               assignee: data.assignee,
+              flow_id: data.flow_id,
               auto_continue: data.auto_continue,
               images: data.images,
               workstream_id: data.workstream_id,

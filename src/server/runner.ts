@@ -39,6 +39,407 @@ interface JobContext {
   onFail: (error: string) => void;
 }
 
+// ---------------------------------------------------------------------------
+// Flow-based execution (new system — composable AI flows)
+// ---------------------------------------------------------------------------
+
+export interface FlowStepConfig {
+  position: number;
+  name: string;
+  instructions: string;
+  model: string;
+  tools: string[];
+  context_sources: string[];
+  is_gate: boolean;
+  on_fail_jump_to: number | null;
+  max_retries: number;
+  on_max_retries: 'pause' | 'fail' | 'skip';
+  include_agents_md: boolean;
+}
+
+export interface FlowConfig {
+  flow_name: string;
+  agents_md: string | null;
+  steps: FlowStepConfig[];
+}
+
+export interface FlowJobContext {
+  jobId: string;
+  taskId: string;
+  projectId: string;
+  localPath: string;
+  task: any;
+  flow: FlowConfig;
+  phasesAlreadyCompleted: any[];
+  onLog: (text: string) => void;
+  onPhaseStart: (phase: string, attempt: number) => void;
+  onPhaseComplete: (phase: string, output: any) => void;
+  onPause: (question: string) => void;
+  onReview: (result: any) => Promise<void> | void;
+  onDone: () => Promise<void> | void;
+  onFail: (error: string) => void;
+}
+
+/** Build a flow_snapshot from a flow + its steps (called at queue time). */
+export function buildFlowSnapshot(flow: any): FlowConfig {
+  const steps = (flow.flow_steps || [])
+    .sort((a: any, b: any) => a.position - b.position)
+    .map((s: any) => ({
+      position: s.position,
+      name: s.name,
+      instructions: s.instructions || '',
+      model: s.model || 'opus',
+      tools: s.tools || [],
+      context_sources: s.context_sources || ['task_description', 'previous_step'],
+      is_gate: s.is_gate || false,
+      on_fail_jump_to: s.on_fail_jump_to ?? null,
+      max_retries: s.max_retries ?? 0,
+      on_max_retries: s.on_max_retries || 'pause',
+      include_agents_md: s.include_agents_md !== false,
+    }));
+  return {
+    flow_name: flow.name,
+    agents_md: flow.agents_md || null,
+    steps,
+  };
+}
+
+/** Build prompt for a single flow step, including only the requested context sources. */
+function buildStepPrompt(
+  step: FlowStepConfig,
+  flow: FlowConfig,
+  task: any,
+  previousOutputs: any[],
+  localPath: string,
+  answer?: string,
+): string {
+  let prompt = 'You are working on a task in this project\'s codebase.\n\n';
+
+  // Agents.md (shared persona/instructions for this flow)
+  if (step.include_agents_md && flow.agents_md) {
+    prompt += `## Agent Instructions\n${flow.agents_md.substring(0, 8000)}\n\n`;
+  }
+
+  for (const source of step.context_sources) {
+    switch (source) {
+      case 'claude_md': {
+        const claudeMdPath = join(localPath, 'CLAUDE.md');
+        if (existsSync(claudeMdPath)) {
+          const content = readFileSync(claudeMdPath, 'utf-8');
+          prompt += `## Project Context (from CLAUDE.md)\n${content.substring(0, 8000)}\n\n`;
+        }
+        break;
+      }
+      case 'task_description':
+        prompt += `## Task\nTitle: ${task.title}\nDescription: ${task.description || 'No description provided.'}\n\n`;
+        break;
+      case 'task_images':
+        if (Array.isArray(task.images) && task.images.length > 0) {
+          prompt += '## Attached Images\n';
+          for (const url of task.images) prompt += `${url}\n`;
+          prompt += '\n';
+        }
+        break;
+      case 'skills':
+        if (task.description) {
+          const skillRefs = [...task.description.matchAll(/(?:^|[\s\n])\/([a-zA-Z0-9_][\w:-]*)/g)].map(m => m[1]);
+          if (skillRefs.length > 0) {
+            const available = discoverSkills(localPath);
+            const skillMap = new Map(available.map(s => [s.name, s]));
+            const verified = skillRefs.filter(name => skillMap.has(name));
+            if (verified.length > 0) {
+              prompt += '## Skills to Apply\n';
+              for (const name of verified) {
+                const skill = skillMap.get(name)!;
+                try {
+                  let content = readFileSync(skill.filePath, 'utf-8');
+                  content = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '').trim();
+                  if (content.length > 8000) content = content.substring(0, 8000) + '\n...(truncated)';
+                  prompt += `\n### Skill: /${name}\n${content}\n`;
+                } catch {
+                  prompt += `\n### Skill: /${name}\nInvoke this skill using the Skill tool: /${name}\n`;
+                }
+              }
+              prompt += '\n';
+            }
+          }
+        }
+        break;
+      case 'followup_notes':
+        if (task.followup_notes) {
+          prompt += `## Followup Notes (from previous rejection)\n${task.followup_notes}\n\n`;
+        }
+        break;
+      case 'architecture_md': {
+        const archPaths = [join(localPath, 'ARCHITECTURE.md'), join(localPath, 'docs', 'ARCHITECTURE.md')];
+        for (const archPath of archPaths) {
+          if (existsSync(archPath)) {
+            try {
+              prompt += `## Architecture Reference\n${readFileSync(archPath, 'utf-8').substring(0, 8000)}\n\n`;
+            } catch { /* ignore */ }
+            break;
+          }
+        }
+        break;
+      }
+      case 'review_criteria': {
+        const configPath = join(localPath, '.codesync', 'config.json');
+        if (existsSync(configPath)) {
+          try {
+            const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+            if (config.review_criteria && Array.isArray(config.review_criteria.rules) && config.review_criteria.rules.length > 0) {
+              prompt += '## Review Criteria\n';
+              for (const rule of config.review_criteria.rules) prompt += `- ${rule}\n`;
+              prompt += '\n';
+            }
+          } catch { /* ignore */ }
+        }
+        break;
+      }
+      case 'git_diff': {
+        try {
+          const diff = execFileSync('git', ['diff', 'HEAD'], { cwd: localPath, encoding: 'utf-8', timeout: 10000 }).trim();
+          if (diff) {
+            prompt += `## Git Diff (changes made)\n\`\`\`diff\n${diff.substring(0, 12000)}\n\`\`\`\n\n`;
+          }
+        } catch { /* ignore */ }
+        break;
+      }
+      case 'previous_step':
+        if (previousOutputs.length > 0) {
+          const last = previousOutputs[previousOutputs.length - 1];
+          prompt += `## Previous Step: ${last.phase}\n${typeof last.output === 'string' ? last.output : JSON.stringify(last.output, null, 2)}\n\n`;
+        }
+        break;
+      case 'all_previous_steps':
+        if (previousOutputs.length > 0) {
+          prompt += '## Previous Phase Outputs\n';
+          for (const po of previousOutputs) {
+            prompt += `### ${po.phase} (attempt ${po.attempt})\n${typeof po.output === 'string' ? po.output : JSON.stringify(po.output, null, 2)}\n\n`;
+          }
+        }
+        break;
+    }
+  }
+
+  // Multi-agent injection
+  if (task.multiagent === 'yes') {
+    prompt += '## Multi-Agent Mode\nUse subagents to parallelize this work. Dispatch separate agents for independent subtasks.\n\n';
+  }
+
+  // Step instructions (the core prompt for this step)
+  prompt += `## Current Step: ${step.name}\n${step.instructions}\n\n`;
+
+  // Human answer (if resuming from pause)
+  if (answer) {
+    prompt += `## Human Answer to Your Question\n${answer}\n\n`;
+  }
+
+  prompt += 'If you need clarification from the human, clearly state your question and stop.\n';
+
+  return prompt;
+}
+
+/** Execute a job using the flow-based system. */
+export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
+  const { jobId, task, flow, localPath, onLog, onPhaseStart, onPhaseComplete, onPause, onReview, onDone, onFail, phasesAlreadyCompleted } = ctx;
+
+  const phasesCompleted: any[] = [...phasesAlreadyCompleted];
+  const completedPhaseNames = new Set(phasesAlreadyCompleted.map((p: any) => p.phase));
+
+  // On resume with a human answer, remove the paused phase so it re-runs
+  if (phasesAlreadyCompleted.length > 0 && task.answer) {
+    const lastPhase = phasesAlreadyCompleted[phasesAlreadyCompleted.length - 1]?.phase;
+    if (lastPhase) completedPhaseNames.delete(lastPhase);
+  }
+
+  const steps = flow.steps;
+
+  let i = 0;
+  while (i < steps.length) {
+    const step = steps[i];
+
+    if (completedPhaseNames.has(step.name)) {
+      onLog(`\n--- Skipping already-completed step: ${step.name} ---\n`);
+      i++;
+      continue;
+    }
+
+    const maxAttempts = step.max_retries + 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      onPhaseStart(step.name, attempt);
+
+      await supabase.from('jobs').update({
+        current_phase: step.name,
+        attempt,
+      }).eq('id', jobId);
+
+      const prompt = buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer);
+
+      // Build claude args
+      const args = ['-p', '--verbose', '--output-format', 'stream-json'];
+      if (step.tools.length > 0) {
+        args.push('--allowedTools', step.tools.join(','));
+        const writeTools = ['Edit', 'Write', 'NotebookEdit', 'Agent'];
+        const blocked = writeTools.filter(t => !step.tools.includes(t));
+        if (blocked.length > 0) args.push('--disallowedTools', blocked.join(','));
+      }
+      if (step.model) args.push('--model', step.model);
+      if (task.effort) args.push('--effort', task.effort);
+
+      onLog(`\n--- Step: ${step.name} (attempt ${attempt}/${maxAttempts}) ---\n`);
+
+      try {
+        const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
+
+        const phaseOutput = {
+          phase: step.name,
+          attempt,
+          output: output.substring(0, 10000),
+        };
+        phasesCompleted.push(phaseOutput);
+        onPhaseComplete(step.name, phaseOutput);
+
+        // Check if claude asked a question
+        const lastLines = output.trim().split('\n').slice(-3).join('\n');
+        if (lastLines.includes('?') && (lastLines.includes('Should I') || lastLines.includes('Could you') || lastLines.includes('Which') || lastLines.includes('clarif'))) {
+          await supabase.from('jobs').update({
+            status: 'paused',
+            question: lastLines,
+            phases_completed: phasesCompleted,
+          }).eq('id', jobId);
+          await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
+          onPause(lastLines);
+          return;
+        }
+
+        // Gate check (verify/review steps)
+        if (step.is_gate) {
+          const verdict = extractVerdict(output);
+          if (!verdict) console.warn(`[runner] Job ${jobId}: gate step '${step.name}' returned no structured verdict, using legacy heuristics`);
+          const isReview = step.name === 'review' || step.context_sources.includes('review_criteria');
+          const failed = verdict ? !verdict.passed : (isReview ? legacyReviewCheck(output) : legacyVerifyCheck(output));
+          const reason = verdict?.reason || `${step.name} failed (see output)`;
+
+          if (failed && attempt < maxAttempts) {
+            if (step.on_fail_jump_to != null) {
+              const jumpIndex = steps.findIndex(s => s.position === step.on_fail_jump_to);
+              if (jumpIndex >= 0 && jumpIndex < i) {
+                onLog(`\n${step.name} failed: ${reason}. Jumping back to '${steps[jumpIndex].name}'...\n`);
+                completedPhaseNames.delete(steps[jumpIndex].name);
+                // Remove stale output
+                for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
+                  if (phasesCompleted[pi].phase === steps[jumpIndex].name) { phasesCompleted.splice(pi, 1); break; }
+                }
+                i = jumpIndex;
+                break;
+              }
+            }
+            onLog(`\n${step.name} failed: ${reason}. Retrying...\n`);
+            continue;
+          }
+          if (failed && attempt >= maxAttempts) {
+            if (step.on_max_retries === 'pause') {
+              const pauseMsg = `${step.name} still failing after ${maxAttempts} attempts: ${reason}`;
+              await supabase.from('jobs').update({
+                status: 'paused',
+                question: pauseMsg,
+                phases_completed: phasesCompleted,
+              }).eq('id', jobId);
+              await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
+              onPause(pauseMsg);
+              return;
+            }
+            if (step.on_max_retries === 'fail') {
+              onFail(`${step.name} failed after ${maxAttempts} attempts: ${reason}`);
+              return;
+            }
+            // 'skip' -- fall through to next step
+            onLog(`\n${step.name} failed but on_max_retries=skip, continuing...\n`);
+          }
+        }
+
+        i++;
+        break;
+
+      } catch (err: any) {
+        onLog(`\nError in step ${step.name}: ${err.message}\n`);
+        if (attempt >= maxAttempts) {
+          let failMessage = `Step '${step.name}' failed: ${err.message}`;
+          try {
+            const { revertToCheckpoint } = await import('./checkpoint.js');
+            revertToCheckpoint(localPath, jobId);
+            onLog('[checkpoint] Auto-reverted changes after failure\n');
+            failMessage += '. Changes have been automatically reverted.';
+          } catch (revertErr: any) {
+            onLog(`[checkpoint] Could not revert: ${revertErr.message}\n`);
+            failMessage += '. WARNING: Changes were NOT reverted.';
+          }
+          await supabase.from('jobs').update({
+            status: 'failed',
+            phases_completed: phasesCompleted,
+            completed_at: new Date().toISOString(),
+            question: failMessage,
+          }).eq('id', jobId);
+          await supabase.from('tasks').update({ status: 'backlog' }).eq('id', task.id);
+          onFail(failMessage);
+          return;
+        }
+      }
+    }
+  }
+
+  // All steps complete -- generate summary and move to review
+  let filesChanged = 0;
+  let linesAdded = 0;
+  let linesRemoved = 0;
+  const changedFiles: string[] = [];
+  try {
+    const diffStat = execFileSync('git', ['diff', '--stat', '--cached'], { cwd: localPath, encoding: 'utf-8', timeout: 5000 }).trim();
+    const stat = diffStat || execFileSync('git', ['diff', '--stat'], { cwd: localPath, encoding: 'utf-8', timeout: 5000 }).trim();
+    const match = stat.match(/(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/);
+    if (match) { filesChanged = parseInt(match[1]) || 0; linesAdded = parseInt(match[2]) || 0; linesRemoved = parseInt(match[3]) || 0; }
+    const lines = stat.split('\n').slice(0, -1);
+    for (const line of lines) { const fm = line.match(/^\s*(.+?)\s+\|/); if (fm) changedFiles.push(fm[1].trim()); }
+  } catch { /* ignore */ }
+
+  let finalSummary = 'Completed';
+  try {
+    const phaseLog = phasesCompleted.map((p: any) => {
+      const raw = (typeof p.output === 'string' ? p.output : '').split('\n').filter((l: string) => l.trim() && !/^\[/.test(l.trim())).join('\n').trim();
+      return `## ${p.phase} (attempt ${p.attempt || 1})\n${raw}`;
+    }).join('\n\n');
+    const diffInfo = changedFiles.length > 0 ? `Files changed: ${changedFiles.join(', ')} (+${linesAdded} -${linesRemoved})` : `${filesChanged} files changed (+${linesAdded} -${linesRemoved})`;
+    const summaryPrompt = `You are summarizing a completed code task for a project dashboard.\n\nTask: ${task.title}\n${diffInfo}\n\nPhase outputs:\n${phaseLog.substring(0, 3000)}\n\nWrite a concise summary (2-4 sentences) of what was done and why. Focus on the actual change, not the process. No markdown formatting, no bullet points. Plain text only.`;
+    finalSummary = await generateSummary(summaryPrompt);
+  } catch (err: any) {
+    console.error('[runner] Summary generation failed:', err.message);
+  }
+
+  const reviewResult = {
+    filesChanged,
+    testsPassed: true,
+    linesAdded,
+    linesRemoved,
+    changedFiles: changedFiles.length > 0 ? changedFiles : undefined,
+    summary: finalSummary,
+  };
+
+  await supabase.from('jobs').update({
+    status: 'review',
+    phases_completed: phasesCompleted,
+    review_result: reviewResult,
+  }).eq('id', jobId);
+  await supabase.from('tasks').update({ status: 'review' }).eq('id', task.id);
+  await onReview(reviewResult);
+  await onDone();
+}
+
+// ---------------------------------------------------------------------------
+// Legacy task-type-based execution (kept for backward compatibility)
+// ---------------------------------------------------------------------------
+
 // Default task type configs (used when .codesync/config.json doesn't exist)
 const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
   'bug-fix': {
