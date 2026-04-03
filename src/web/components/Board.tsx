@@ -146,30 +146,36 @@ export function Board({
     [workstreams]
   );
 
-  const handleDropTask = async (targetWsId: string | null, dropIndex: number) => {
+  const handleDropTask = async (targetWsId: string | null, dropBeforeTaskId: string | null) => {
     if (!draggedTaskId) return;
     const task = tasks.find(t => t.id === draggedTaskId);
     if (!task) return;
 
-    // Calculate new position based on drop index
+    // Get tasks in the target column, excluding the dragged task
     const targetKey = targetWsId || '__backlog__';
-    const targetTasks = tasksByWorkstream[targetKey] || [];
+    const targetTasks = (tasksByWorkstream[targetKey] || []).filter((t: any) => t.id !== draggedTaskId);
     let newPosition: number;
 
-    if (dropIndex >= targetTasks.length) {
+    if (!dropBeforeTaskId) {
       // Dropped at end
       const last = targetTasks[targetTasks.length - 1];
       newPosition = last ? last.position + 1 : 1;
-    } else if (dropIndex === 0) {
-      // Dropped at start
-      const first = targetTasks[0];
-      newPosition = first ? first.position - 1 : 1;
     } else {
-      // Dropped between two items
-      const before = targetTasks[dropIndex - 1];
-      const after = targetTasks[dropIndex];
-      newPosition = Math.floor((before.position + after.position) / 2);
-      if (newPosition === before.position) newPosition = before.position + 1;
+      const dropIdx = targetTasks.findIndex((t: any) => t.id === dropBeforeTaskId);
+      if (dropIdx === 0) {
+        // Dropped at start
+        newPosition = targetTasks[0].position - 1;
+      } else if (dropIdx > 0) {
+        // Dropped between two items
+        const before = targetTasks[dropIdx - 1];
+        const after = targetTasks[dropIdx];
+        newPosition = Math.floor((before.position + after.position) / 2);
+        if (newPosition === before.position) newPosition = before.position + 1;
+      } else {
+        // dropBeforeTaskId not found — drop at end
+        const last = targetTasks[targetTasks.length - 1];
+        newPosition = last ? last.position + 1 : 1;
+      }
     }
 
     await onMoveTask(draggedTaskId, targetWsId, newPosition);

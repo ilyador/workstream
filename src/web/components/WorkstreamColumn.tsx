@@ -44,7 +44,7 @@ interface WorkstreamColumnProps {
   draggedTaskId: string | null;
   onDragTaskStart: (taskId: string) => void;
   onDragTaskEnd: () => void;
-  onDropTask: (workstreamId: string | null, dropIndex: number) => void;
+  onDropTask: (workstreamId: string | null, dropBeforeTaskId: string | null) => void;
   // Column drag
   draggedWsId?: string | null;
   onColumnDragStart?: (wsId: string) => void;
@@ -244,33 +244,28 @@ export function WorkstreamColumn({
   const updateDropIndicator = useCallback((clientY: number) => {
     const container = tasksRef.current;
     if (!container || !draggedTaskId) return;
+    // Get all card wraps, excluding the one being dragged
     const allWraps = Array.from(container.querySelectorAll<HTMLElement>(`.${s.cardWrap}`));
     const wraps = allWraps.filter(el => el.dataset.taskId !== draggedTaskId);
     clearDropIndicator();
 
-    let idx = wraps.length;
-    for (let i = 0; i < wraps.length; i++) {
-      const rect = wraps[i].getBoundingClientRect();
+    // Find which non-dragged card the cursor is above
+    let dropBeforeTaskId: string | null = null;
+    for (const wrap of wraps) {
+      const rect = wrap.getBoundingClientRect();
       if (clientY < rect.top + rect.height / 2) {
-        idx = i;
+        dropBeforeTaskId = wrap.dataset.taskId || null;
         break;
       }
     }
 
-    // Map the index among non-dragged cards back to the actual task index
-    // idx among filtered wraps = insert before the idx-th non-dragged card
-    // Find the corresponding index in allWraps
-    let actualIdx: number;
-    if (idx < wraps.length) {
-      actualIdx = allWraps.indexOf(wraps[idx]);
-    } else {
-      actualIdx = allWraps.length;
-    }
-    dropIndexRef.current = actualIdx;
+    // Store the task ID to drop before (null = drop at end)
+    dropIndexRef.current = dropBeforeTaskId as any;
 
-    // Apply CSS class to show a drop indicator line
-    if (idx < wraps.length) {
-      wraps[idx].classList.add(s.dropBefore);
+    // Show visual indicator
+    if (dropBeforeTaskId) {
+      const targetWrap = wraps.find(el => el.dataset.taskId === dropBeforeTaskId);
+      targetWrap?.classList.add(s.dropBefore);
     } else if (wraps.length > 0) {
       wraps[wraps.length - 1].classList.add(s.dropAfter);
     }
