@@ -73,59 +73,70 @@ alter table tasks add column if not exists flow_id uuid references public.flows(
 alter table jobs add column if not exists flow_id uuid references public.flows(id) on delete set null;
 alter table jobs add column if not exists flow_snapshot jsonb;
 
--- 5. Seed default "AI Bug Fixer" flow for every existing project
+-- 5. Seed 4 default flows for every existing project (3 steps each: execute, verify, review)
+-- Uses the hybrid session model: plan+execute combined in step 1, minimal-context verify, diff-based review.
 do $$
 declare
   proj record;
-  flow_uuid uuid;
+  fid uuid;
+
+  -- Shared verify/review instructions
+  verify_instr text := E'RULES:\n- Run the test suite. Do nothing else.\n- Do NOT modify any files.\n- Do NOT attempt to fix failing tests.\n- Report what passed and what failed.\n\nRun the test suite and verify the changes work.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if tests fail:\n```json\n{"passed": false, "reason": "Brief description of what failed"}\n```';
+  review_instr text := E'RULES:\n- Review the git diff only. Do NOT modify files.\n- Check: code quality, architecture alignment, completeness.\n- Compare against review criteria and architecture docs if provided.\n- Focus on real issues, not style nitpicks.\n\nReview the changes made for correctness and quality.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if issues found:\n```json\n{"passed": false, "reason": "Brief description of issues"}\n```';
+  exec_ctx text[] := '{"claude_md","agents_md","task_description","skills","task_images","followup_notes"}';
+  verify_ctx text[] := '{"task_description"}';
+  review_ctx text[] := '{"task_description","architecture_md","review_criteria","git_diff"}';
 begin
   for proj in select id from projects loop
-    -- Create the flow
-    insert into flows (id, project_id, name, description, is_builtin)
-    values (gen_random_uuid(), proj.id, 'AI Bug Fixer', 'Plan, analyze, fix, verify, review. Mirrors the bug-fix pipeline.', true)
-    returning id into flow_uuid;
 
-    -- Steps: plan + analyze + fix (session 1 candidates), verify (session 2), review (session 3)
+    -- AI Developer
+    insert into flows (project_id, name, description, is_builtin)
+    values (proj.id, 'AI Developer', 'Plan and implement features, verify with tests, review.', true)
+    returning id into fid;
     insert into flow_steps (flow_id, name, position, instructions, model, tools, context_sources, is_gate, on_fail_jump_to, max_retries, on_max_retries, include_agents_md) values
-    (flow_uuid, 'plan', 1,
-     'Read the codebase to understand the relevant files and architecture. Create a step-by-step implementation plan. List which files need to be created or modified and what changes are needed. Do NOT make any changes yet — only plan.',
-     'opus', '{"Read","Grep","Glob"}',
-     '{"claude_md","task_description","skills","task_images","followup_notes"}',
-     false, null, 0, 'pause', true),
+    (fid, 'implement', 1, E'RULES:\n- You are implementing a task. Plan your approach first, then implement it.\n- Do NOT fix unrelated issues you discover.\n- Do NOT refactor code outside the scope of this task.\n- If requirements are ambiguous, ask -- do not guess.\n- Run tests after making changes if a test suite exists.\n\nRead the codebase to understand the relevant files and architecture. Create a plan, then implement the described feature. Follow existing code patterns.', 'opus', '{"Read","Edit","Write","Bash","Grep","Glob"}', exec_ctx, false, null, 0, 'pause', true),
+    (fid, 'verify', 2, verify_instr, 'sonnet', '{"Bash","Read"}', verify_ctx, true, 1, 2, 'pause', false),
+    (fid, 'review', 3, review_instr, 'sonnet', '{"Read","Grep"}', review_ctx, true, 1, 1, 'pause', false);
 
-    (flow_uuid, 'analyze', 2,
-     'Analyze the codebase to understand the problem. Identify the root cause and location. Output a structured summary of your findings.',
-     'opus', '{"Read","Grep","Bash"}',
-     '{"claude_md","task_description","skills","task_images","followup_notes"}',
-     false, null, 0, 'pause', true),
+    -- AI Bug Hunter
+    insert into flows (project_id, name, description, is_builtin)
+    values (proj.id, 'AI Bug Hunter', 'Analyze bugs, fix them, verify and review.', true)
+    returning id into fid;
+    insert into flow_steps (flow_id, name, position, instructions, model, tools, context_sources, is_gate, on_fail_jump_to, max_retries, on_max_retries, include_agents_md) values
+    (fid, 'fix', 1, E'RULES:\n- You are fixing a bug. Analyze the problem first, then fix it.\n- Do NOT fix unrelated issues you discover.\n- Do NOT refactor code outside the scope of this fix.\n- If the root cause is unclear, ask -- do not guess.\n- Run tests after making changes if a test suite exists.\n\nAnalyze the codebase to understand the bug. Identify the root cause and location. Then fix the issue with the minimal changes needed.', 'opus', '{"Read","Edit","Bash","Grep","Glob"}', exec_ctx, false, null, 0, 'pause', true),
+    (fid, 'verify', 2, verify_instr, 'sonnet', '{"Bash","Read"}', verify_ctx, true, 1, 2, 'pause', false),
+    (fid, 'review', 3, review_instr, 'sonnet', '{"Read","Grep"}', review_ctx, true, 1, 1, 'pause', false);
 
-    (flow_uuid, 'fix', 3,
-     'Fix the issue based on the analysis. Make the minimal changes needed. Run tests if available.',
-     'opus', '{"Read","Edit","Bash"}',
-     '{"claude_md","task_description","skills","followup_notes"}',
-     false, null, 0, 'pause', true),
+    -- AI Refactorer
+    insert into flows (project_id, name, description, is_builtin)
+    values (proj.id, 'AI Refactorer', 'Plan and execute refactors, verify nothing broke, review.', true)
+    returning id into fid;
+    insert into flow_steps (flow_id, name, position, instructions, model, tools, context_sources, is_gate, on_fail_jump_to, max_retries, on_max_retries, include_agents_md) values
+    (fid, 'refactor', 1, E'RULES:\n- You are refactoring code. Plan the refactor first, then execute it.\n- Maintain all existing behavior. Do NOT change functionality.\n- Do NOT fix unrelated issues or add features.\n- Run tests after every significant change to catch regressions early.\n\nRead the codebase to understand the current structure. Plan the refactor, then execute it. Maintain all existing behavior.', 'opus', '{"Read","Edit","Bash","Grep","Glob"}', exec_ctx, false, null, 0, 'pause', true),
+    (fid, 'verify', 2, verify_instr, 'sonnet', '{"Bash","Read"}', verify_ctx, true, 1, 2, 'pause', false),
+    (fid, 'review', 3, review_instr, 'sonnet', '{"Read","Grep"}', review_ctx, true, 1, 1, 'pause', false);
 
-    (flow_uuid, 'verify', 4,
-     E'Run the test suite and verify the changes work. Report any issues found.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if tests fail:\n```json\n{"passed": false, "reason": "Brief description of what failed"}\n```',
-     'sonnet', '{"Bash","Read"}',
-     '{"task_description"}',
-     true, 3, 2, 'pause', false),
-
-    (flow_uuid, 'review', 5,
-     E'Review the changes made. Check code quality, architecture alignment, and completeness.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if issues found:\n```json\n{"passed": false, "reason": "Brief description of issues"}\n```',
-     'sonnet', '{"Read","Grep"}',
-     '{"task_description","architecture_md","review_criteria","git_diff"}',
-     true, 3, 1, 'pause', false);
+    -- AI Tester
+    insert into flows (project_id, name, description, is_builtin)
+    values (proj.id, 'AI Tester', 'Plan and write tests, verify they pass, review.', true)
+    returning id into fid;
+    insert into flow_steps (flow_id, name, position, instructions, model, tools, context_sources, is_gate, on_fail_jump_to, max_retries, on_max_retries, include_agents_md) values
+    (fid, 'write-tests', 1, E'RULES:\n- You are writing tests. Plan what to test first, then write the tests.\n- Follow existing test patterns in the project.\n- Do NOT modify production code -- only test files.\n- Run the tests after writing them to make sure they pass.\n\nRead the codebase to understand what needs testing. Follow existing test patterns. Write comprehensive tests for the described functionality.', 'opus', '{"Read","Write","Bash","Grep","Glob"}', exec_ctx, false, null, 0, 'pause', true),
+    (fid, 'verify', 2, verify_instr, 'sonnet', '{"Bash","Read"}', verify_ctx, true, 1, 2, 'pause', false),
+    (fid, 'review', 3, review_instr, 'sonnet', '{"Read","Grep"}', review_ctx, true, 1, 1, 'pause', false);
 
   end loop;
 end $$;
 
--- 6. Map existing AI tasks with type='bug-fix' to the new flow
-update tasks t
-set flow_id = f.id
-from flows f
-where f.project_id = t.project_id
-  and f.name = 'AI Bug Fixer'
-  and t.mode = 'ai'
-  and t.type = 'bug-fix'
-  and t.flow_id is null;
+-- 6. Map existing AI tasks to the appropriate flow by type
+update tasks t set flow_id = f.id from flows f
+where f.project_id = t.project_id and f.name = 'AI Bug Hunter' and t.mode = 'ai' and t.type = 'bug-fix' and t.flow_id is null;
+
+update tasks t set flow_id = f.id from flows f
+where f.project_id = t.project_id and f.name = 'AI Developer' and t.mode = 'ai' and t.type in ('feature', 'ui-fix', 'design', 'chore') and t.flow_id is null;
+
+update tasks t set flow_id = f.id from flows f
+where f.project_id = t.project_id and f.name = 'AI Refactorer' and t.mode = 'ai' and t.type = 'refactor' and t.flow_id is null;
+
+update tasks t set flow_id = f.id from flows f
+where f.project_id = t.project_id and f.name = 'AI Tester' and t.mode = 'ai' and t.type = 'test' and t.flow_id is null;

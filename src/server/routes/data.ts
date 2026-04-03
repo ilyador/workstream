@@ -636,33 +636,141 @@ dataRouter.delete('/api/custom-types/:id', requireAuth, async (req, res) => {
 
 // --- Flows ---
 
-const DEFAULT_FLOW_STEPS = [
-  { name: 'plan', position: 1, instructions: 'Read the codebase to understand the relevant files and architecture. Create a step-by-step implementation plan. List which files need to be created or modified and what changes are needed. Do NOT make any changes yet — only plan.', model: 'opus', tools: ['Read','Grep','Glob'], context_sources: ['claude_md','task_description','skills','task_images','followup_notes'], is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true },
-  { name: 'analyze', position: 2, instructions: 'Analyze the codebase to understand the problem. Identify the root cause and location. Output a structured summary of your findings.', model: 'opus', tools: ['Read','Grep','Bash'], context_sources: ['claude_md','task_description','skills','task_images','followup_notes'], is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true },
-  { name: 'fix', position: 3, instructions: 'Fix the issue based on the analysis. Make the minimal changes needed. Run tests if available.', model: 'opus', tools: ['Read','Edit','Bash'], context_sources: ['claude_md','task_description','skills','followup_notes'], is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true },
-  { name: 'verify', position: 4, instructions: 'Run the test suite and verify the changes work. Report any issues found.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if tests fail:\n```json\n{"passed": false, "reason": "Brief description of what failed"}\n```', model: 'sonnet', tools: ['Bash','Read'], context_sources: ['task_description'], is_gate: true, on_fail_jump_to: 3, max_retries: 2, on_max_retries: 'pause', include_agents_md: false },
-  { name: 'review', position: 5, instructions: 'Review the changes made. Check code quality, architecture alignment, and completeness.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if issues found:\n```json\n{"passed": false, "reason": "Brief description of issues"}\n```', model: 'sonnet', tools: ['Read','Grep'], context_sources: ['task_description','architecture_md','review_criteria','git_diff'], is_gate: true, on_fail_jump_to: 3, max_retries: 1, on_max_retries: 'pause', include_agents_md: false },
+// Shared verify and review steps -- same across all flows, minimal context
+const VERIFY_STEP = {
+  name: 'verify', position: 2, model: 'sonnet', tools: ['Bash', 'Read'],
+  context_sources: ['task_description'],
+  is_gate: true, on_fail_jump_to: 1, max_retries: 2, on_max_retries: 'pause', include_agents_md: false,
+  instructions: `RULES:
+- Run the test suite. Do nothing else.
+- Do NOT modify any files.
+- Do NOT attempt to fix failing tests.
+- Report what passed and what failed.
+
+Run the test suite and verify the changes work.
+
+IMPORTANT: You MUST end your response with a JSON verdict block:
+\`\`\`json
+{"passed": true}
+\`\`\`
+or if tests fail:
+\`\`\`json
+{"passed": false, "reason": "Brief description of what failed"}
+\`\`\``,
+};
+
+const REVIEW_STEP = {
+  name: 'review', position: 3, model: 'sonnet', tools: ['Read', 'Grep'],
+  context_sources: ['task_description', 'architecture_md', 'review_criteria', 'git_diff'],
+  is_gate: true, on_fail_jump_to: 1, max_retries: 1, on_max_retries: 'pause', include_agents_md: false,
+  instructions: `RULES:
+- Review the git diff only. Do NOT modify files.
+- Check: code quality, architecture alignment, completeness.
+- Compare against review criteria and architecture docs if provided.
+- Focus on real issues, not style nitpicks.
+
+Review the changes made for correctness and quality.
+
+IMPORTANT: You MUST end your response with a JSON verdict block:
+\`\`\`json
+{"passed": true}
+\`\`\`
+or if issues found:
+\`\`\`json
+{"passed": false, "reason": "Brief description of issues"}
+\`\`\``,
+};
+
+const EXECUTE_CONTEXT = ['claude_md', 'agents_md', 'task_description', 'skills', 'task_images', 'followup_notes'];
+
+const DEFAULT_FLOWS: Array<{ name: string; description: string; steps: any[] }> = [
+  {
+    name: 'AI Developer',
+    description: 'Plan and implement features, verify with tests, review.',
+    steps: [
+      { name: 'implement', position: 1, model: 'opus', tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
+- You are implementing a task. Plan your approach first, then implement it.
+- Do NOT fix unrelated issues you discover.
+- Do NOT refactor code outside the scope of this task.
+- If requirements are ambiguous, ask -- do not guess.
+- Run tests after making changes if a test suite exists.
+
+Read the codebase to understand the relevant files and architecture. Create a plan, then implement the described feature. Follow existing code patterns.` },
+      { ...VERIFY_STEP },
+      { ...REVIEW_STEP },
+    ],
+  },
+  {
+    name: 'AI Bug Hunter',
+    description: 'Analyze bugs, fix them, verify and review.',
+    steps: [
+      { name: 'fix', position: 1, model: 'opus', tools: ['Read', 'Edit', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
+- You are fixing a bug. Analyze the problem first, then fix it.
+- Do NOT fix unrelated issues you discover.
+- Do NOT refactor code outside the scope of this fix.
+- If the root cause is unclear, ask -- do not guess.
+- Run tests after making changes if a test suite exists.
+
+Analyze the codebase to understand the bug. Identify the root cause and location. Then fix the issue with the minimal changes needed.` },
+      { ...VERIFY_STEP },
+      { ...REVIEW_STEP },
+    ],
+  },
+  {
+    name: 'AI Refactorer',
+    description: 'Plan and execute refactors, verify nothing broke, review.',
+    steps: [
+      { name: 'refactor', position: 1, model: 'opus', tools: ['Read', 'Edit', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
+- You are refactoring code. Plan the refactor first, then execute it.
+- Maintain all existing behavior. Do NOT change functionality.
+- Do NOT fix unrelated issues or add features.
+- Run tests after every significant change to catch regressions early.
+
+Read the codebase to understand the current structure. Plan the refactor, then execute it. Maintain all existing behavior.` },
+      { ...VERIFY_STEP },
+      { ...REVIEW_STEP },
+    ],
+  },
+  {
+    name: 'AI Tester',
+    description: 'Plan and write tests, verify they pass, review.',
+    steps: [
+      { name: 'write-tests', position: 1, model: 'opus', tools: ['Read', 'Write', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
+- You are writing tests. Plan what to test first, then write the tests.
+- Follow existing test patterns in the project.
+- Do NOT modify production code -- only test files.
+- Run the tests after writing them to make sure they pass.
+
+Read the codebase to understand what needs testing. Follow existing test patterns. Write comprehensive tests for the described functionality.` },
+      { ...VERIFY_STEP },
+      { ...REVIEW_STEP },
+    ],
+  },
 ];
 
 async function createDefaultFlows(projectId: string): Promise<void> {
+  // Check which default flows already exist for this project
   const { data: existing } = await supabase
     .from('flows')
-    .select('id')
+    .select('name')
     .eq('project_id', projectId)
-    .eq('is_builtin', true)
-    .limit(1);
-  if (existing && existing.length > 0) return; // already seeded
+    .eq('is_builtin', true);
+  const existingNames = new Set((existing || []).map((f: any) => f.name));
 
-  const { data: flow, error } = await supabase
-    .from('flows')
-    .insert({ project_id: projectId, name: 'AI Bug Fixer', description: 'Plan, analyze, fix, verify, review.', is_builtin: true })
-    .select()
-    .single();
-  if (error || !flow) return;
+  for (const def of DEFAULT_FLOWS) {
+    if (existingNames.has(def.name)) continue; // already exists
 
-  await supabase.from('flow_steps').insert(
-    DEFAULT_FLOW_STEPS.map(s => ({ ...s, flow_id: flow.id }))
-  );
+    const { data: flow, error } = await supabase
+      .from('flows')
+      .insert({ project_id: projectId, name: def.name, description: def.description, is_builtin: true })
+      .select()
+      .single();
+    if (error || !flow) continue;
+
+    await supabase.from('flow_steps').insert(
+      def.steps.map(s => ({ ...s, flow_id: flow.id }))
+    );
+  }
 }
 
 dataRouter.get('/api/flows', requireAuth, async (req, res) => {
@@ -747,9 +855,16 @@ dataRouter.delete('/api/flows/:id', requireAuth, async (req, res) => {
 
 // Replace all steps for a flow (bulk upsert)
 dataRouter.put('/api/flows/:id/steps', requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
   const flowId = req.params.id;
   const { steps } = req.body;
   if (!Array.isArray(steps)) return res.status(400).json({ error: 'steps array required' });
+
+  // Verify user is a member of the flow's project
+  const { data: flow } = await supabase.from('flows').select('project_id').eq('id', flowId).single();
+  if (!flow) return res.status(404).json({ error: 'Flow not found' });
+  const { data: member } = await supabase.from('project_members').select('role').eq('project_id', flow.project_id).eq('user_id', userId).single();
+  if (!member) return res.status(403).json({ error: 'Not a member of this project' });
 
   // Delete existing steps and insert new ones
   await supabase.from('flow_steps').delete().eq('flow_id', flowId);

@@ -33,6 +33,7 @@ interface Props {
   onNewProject: () => void;
   onSignOut?: () => void;
   onManageMembers?: () => void;
+  onManageFlows?: () => void;
 }
 
 export function Header({
@@ -50,6 +51,7 @@ export function Header({
   onNewProject,
   onSignOut,
   onManageMembers,
+  onManageFlows,
 }: Props) {
   const navigate = useNavigate();
   const { theme, toggle: toggleTheme } = useTheme();
@@ -126,6 +128,20 @@ export function Header({
                     }}
                   >
                     Manage Members
+                  </button>
+                </>
+              )}
+              {onManageFlows && (
+                <>
+                  <div className={s.dropdownDivider} />
+                  <button
+                    className={s.dropdownNew}
+                    onClick={() => {
+                      setOpen(false);
+                      onManageFlows();
+                    }}
+                  >
+                    Manage Flows
                   </button>
                 </>
               )}

@@ -22,6 +22,7 @@ import type { JobView } from './components/job-types';
 import { TaskForm, type EditTaskData } from './components/TaskForm';
 import { AddProjectModal } from './components/AddProjectModal';
 import { MembersModal } from './components/MembersModal';
+import { FlowEditor } from './components/FlowEditor';
 import { useModal } from './hooks/useModal';
 import './styles/global.css';
 
@@ -75,6 +76,7 @@ export default function App() {
   const [editingTask, setEditingTask] = useState<EditTaskData | null>(null);
   const [showAddProject, setShowAddProject] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [showFlowEditor, setShowFlowEditor] = useState(false);
   const auth = useAuth();
   const projects = useProjects(auth.profile?.id);
   const tasks = useTasks(projects.current?.id || null);
@@ -285,6 +287,7 @@ export default function App() {
         onNewProject={() => setShowAddProject(true)}
         onSignOut={async () => { await signOut(); window.location.reload(); }}
         onManageMembers={() => setShowMembersModal(true)}
+        onManageFlows={() => setShowFlowEditor(true)}
       />
 
       <Routes>
@@ -534,6 +537,26 @@ export default function App() {
           projectId={projects.current.id}
           currentUserId={auth.profile.id}
           onClose={() => setShowMembersModal(false)}
+        />
+      )}
+
+      {showFlowEditor && projects.current && (
+        <FlowEditor
+          flows={aiFlows.flows}
+          projectId={projects.current.id}
+          onSave={async (flowId, updates) => {
+            await aiFlows.updateFlow(flowId, updates);
+          }}
+          onSaveSteps={async (flowId, steps) => {
+            await aiFlows.updateFlowSteps(flowId, steps);
+          }}
+          onCreateFlow={async (data) => {
+            await aiFlows.createFlow(data);
+          }}
+          onDeleteFlow={async (flowId) => {
+            await aiFlows.deleteFlow(flowId);
+          }}
+          onClose={() => setShowFlowEditor(false)}
         />
       )}
     </>

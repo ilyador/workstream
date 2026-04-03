@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getFlows, type Flow } from '../lib/api';
+import { getFlows, createFlow as apiCreate, updateFlow as apiUpdate, deleteFlow as apiDelete, updateFlowSteps as apiUpdateSteps, type Flow } from '../lib/api';
 
 export function useFlows(projectId: string | null) {
   const [flows, setFlows] = useState<Flow[]>([]);
@@ -11,7 +11,7 @@ export function useFlows(projectId: string | null) {
       const data = await getFlows(projectId);
       setFlows(data);
     } catch {
-      // Silently handle — flows list is optional during transition
+      // Silently handle
     } finally {
       setLoading(false);
     }
@@ -19,5 +19,25 @@ export function useFlows(projectId: string | null) {
 
   useEffect(() => { load(); }, [load]);
 
-  return { flows, loading, reload: load };
+  const createFlow = useCallback(async (data: { project_id: string; name: string; description?: string; steps?: any[] }) => {
+    await apiCreate(data);
+    await load();
+  }, [load]);
+
+  const updateFlow = useCallback(async (id: string, data: Record<string, unknown>) => {
+    await apiUpdate(id, data);
+    await load();
+  }, [load]);
+
+  const deleteFlow = useCallback(async (id: string) => {
+    await apiDelete(id);
+    await load();
+  }, [load]);
+
+  const updateFlowSteps = useCallback(async (flowId: string, steps: any[]) => {
+    await apiUpdateSteps(flowId, steps);
+    await load();
+  }, [load]);
+
+  return { flows, loading, reload: load, createFlow, updateFlow, deleteFlow, updateFlowSteps };
 }
