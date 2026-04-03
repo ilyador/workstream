@@ -173,7 +173,7 @@ export function TaskCard({
         <span className={s.title}>{task.title}</span>
 
         <div className={s.tags}>
-          {!task.auto_continue && (
+          {!task.auto_continue && (!task.assignee || task.assignee.type === 'ai') && (
             <span className={s.chain} title="Manual review required">&#9646;&#9646;</span>
           )}
           {jobStatus && jobStatus !== 'done' && (
@@ -290,28 +290,8 @@ export function TaskCard({
         </div>
       )}
 
-      {/* Human task waiting — ALWAYS visible when in this state */}
-      {isHumanWaiting && (
-        <div className={s.detail} onClick={(e) => e.stopPropagation()}>
-          {task.description && (
-            <div className={s.desc}><Markdown>{task.description}</Markdown></div>
-          )}
-          <div className={s.humanWaiting}>
-            <span className={s.humanWaitingLabel}>This task needs manual completion</span>
-            {onUpdateTask && (
-              <button
-                className={`btn btnSuccess ${s.humanCompleteBtn}`}
-                onClick={() => onUpdateTask(task.id, { status: 'done' })}
-              >
-                Complete
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Preview: description only (visible when collapsed and NOT active) */}
-      {!isActive && !isHumanWaiting && !isExpanded && task.description && (
+      {!isActive && !isExpanded && task.description && (
         <div className={s.preview}>
           <div className={s.previewDesc}>
             <Markdown>{task.description}</Markdown>
@@ -320,7 +300,7 @@ export function TaskCard({
       )}
 
       {/* Expanded detail for non-active states (click to toggle) */}
-      {!isActive && !isHumanWaiting && isExpanded && (
+      {!isActive && isExpanded && (
         <div className={s.detail} onClick={(e) => e.stopPropagation()}>
           {/* FAILED */}
           {jobStatus === 'failed' && job && (

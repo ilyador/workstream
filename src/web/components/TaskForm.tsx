@@ -437,15 +437,16 @@ export function TaskForm({ workstreams, members, existingTasks, customTypes = []
                 <span>Use subagents</span>
               </label>
             )}
-            <label className={s.checkboxRow}>
-              <input
-                type="checkbox"
-                checked={autoContinue}
-                onChange={e => setAutoContinue(e.target.checked)}
-                disabled={!!assignee}
-              />
-              <span>Continue automatically</span>
-            </label>
+            {!assignee && (
+              <label className={s.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={autoContinue}
+                  onChange={e => setAutoContinue(e.target.checked)}
+                />
+                <span>Continue automatically</span>
+              </label>
+            )}
           </div>
 
           <div className={s.imagesSection}>
