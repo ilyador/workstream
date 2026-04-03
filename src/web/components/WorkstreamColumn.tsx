@@ -112,7 +112,7 @@ export function WorkstreamColumn({
   const nameInputRef = useRef<HTMLInputElement>(null);
   const tasksRef = useRef<HTMLDivElement>(null);
   const columnRef = useRef<HTMLDivElement>(null);
-  const dropIndexRef = useRef<number | null>(null);
+  const dropIndexRef = useRef<string | null>(null);
   const dragCountRef = useRef(0); // track enter/leave balance to handle child elements
   const colDragCountRef = useRef(0);
   const columnScrollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -260,7 +260,7 @@ export function WorkstreamColumn({
     }
 
     // Store the task ID to drop before (null = drop at end)
-    dropIndexRef.current = dropBeforeTaskId as any;
+    dropIndexRef.current = dropBeforeTaskId;
 
     // Show visual indicator
     if (dropBeforeTaskId) {
@@ -332,8 +332,8 @@ export function WorkstreamColumn({
       onDrop={(e) => {
         e.preventDefault();
         clearColumnScroll();
-        // Handle task drop
-        if (draggedTaskId && dropIndexRef.current !== null) {
+        // Handle task drop (null = drop at end, which also handles empty columns)
+        if (draggedTaskId) {
           clearDropIndicator();
           dragCountRef.current = 0;
           onDropTask(wsId, dropIndexRef.current);
