@@ -392,17 +392,37 @@ dataRouter.post('/api/comments', requireAuth, async (req, res) => {
   // After the comment insert succeeds, parse @mentions
   const mentions = (body as string).match(/@(\w+)/g);
   if (mentions) {
-    // Look up profiles by name (case-insensitive)
+    // Get the task's project to scope the lookup to project members
+    const { data: taskRow } = await supabase.from('tasks').select('project_id').eq('id', task_id).single();
+    const projectId = taskRow?.project_id;
+
+    // Deduplicate mentions
+    const seen = new Set<string>();
     for (const mention of mentions) {
       const name = mention.slice(1); // remove @
+      if (seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+
+      // Prefix match (ilike with wildcard) so "Danny" matches "Danny Smith"
       const { data: profile } = await supabase
         .from('profiles')
         .select('id')
-        .ilike('name', name)
+        .ilike('name', `${name}%`)
         .limit(1)
         .single();
 
       if (profile && profile.id !== userId) {
+        // Verify the mentioned user is a member of this project
+        if (projectId) {
+          const { data: member } = await supabase
+            .from('project_members')
+            .select('user_id')
+            .eq('project_id', projectId)
+            .eq('user_id', profile.id)
+            .single();
+          if (!member) continue; // Not a project member, skip
+        }
+
         await supabase.from('notifications').insert({
           user_id: profile.id,
           type: 'mention',
