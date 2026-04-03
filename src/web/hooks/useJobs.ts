@@ -14,6 +14,7 @@ interface Job {
   question: string | null;
   answer: string | null;
   review_result: any;
+  flow_snapshot: any;
   started_at: string;
   completed_at: string | null;
 }
