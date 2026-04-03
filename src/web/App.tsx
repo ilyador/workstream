@@ -8,11 +8,13 @@ import { useMembers } from './hooks/useMembers';
 import { useNotifications } from './hooks/useNotifications';
 import { useWebNotifications } from './hooks/useWebNotifications';
 import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, revertJob, terminateJob, deleteJob, updateTask, reviewAndCreatePr } from './lib/api';
+import { Routes, Route } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
 import { NewProject } from './components/NewProject';
 import { Header } from './components/Header';
 import { Board } from './components/Board';
+import { ArchivePage } from './components/ArchivePage';
 import type { JobView } from './components/job-types';
 import { TaskForm, type EditTaskData } from './components/TaskForm';
 import { AddProjectModal } from './components/AddProjectModal';
@@ -257,150 +259,160 @@ export default function App() {
         onManageMembers={() => setShowMembersModal(true)}
       />
 
-      <Board
-        workstreams={workstreams.active}
-        archivedWorkstreams={workstreams.workstreams.filter(w => w.status === 'archived')}
-        tasks={tasks.tasks}
-        jobs={jobViews}
-        memberMap={memberMap}
-        userRole={projects.current?.role || 'dev'}
-        projectId={projects.current?.id || null}
-        onCreateWorkstream={async (name) => {
-          await workstreams.createWorkstream(name);
-        }}
-        onUpdateWorkstream={async (id, data) => {
-          await workstreams.updateWorkstream(id, data);
-        }}
-        onDeleteWorkstream={async (id) => {
-          await workstreams.deleteWorkstream(id);
-          tasks.reload();
-        }}
-        onAddTask={(workstreamId) => {
-          setTaskFormWorkstream(workstreamId);
-          setShowTaskForm(true);
-        }}
-        onRunWorkstream={async (workstreamId) => {
-          if (!projects.current?.id || !projects.current?.local_path) {
-            await modal.alert('Missing path', 'Set a local folder path for this project first.');
-            return;
-          }
-          const wsTasks = tasks.tasks
-            .filter(t => t.workstream_id === workstreamId && ['backlog', 'todo'].includes(t.status) && t.mode === 'ai')
-            .sort((a, b) => a.position - b.position);
-          if (wsTasks.length === 0) {
-            await modal.alert('No tasks', 'No runnable AI tasks in this workstream.');
-            return;
-          }
-          try {
-            await runTaskApi(wsTasks[0].id, projects.current.id, projects.current.local_path, true);
-            jobs.reload();
-            tasks.reload();
-          } catch (err: any) {
-            await modal.alert('Error', err.message || 'Failed to start workstream');
-          }
-        }}
-        onRunTask={async (taskId) => {
-          if (!projects.current?.id || !projects.current?.local_path) {
-            await modal.alert('Missing path', 'Set a local folder path for this project first.');
-            return;
-          }
-          try {
-            await runTaskApi(taskId, projects.current.id, projects.current.local_path, false);
-            jobs.reload();
-            tasks.reload();
-          } catch (err: any) {
-            await modal.alert('Error', err.message || 'Failed to start task');
-          }
-        }}
-        onEditTask={(task) => {
-          const rawTask = tasks.tasks.find(t => t.id === task.id);
-          setEditingTask({
-            id: task.id,
-            title: task.title,
-            description: task.description,
-            type: task.type,
-            mode: task.mode,
-            effort: task.effort,
-            multiagent: task.multiagent,
-            assignee: rawTask?.assignee ?? null,
-            images: task.images,
-            workstream_id: task.workstream_id,
-            auto_continue: task.auto_continue,
-            priority: (task as any).priority,
-          });
-        }}
-        onDeleteTask={async (taskId) => {
-          await tasks.deleteTask(taskId);
-        }}
-        onUpdateTask={async (taskId, data) => {
-          await tasks.updateTask(taskId, data);
-        }}
-        onMoveTask={async (taskId, workstreamId, newPosition) => {
-          await updateTask(taskId, { workstream_id: workstreamId, position: newPosition });
-          tasks.reload();
-        }}
-        onTerminate={async (jobId) => {
-          if (await modal.confirm('Terminate job', 'Terminate this running job?', { label: 'Terminate', danger: true })) {
-            await terminateJob(jobId);
-            jobs.reload();
-            tasks.reload();
-          }
-        }}
-        onReply={async (jobId, answer) => {
-          try {
-            await replyToJob(jobId, answer, projects.current?.local_path || '');
-            jobs.reload();
-            tasks.reload();
-          } catch (err: any) {
-            await modal.alert('Error', err.message || 'Failed to send reply');
-          }
-        }}
-        onApprove={async (jobId) => {
-          try {
-            await approveJob(jobId);
-            jobs.reload();
-            tasks.reload();
-          } catch (err: any) {
-            await modal.alert('Error', err.message || 'Failed to approve');
-          }
-        }}
-        onReject={async (jobId) => {
-          try {
-            await rejectJob(jobId, '');
-            jobs.reload();
-            tasks.reload();
-          } catch (err: any) {
-            await modal.alert('Error', err.message || 'Failed to reject');
-          }
-        }}
-        onRevert={async (jobId) => {
-          if (await modal.confirm('Revert changes', 'Revert all file changes? This restores files to their state before the task ran.', { label: 'Revert', danger: true })) {
-            try {
-              await revertJob(jobId, projects.current?.local_path || '');
-              jobs.reload();
+      <Routes>
+        <Route path="/" element={
+          <Board
+            workstreams={workstreams.active}
+            tasks={tasks.tasks}
+            jobs={jobViews}
+            memberMap={memberMap}
+            userRole={projects.current?.role || 'dev'}
+            projectId={projects.current?.id || null}
+            onCreateWorkstream={async (name) => {
+              await workstreams.createWorkstream(name);
+            }}
+            onUpdateWorkstream={async (id, data) => {
+              await workstreams.updateWorkstream(id, data);
+            }}
+            onDeleteWorkstream={async (id) => {
+              await workstreams.deleteWorkstream(id);
               tasks.reload();
-            } catch (err: any) {
-              await modal.alert('Error', err.message || 'Failed to revert');
-            }
-          }
-        }}
-        onDeleteJob={async (jobId) => {
-          try {
-            await deleteJob(jobId);
-            jobs.reload();
-          } catch (err: any) {
-            await modal.alert('Error', err.message || 'Failed to dismiss job');
-          }
-        }}
-        onCreatePr={async (workstreamId) => {
-          try {
-            await reviewAndCreatePr(workstreamId, projects.current?.local_path || '');
-            // Review runs in background -- status updates via SSE
-          } catch (err: any) {
-            await modal.alert('Error', err.message || 'Failed to start review');
-          }
-        }}
-      />
+            }}
+            onAddTask={(workstreamId) => {
+              setTaskFormWorkstream(workstreamId);
+              setShowTaskForm(true);
+            }}
+            onRunWorkstream={async (workstreamId) => {
+              if (!projects.current?.id || !projects.current?.local_path) {
+                await modal.alert('Missing path', 'Set a local folder path for this project first.');
+                return;
+              }
+              const wsTasks = tasks.tasks
+                .filter(t => t.workstream_id === workstreamId && ['backlog', 'todo'].includes(t.status) && t.mode === 'ai')
+                .sort((a, b) => a.position - b.position);
+              if (wsTasks.length === 0) {
+                await modal.alert('No tasks', 'No runnable AI tasks in this workstream.');
+                return;
+              }
+              try {
+                await runTaskApi(wsTasks[0].id, projects.current.id, projects.current.local_path, true);
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                await modal.alert('Error', err.message || 'Failed to start workstream');
+              }
+            }}
+            onRunTask={async (taskId) => {
+              if (!projects.current?.id || !projects.current?.local_path) {
+                await modal.alert('Missing path', 'Set a local folder path for this project first.');
+                return;
+              }
+              try {
+                await runTaskApi(taskId, projects.current.id, projects.current.local_path, false);
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                await modal.alert('Error', err.message || 'Failed to start task');
+              }
+            }}
+            onEditTask={(task) => {
+              const rawTask = tasks.tasks.find(t => t.id === task.id);
+              setEditingTask({
+                id: task.id,
+                title: task.title,
+                description: task.description,
+                type: task.type,
+                mode: task.mode,
+                effort: task.effort,
+                multiagent: task.multiagent,
+                assignee: rawTask?.assignee ?? null,
+                images: task.images,
+                workstream_id: task.workstream_id,
+                auto_continue: task.auto_continue,
+                priority: (task as any).priority,
+              });
+            }}
+            onDeleteTask={async (taskId) => {
+              await tasks.deleteTask(taskId);
+            }}
+            onUpdateTask={async (taskId, data) => {
+              await tasks.updateTask(taskId, data);
+            }}
+            onMoveTask={async (taskId, workstreamId, newPosition) => {
+              await updateTask(taskId, { workstream_id: workstreamId, position: newPosition });
+              tasks.reload();
+            }}
+            onTerminate={async (jobId) => {
+              if (await modal.confirm('Terminate job', 'Terminate this running job?', { label: 'Terminate', danger: true })) {
+                await terminateJob(jobId);
+                jobs.reload();
+                tasks.reload();
+              }
+            }}
+            onReply={async (jobId, answer) => {
+              try {
+                await replyToJob(jobId, answer, projects.current?.local_path || '');
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                await modal.alert('Error', err.message || 'Failed to send reply');
+              }
+            }}
+            onApprove={async (jobId) => {
+              try {
+                await approveJob(jobId);
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                await modal.alert('Error', err.message || 'Failed to approve');
+              }
+            }}
+            onReject={async (jobId) => {
+              try {
+                await rejectJob(jobId, '');
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                await modal.alert('Error', err.message || 'Failed to reject');
+              }
+            }}
+            onRevert={async (jobId) => {
+              if (await modal.confirm('Revert changes', 'Revert all file changes? This restores files to their state before the task ran.', { label: 'Revert', danger: true })) {
+                try {
+                  await revertJob(jobId, projects.current?.local_path || '');
+                  jobs.reload();
+                  tasks.reload();
+                } catch (err: any) {
+                  await modal.alert('Error', err.message || 'Failed to revert');
+                }
+              }
+            }}
+            onDeleteJob={async (jobId) => {
+              try {
+                await deleteJob(jobId);
+                jobs.reload();
+              } catch (err: any) {
+                await modal.alert('Error', err.message || 'Failed to dismiss job');
+              }
+            }}
+            onCreatePr={async (workstreamId) => {
+              try {
+                await reviewAndCreatePr(workstreamId, projects.current?.local_path || '');
+                // Review runs in background -- status updates via SSE
+              } catch (err: any) {
+                await modal.alert('Error', err.message || 'Failed to start review');
+              }
+            }}
+          />
+        } />
+        <Route path="/archive" element={
+          <ArchivePage
+            workstreams={workstreams.workstreams.filter(w => w.status === 'archived')}
+            tasks={tasks.tasks}
+            onRestore={async (wsId) => { await workstreams.updateWorkstream(wsId, { status: 'active' }); }}
+          />
+        } />
+      </Routes>
 
       {showTaskForm && projects.current && (
         <TaskForm

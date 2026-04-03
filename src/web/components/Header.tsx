@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { NavLink } from 'react-router-dom';
 import { timeAgo } from '../lib/time';
 import { useTheme } from '../hooks/useTheme';
 import s from './Header.module.css';
@@ -130,6 +131,10 @@ export function Header({
             </div>
           )}
         </div>
+        <nav className={s.headerNav}>
+          <NavLink to="/" end className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>Board</NavLink>
+          <NavLink to="/archive" className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>Archive</NavLink>
+        </nav>
       </div>
       <div className={s.right}>
         {localPath && <span className={s.localPath} title={localPath}>{localPath}</span>}
