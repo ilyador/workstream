@@ -37,7 +37,9 @@ export async function queueNextWorkstreamTask(params: {
       .limit(1);
 
     if (!remaining || remaining.length === 0) {
-      await supabase.from('workstreams').update({ status: 'complete' }).eq('id', workstreamId);
+      // Don't set 'complete' — leave status as 'active' so the UI shows
+      // "pending review" (derived from allDone) and the user can click
+      // "Review & Create PR". The review endpoint sets 'complete' after PR creation.
     }
     return null;
   }
