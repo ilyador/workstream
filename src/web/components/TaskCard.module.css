@@ -30,10 +30,9 @@
 }
 .statusDone {
   border-left: 3px solid var(--divider);
-  opacity: 0.65;
 }
-.statusDone:hover {
-  opacity: 0.8;
+.statusDone .title {
+  color: var(--text-3);
 }
 
 /* Priority ambient background (always applied) */
