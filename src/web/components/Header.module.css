@@ -11,6 +11,32 @@
   z-index: 50;
 }
 .left, .right { display: flex; align-items: center; gap: 16px; }
+.headerNav {
+  display: flex;
+  gap: 2px;
+  margin-left: 8px;
+}
+.navLink {
+  font-size: 13px;
+  color: var(--text-3);
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: color 0.12s, background 0.12s;
+}
+.navLink:hover {
+  color: var(--text-2);
+  background: var(--bg-hover);
+}
+.navLinkActive {
+  font-size: 13px;
+  color: var(--text);
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+}
 
 @media (max-width: 768px) {
   .bar { padding: 0 12px; height: 48px; }
@@ -18,6 +44,8 @@
   .logo { font-size: 14px; }
   .sep { display: none; }
   .localPath { display: none; }
+  .headerNav { margin-left: 4px; gap: 0; }
+  .navLink, .navLinkActive { font-size: 12px; padding: 3px 6px; }
 }
 .logo {
   font-size: 16px;
