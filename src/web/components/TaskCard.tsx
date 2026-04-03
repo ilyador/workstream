@@ -84,6 +84,8 @@ export function TaskCard({
   projectId,
   hasUnreadMention,
 }: TaskCardProps) {
+  const { comments: taskComments } = useComments(task.id);
+  const commentCount = taskComments.length;
   const jobStatus = job?.status;
   const isActive = jobStatus === 'queued' || jobStatus === 'running' || jobStatus === 'paused' || jobStatus === 'review';
   const taskDone = task.status === 'done' || jobStatus === 'done';
@@ -169,7 +171,6 @@ export function TaskCard({
         )}
 
         {(jobStatus || taskDone || isHumanWaiting) && <span className={`${s.statusDot} ${dotClass}`} />}
-        {hasUnreadMention && <span className={s.mentionDot} />}
 
         <span className={s.title}>{task.title}</span>
 
@@ -185,6 +186,14 @@ export function TaskCard({
           {jobStatus && jobStatus !== 'done' && (
             <span className={`${s.tag} ${s.tagStatus} ${tagStatusClass}`}>
               {STATUS_LABELS[jobStatus]}
+            </span>
+          )}
+          {commentCount > 0 && (
+            <span className={`${s.commentBadge} ${hasUnreadMention ? s.commentBadgeMention : ''}`} title={hasUnreadMention ? 'You were mentioned' : `${commentCount} comment${commentCount > 1 ? 's' : ''}`}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+              </svg>
+              {commentCount}
             </span>
           )}
           {task.assignee && task.assignee.type !== 'ai' && !isHumanWaiting && (

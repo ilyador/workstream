@@ -229,15 +229,26 @@
   50% { opacity: 0.4; }
 }
 
-/* Unread @mention red dot */
-.mentionDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--red);
+/* Comment count badge — turns red when mentioned */
+.commentBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-4);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
   flex-shrink: 0;
-  margin-top: 7px;
 }
+.commentBadge svg { opacity: 0.7; }
+.commentBadgeMention {
+  color: var(--red);
+  background: var(--red-bg);
+  font-weight: 600;
+}
+.commentBadgeMention svg { opacity: 1; }
 
 /* Task highlight animation (triggered by ?task= URL param) */
 .highlight {

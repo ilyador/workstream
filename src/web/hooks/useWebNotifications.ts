@@ -44,7 +44,9 @@ export function useWebNotifications() {
     }
   }, []);
 
-  const showPrompt = permission === 'default' && !dismissed;
+  // Notification API only available on HTTPS or localhost
+  const notificationsAvailable = typeof Notification !== 'undefined';
+  const showPrompt = notificationsAvailable && permission === 'default' && !dismissed;
 
   return { permission, showPrompt, requestPermission, dismiss, notify };
 }
