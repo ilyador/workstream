@@ -366,11 +366,11 @@ export default function App() {
                 effort: task.effort,
                 multiagent: task.multiagent,
                 assignee: rawTask?.assignee ?? null,
-                flow_id: (rawTask as any)?.flow_id ?? null,
+                flow_id: rawTask?.flow_id ?? null,
                 images: task.images,
                 workstream_id: task.workstream_id,
                 auto_continue: task.auto_continue,
-                priority: (task as any).priority,
+                priority: task.priority,
               });
             }}
             onDeleteTask={async (taskId) => {

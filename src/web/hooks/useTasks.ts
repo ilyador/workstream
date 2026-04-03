@@ -22,6 +22,7 @@ interface Task {
   created_at: string;
   completed_at: string | null;
   created_by: string | null;
+  flow_id: string | null;
 }
 
 export function useTasks(projectId: string | null) {

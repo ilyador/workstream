@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js';
-import { loadTaskTypeConfig } from './runner.js';
+import { loadTaskTypeConfig, buildFlowSnapshot } from './runner.js';
 
 /**
  * Find and queue the next AI task in a workstream after a task completes.
@@ -18,7 +18,7 @@ export async function queueNextWorkstreamTask(params: {
   // Find next incomplete task in workstream by position
   const { data: nextTask } = await supabase
     .from('tasks')
-    .select('id, type, mode, title, assignee, created_by')
+    .select('id, type, mode, title, assignee, created_by, flow_id')
     .eq('workstream_id', workstreamId)
     .in('status', ['backlog', 'todo'])
     .gt('position', completedPosition)
@@ -61,14 +61,28 @@ export async function queueNextWorkstreamTask(params: {
 
   // Queue the next AI task
   const nextTaskType = loadTaskTypeConfig(localPath, nextTask.type);
-  const { data: job, error } = await supabase.from('jobs').insert({
+  const jobPayload: Record<string, unknown> = {
     task_id: nextTask.id,
     project_id: projectId,
     local_path: localPath,
     status: 'queued',
     current_phase: nextTaskType.phases[0],
     max_attempts: nextTaskType.verify_retries + 1,
-  }).select('id').single();
+  };
+
+  if (nextTask.flow_id) {
+    const { data: flow } = await supabase
+      .from('flows')
+      .select('*, flow_steps(*)')
+      .eq('id', nextTask.flow_id)
+      .single();
+    if (flow) {
+      jobPayload.flow_id = nextTask.flow_id;
+      jobPayload.flow_snapshot = buildFlowSnapshot(flow);
+    }
+  }
+
+  const { data: job, error } = await supabase.from('jobs').insert(jobPayload).select('id').single();
 
   if (error) {
     console.error(`[auto-continue] Failed to queue next task ${nextTask.id}:`, error.message);

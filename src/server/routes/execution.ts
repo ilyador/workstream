@@ -72,8 +72,9 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
     if (flow) {
       flowSnapshot = buildFlowSnapshot(flow);
       firstPhase = flowSnapshot.steps[0]?.name || 'plan';
-      maxAttempts = Math.max(...flowSnapshot.steps.map((s: any) => s.max_retries + 1));
+      maxAttempts = flowSnapshot.steps.length > 0 ? Math.max(...flowSnapshot.steps.map((s: any) => s.max_retries + 1)) : 1;
     } else {
+      console.warn(`[execution] Flow ${task.flow_id} not found for task ${taskId}, falling back to legacy type`);
       const taskType = loadTaskTypeConfig(localPath, task.type);
       firstPhase = taskType.phases[0];
       maxAttempts = taskType.verify_retries + 1;

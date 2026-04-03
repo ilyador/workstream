@@ -20,5 +20,6 @@ export type JobView = {
     changedFiles?: string[];
   };
   completedAgo?: string;
+  flow_snapshot?: any;
 };
 

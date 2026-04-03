@@ -9,10 +9,9 @@ interface FlowEditorProps {
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: any[] }) => Promise<Flow>;
   onDeleteFlow: (flowId: string) => Promise<void>;
   projectId: string;
-  onClose?: () => void;
 }
 
-const ALL_TOOLS = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'Agent'];
+const ALL_TOOLS = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'];
 const ALL_CONTEXT_SOURCES = [
   'claude_md', 'agents_md', 'task_description', 'task_images',
   'skills', 'architecture_md', 'review_criteria', 'followup_notes', 'git_diff',
@@ -546,7 +545,7 @@ function FlowColumn({
 }
 
 /* ─── FlowEditor: Board container ─── */
-export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, projectId, onClose }: FlowEditorProps) {
+export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, projectId }: FlowEditorProps) {
   const [creating, setCreating] = useState(false);
 
   const handleNewFlow = useCallback(async () => {
