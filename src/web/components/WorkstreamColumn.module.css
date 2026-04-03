@@ -41,12 +41,17 @@
   border-color: var(--blue-soft);
 }
 
-/* Column reorder drop indicator — inset line on the drop side */
-.columnDropLeft {
-  border-left: 2px solid var(--blue);
+/* Column reorder wrapper + separator line between columns */
+.columnOuter {
+  display: contents;
 }
-.columnDropRight {
-  border-right: 2px solid var(--blue);
+.columnDropLine {
+  flex-shrink: 0;
+  width: 2px;
+  background: var(--blue);
+  border-radius: 1px;
+  align-self: stretch;
+  margin: 8px -10px;
 }
 
 /* ─── Column header ─── */
