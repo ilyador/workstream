@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { WorkstreamColumn } from './WorkstreamColumn';
 import type { JobView } from './job-types';
 import s from './Board.module.css';
@@ -97,6 +97,11 @@ export function Board({
 
   const boardRef = useRef<HTMLDivElement>(null);
   const scrollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clean up scroll interval on unmount
+  useEffect(() => () => {
+    if (scrollInterval.current) clearInterval(scrollInterval.current);
+  }, []);
 
   const taskJobMap = useMemo(() => {
     const priority: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };

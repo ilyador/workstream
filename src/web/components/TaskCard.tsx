@@ -588,7 +588,7 @@ function CardComments({ taskId, projectId }: { taskId: string; projectId?: strin
             style={{
               flex: 1, padding: '4px 10px', background: 'var(--white)', border: '1.5px solid var(--divider)',
               borderRadius: 6, fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', outline: 'none',
-              resize: 'none', minHeight: 28,
+              resize: 'none', minHeight: 28, maxHeight: 120, overflowY: 'auto',
             }}
             value={text}
             onChange={e => handleChange(e.target.value)}

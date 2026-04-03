@@ -519,10 +519,20 @@ export function discoverSkills(localPath?: string): SkillInfo[] {
   return skills;
 }
 
+// Cache skills for 30 seconds to avoid repeated filesystem traversal
+const skillsCache = new Map<string, { skills: SkillInfo[]; expires: number }>();
+const SKILLS_CACHE_TTL = 30000;
+
 dataRouter.get('/api/skills', requireAuth, (req, res) => {
   const localPath = req.query.local_path as string | undefined;
+  const cacheKey = localPath || '__global__';
+  const cached = skillsCache.get(cacheKey);
+  if (cached && Date.now() < cached.expires) {
+    res.json(cached.skills.map(({ filePath, ...rest }) => rest));
+    return;
+  }
   const skills = discoverSkills(localPath);
-  // Strip filePath from API response — internal use only
+  skillsCache.set(cacheKey, { skills, expires: Date.now() + SKILLS_CACHE_TTL });
   res.json(skills.map(({ filePath, ...rest }) => rest));
 });
 

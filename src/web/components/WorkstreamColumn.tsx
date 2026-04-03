@@ -190,7 +190,7 @@ export function WorkstreamColumn({
       return next;
     });
     // Scroll into view and apply highlight after a tick (DOM needs to update)
-    requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
       const container = tasksRef.current;
       if (!container) return;
       const wraps = Array.from(container.querySelectorAll<HTMLElement>(`.${s.cardWrap}`));
@@ -198,13 +198,13 @@ export function WorkstreamColumn({
       const el = wraps[idx];
       if (!el) return;
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      // Apply highlight animation class to the card inside the wrapper
       const card = el.querySelector<HTMLElement>(`.${taskStyles.card}`);
       if (card) {
         card.classList.add(taskStyles.highlight);
         card.addEventListener('animationend', () => card.classList.remove(taskStyles.highlight), { once: true });
       }
     });
+    return () => cancelAnimationFrame(rafId);
   }, [focusTaskId, tasks]);
 
   // Focus name input when editing
