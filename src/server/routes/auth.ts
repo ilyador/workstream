@@ -51,7 +51,7 @@ authRouter.post('/api/auth/signup', async (req, res) => {
       // Update profile name/initials
       const parts = name.trim().split(/\s+/);
       const initials = parts.length === 1
-        ? parts[0].substring(0, 2).toUpperCase()
+        ? parts[0][0].toUpperCase()
         : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
       await admin.from('profiles').update({ name: name.trim(), initials }).eq('id', ghost.id);
 

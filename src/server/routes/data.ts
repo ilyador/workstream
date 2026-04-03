@@ -13,7 +13,7 @@ function deriveNameFromEmail(email: string): { name: string; initials: string } 
   const name = email.split('@')[0];
   const parts = name.split(/[.\-_]/);
   const initials = parts.length === 1
-    ? parts[0].substring(0, 2).toUpperCase()
+    ? parts[0][0].toUpperCase()
     : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   return { name, initials };
 }

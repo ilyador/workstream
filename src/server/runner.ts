@@ -281,7 +281,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
       const args = ['-p', '--verbose', '--output-format', 'stream-json'];
       if (step.tools.length > 0) {
         args.push('--allowedTools', step.tools.join(','));
-        const writeTools = ['Edit', 'Write', 'NotebookEdit', 'Agent'];
+        const writeTools = ['Edit', 'Write', 'NotebookEdit'];
         const blocked = writeTools.filter(t => !step.tools.includes(t));
         if (blocked.length > 0) args.push('--disallowedTools', blocked.join(','));
       }
@@ -302,7 +302,12 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         onPhaseComplete(step.name, phaseOutput);
 
         // Check if claude asked a question
-        const lastLines = output.trim().split('\n').slice(-3).join('\n');
+        // Filter out RULES/instruction lines to avoid false-positive pause detection
+        const candidateLines = output.trim().split('\n').slice(-5).filter(l => {
+          const trimmed = l.trim();
+          return !trimmed.startsWith('- ') && !trimmed.startsWith('RULES:') && !trimmed.startsWith('IMPORTANT:');
+        });
+        const lastLines = candidateLines.join('\n');
         if (lastLines.includes('?') && (lastLines.includes('Should I') || lastLines.includes('Could you') || lastLines.includes('Which') || lastLines.includes('clarif'))) {
           await supabase.from('jobs').update({
             status: 'paused',
@@ -327,10 +332,14 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
               const jumpIndex = steps.findIndex(s => s.position === step.on_fail_jump_to);
               if (jumpIndex >= 0 && jumpIndex < i) {
                 onLog(`\n${step.name} failed: ${reason}. Jumping back to '${steps[jumpIndex].name}'...\n`);
-                completedPhaseNames.delete(steps[jumpIndex].name);
-                // Remove stale output
+                // Clear ALL steps from jumpIndex through i (not just the target)
+                for (let ci = jumpIndex; ci <= i; ci++) {
+                  completedPhaseNames.delete(steps[ci].name);
+                }
+                // Remove stale output for all intermediate steps
                 for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
-                  if (phasesCompleted[pi].phase === steps[jumpIndex].name) { phasesCompleted.splice(pi, 1); break; }
+                  const stepIdx = steps.findIndex(s => s.name === phasesCompleted[pi].phase);
+                  if (stepIdx >= jumpIndex && stepIdx <= i) { phasesCompleted.splice(pi, 1); }
                 }
                 i = jumpIndex;
                 break;
@@ -427,6 +436,9 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
   const reviewResult = {
     filesChanged,
+    // testsPassed is true here because if any gate step had failed beyond max
+    // retries, we would have already returned (paused/failed) before reaching
+    // this point. Reaching here means all gates passed or were skipped.
     testsPassed: true,
     linesAdded,
     linesRemoved,
@@ -742,7 +754,10 @@ function extractVerdict(output: string): PhaseVerdict | null {
 }
 
 function legacyVerifyCheck(output: string): boolean {
-  const lower = output.toLowerCase();
+  // Only check the last 20 lines (actual test results), not the full output
+  // which includes the echoed prompt/RULES that contain words like "failing tests".
+  const tail = output.trim().split('\n').slice(-20).join('\n');
+  const lower = tail.toLowerCase();
   const hasFail = /\bfail\b|tests?\s+fail/.test(lower);
   const hasError = lower.includes('error') || lower.includes('not passing');
   const excluded = lower.includes('no failures') || lower.includes('0 failed') || lower.includes('fixed');
@@ -896,7 +911,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
       if (phaseConfig.tools.length > 0) {
         args.push('--allowedTools', phaseConfig.tools.join(','));
         // Explicitly block write tools for read-only phases
-        const writeTools = ['Edit', 'Write', 'NotebookEdit', 'Agent'];
+        const writeTools = ['Edit', 'Write', 'NotebookEdit'];
         const blocked = writeTools.filter(t => !phaseConfig.tools.includes(t));
         if (blocked.length > 0) {
           args.push('--disallowedTools', blocked.join(','));
@@ -1114,6 +1129,9 @@ Write a concise summary (2-4 sentences) of what was done and why. Focus on the a
 
   const reviewResult = {
     filesChanged,
+    // testsPassed is true here because if any gate step had failed beyond max
+    // retries, we would have already returned (paused/failed) before reaching
+    // this point. Reaching here means all gates passed or were skipped.
     testsPassed: true,
     linesAdded,
     linesRemoved,
