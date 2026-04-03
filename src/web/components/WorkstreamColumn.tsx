@@ -364,7 +364,7 @@ export function WorkstreamColumn({
                 e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 20);
                 onColumnDragStart(workstream.id);
                 e.stopPropagation();
-              }
+              }}
               onDragEnd={() => {
                 document.getElementById('__column-drag-preview__')?.remove();
               }}
