@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { Flow, FlowStep } from '../lib/api';
 import s from './FlowEditor.module.css';
 
@@ -163,6 +163,25 @@ function FlowColumn({
     state.setDragOverIdx(null);
   }, [state.dragIdx, state.dragOverIdx, state.setEditSteps, state.setDragIdx, state.setDragOverIdx]);
 
+  // ---- Dirty detection ----
+  const isDirty = useMemo(() => {
+    if (state.editName !== flow.name) return true;
+    if (state.editAgentsMd !== (flow.agents_md ?? '')) return true;
+    const origSteps = flow.flow_steps.slice().sort((a, b) => a.position - b.position);
+    if (state.editSteps.length !== origSteps.length) return true;
+    for (let i = 0; i < state.editSteps.length; i++) {
+      const e = state.editSteps[i], o = origSteps[i];
+      if (!o) return true;
+      if (e.name !== o.name || e.instructions !== o.instructions || e.model !== o.model
+        || e.is_gate !== o.is_gate || e.max_retries !== o.max_retries
+        || e.on_max_retries !== o.on_max_retries || e.include_agents_md !== o.include_agents_md
+        || e.on_fail_jump_to !== o.on_fail_jump_to
+        || JSON.stringify(e.tools) !== JSON.stringify(o.tools)
+        || JSON.stringify(e.context_sources) !== JSON.stringify(o.context_sources)) return true;
+    }
+    return false;
+  }, [state.editName, state.editAgentsMd, state.editSteps, flow]);
+
   // ---- Save ----
   const handleSave = useCallback(async () => {
     state.setSaving(true);
@@ -195,7 +214,6 @@ function FlowColumn({
 
   // ---- Delete flow ----
   const handleDeleteFlow = useCallback(async () => {
-    if (flow.is_builtin) return;
     if (!confirm(`Delete flow "${flow.name}" and all its steps? This cannot be undone.`)) return;
     state.setSaving(true);
     state.setError('');
@@ -260,26 +278,27 @@ function FlowColumn({
 
           {state.saving && <span className={s.savingText}>Saving...</span>}
 
-          <button
-            className={s.saveBtn}
-            onClick={handleSave}
-            disabled={state.saving}
-            title="Save flow"
-          >
-            Save
-          </button>
-
-          {!flow.is_builtin && (
+          {isDirty && (
             <button
-              className={`${s.actionBtn} ${s.actionBtnDanger}`}
-              onClick={handleDeleteFlow}
+              className={s.saveBtn}
+              onClick={handleSave}
               disabled={state.saving}
-              title="Delete flow"
+              title="Save flow"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              Save
             </button>
+          )}
+
+          <button
+            className={`${s.actionBtn} ${s.actionBtnDanger}`}
+            onClick={handleDeleteFlow}
+            disabled={state.saving}
+            title="Delete flow"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
           )}
         </div>
       </div>
