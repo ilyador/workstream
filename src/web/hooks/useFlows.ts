@@ -19,9 +19,10 @@ export function useFlows(projectId: string | null) {
 
   useEffect(() => { load(); }, [load]);
 
-  const createFlow = useCallback(async (data: { project_id: string; name: string; description?: string; steps?: any[] }) => {
-    await apiCreate(data);
+  const createFlow = useCallback(async (data: { project_id: string; name: string; description?: string; steps?: any[] }): Promise<Flow> => {
+    const created = await apiCreate(data);
     await load();
+    return created;
   }, [load]);
 
   const updateFlow = useCallback(async (id: string, data: Record<string, unknown>) => {
