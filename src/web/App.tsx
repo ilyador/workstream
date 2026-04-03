@@ -430,6 +430,9 @@ export default function App() {
           <ArchivePage
             workstreams={workstreams.workstreams.filter(w => w.status === 'archived')}
             tasks={tasks.tasks}
+            jobs={jobViews}
+            memberMap={memberMap}
+            projectId={projects.current?.id || null}
             onRestore={async (wsId) => { await workstreams.updateWorkstream(wsId, { status: 'active' }); }}
           />
         } />
