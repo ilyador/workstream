@@ -62,7 +62,7 @@ interface FlowEditorProps {
 
 const ALL_TOOLS = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'];
 const ALL_CONTEXT_SOURCES = [
-  'claude_md', 'agents_md', 'task_description', 'task_images',
+  'claude_md', 'task_description', 'task_images',
   'skills', 'architecture_md', 'review_criteria', 'followup_notes', 'git_diff',
 ];
 const MODEL_OPTIONS = ['opus', 'sonnet'];
@@ -222,7 +222,7 @@ function FlowColumn({
       if (!o) return true;
       if (e.name !== o.name || e.instructions !== o.instructions || e.model !== o.model
         || e.is_gate !== o.is_gate || e.max_retries !== o.max_retries
-        || e.on_max_retries !== o.on_max_retries || e.include_agents_md !== o.include_agents_md
+        || e.on_max_retries !== o.on_max_retries
         || e.on_fail_jump_to !== o.on_fail_jump_to
         || JSON.stringify(e.tools) !== JSON.stringify(o.tools)
         || JSON.stringify(e.context_sources) !== JSON.stringify(o.context_sources)) return true;
@@ -485,7 +485,7 @@ function FlowColumn({
                     </div>
                   </div>
 
-                  {/* Gate toggle + include_agents_md */}
+                  {/* Gate toggle */}
                   <div className={s.row}>
                     <label className={s.checkboxLabel}>
                       <input
@@ -493,15 +493,7 @@ function FlowColumn({
                         checked={step.is_gate}
                         onChange={e => updateStep(idx, { is_gate: e.target.checked })}
                       />
-                      Gate step
-                    </label>
-                    <label className={s.checkboxLabel}>
-                      <input
-                        type="checkbox"
-                        checked={step.include_agents_md}
-                        onChange={e => updateStep(idx, { include_agents_md: e.target.checked })}
-                      />
-                      Include agents_md
+                      Gate step (pass/fail verdict)
                     </label>
                   </div>
 

@@ -115,8 +115,8 @@ function buildStepPrompt(
 ): string {
   let prompt = 'You are working on a task in this project\'s codebase.\n\n';
 
-  // Agents.md (shared persona/instructions for this flow)
-  if (step.include_agents_md && flow.agents_md) {
+  // Agents.md -- always injected if the flow has it (applies to all steps)
+  if (flow.agents_md) {
     prompt += `## Agent Instructions\n${flow.agents_md.substring(0, 8000)}\n\n`;
   }
 
