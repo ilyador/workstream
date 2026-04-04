@@ -69,13 +69,14 @@ interface Props {
   onClose: () => void;
 }
 
-const BUILT_IN_TYPES = ['feature', 'bug-fix', 'ui-fix', 'refactor', 'test', 'design', 'chore'];
+const BUILT_IN_TYPES = ['feature', 'bug-fix', 'ui-fix', 'refactor', 'test', 'design', 'chore', 'doc-search'];
 
 const PIPELINE_OPTIONS = [
   { value: 'feature', label: 'feature (plan → implement → verify → review)' },
   { value: 'bug-fix', label: 'bug-fix (plan → analyze → fix → verify → review)' },
   { value: 'refactor', label: 'refactor (plan → analyze → refactor → verify → review)' },
   { value: 'test', label: 'test (plan → write-tests → verify → review)' },
+  { value: 'doc-search', label: 'doc-search (search RAG → answer)' },
 ];
 
 export function TaskForm({ workstreams, members, existingTasks, flows = [], customTypes = [], onSaveCustomType, localPath, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {

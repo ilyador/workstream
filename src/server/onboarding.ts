@@ -17,7 +17,7 @@ function run(cmd: string, args: string[] = []): { ok: boolean; output: string } 
   }
 }
 
-export function runChecks(localPath?: string): Check[] {
+export async function runChecks(localPath?: string): Promise<Check[]> {
   const checks: Check[] = [];
 
   // Claude Code
@@ -103,6 +103,35 @@ export function runChecks(localPath?: string): Check[] {
       ok: repo.ok,
       help: `Initialize a git repo: cd ${localPath} && git init`,
       required: true,
+    });
+  }
+
+  // LM Studio (optional — for RAG doc search)
+  const lmStudioUrl = process.env.LM_STUDIO_URL || 'http://localhost:1234';
+  let lmStudioOk = false;
+  let modelsBody: any = null;
+  try {
+    const resp = await fetch(`${lmStudioUrl}/v1/models`, { signal: AbortSignal.timeout(3000) });
+    lmStudioOk = resp.ok;
+    if (resp.ok) modelsBody = await resp.json();
+  } catch {}
+  checks.push({
+    id: 'lm-studio',
+    label: 'LM Studio',
+    ok: lmStudioOk,
+    help: 'Start LM Studio server: lms server start — needed for AI doc search (RAG)',
+    required: false,
+  });
+
+  if (lmStudioOk && modelsBody) {
+    const embeddingModel = process.env.EMBEDDING_MODEL || 'text-embedding-nomic-embed-text-v1.5';
+    const modelLoaded = modelsBody.data?.some((m: any) => m.id?.includes('nomic') || m.id?.includes('embed')) ?? false;
+    checks.push({
+      id: 'embedding-model',
+      label: 'Embedding model loaded',
+      ok: modelLoaded,
+      help: `Load embedding model: lms load ${embeddingModel}`,
+      required: false,
     });
   }
 

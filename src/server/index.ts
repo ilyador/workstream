@@ -6,6 +6,7 @@ import { executionRouter } from './routes/execution.js';
 import { gitRouter } from './routes/git.js';
 import { authRouter } from './routes/auth.js';
 import { dataRouter } from './routes/data.js';
+import { documentsRouter } from './routes/documents.js';
 
 const PORT = process.env.PORT || 3001;
 const app = express();
@@ -27,9 +28,9 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
 app.use(express.json());
 
 // Onboarding
-app.get('/api/onboarding', (req, res) => {
+app.get('/api/onboarding', async (req, res) => {
   const localPath = req.query.localPath as string | undefined;
-  const checks = runChecks(localPath);
+  const checks = await runChecks(localPath);
   const allRequiredOk = checks.filter(c => c.required).every(c => c.ok);
   res.json({ checks, ready: allRequiredOk });
 });
@@ -50,6 +51,9 @@ app.use(executionRouter);
 
 // Git operations (commit, push, pr)
 app.use(gitRouter);
+
+// Documents (upload, search, list, delete)
+app.use(documentsRouter);
 
 // Global error handler
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

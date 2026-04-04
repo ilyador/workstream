@@ -129,21 +129,12 @@ export function Header({
                   </button>
                 </>
               )}
-              <div className={s.dropdownDivider} />
-              <button
-                className={s.dropdownNew}
-                onClick={() => {
-                  setOpen(false);
-                  navigate('/flows');
-                }}
-              >
-                Manage Flows
-              </button>
             </div>
           )}
         </div>
         <nav className={s.headerNav}>
-          <NavLink to="/" end className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>Board</NavLink>
+          <NavLink to="/" end className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>Streams</NavLink>
+          <NavLink to="/flows" className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>AI Flows</NavLink>
           <NavLink to="/archive" className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>Archive</NavLink>
         </nav>
       </div>

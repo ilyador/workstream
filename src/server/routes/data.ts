@@ -612,6 +612,8 @@ dataRouter.get('/api/custom-types', requireAuth, async (req, res) => {
 dataRouter.post('/api/custom-types', requireAuth, async (req, res) => {
   const { project_id, name, description, pipeline } = req.body;
   if (!project_id || !name?.trim()) return res.status(400).json({ error: 'project_id and name required' });
+  const validPipelines = ['feature', 'bug-fix', 'refactor', 'test', 'doc-search'];
+  if (pipeline && !validPipelines.includes(pipeline)) return res.status(400).json({ error: `pipeline must be one of: ${validPipelines.join(', ')}` });
 
   const slug = name.trim().toLowerCase().replace(/\s+/g, '-');
   const { data, error } = await supabase

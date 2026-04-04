@@ -524,6 +524,18 @@ const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
       review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
     },
   },
+  'doc-search': {
+    phases: ['answer'],
+    on_verify_fail: 'answer',
+    verify_retries: 0,
+    final: 'answer',
+    on_review_fail: 'answer',
+    review_retries: 0,
+    on_max_retries: 'done',
+    phase_config: {
+      answer: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'sonnet' },
+    },
+  },
 };
 
 function loadTaskTypeConfig(localPath: string, taskType: string): TaskTypeConfig {
@@ -553,6 +565,15 @@ Title: ${task.title}
 Type: ${task.type}
 Description: ${task.description || 'No description provided.'}
 `;
+
+  // RAG context injection for doc-search flow
+  if (task._ragResults && task._ragResults.length > 0) {
+    prompt += '\n## Document Search Results\nThe following passages were found relevant to your question:\n\n';
+    for (let i = 0; i < task._ragResults.length; i++) {
+      const r = task._ragResults[i];
+      prompt += `[${i + 1}] From "${r.file_name}" (${(r.similarity * 100).toFixed(1)}% match):\n${r.content}\n\n`;
+    }
+  }
 
   // Skill references: parse /skillname from description, verify they exist, inject content
   if (task.description) {
@@ -639,6 +660,7 @@ or if issues found:
 \`\`\``,
     refactor: 'Refactor the code as described. Maintain all existing behavior. Run tests to verify nothing broke.',
     'write-tests': 'Write tests for the described functionality. Follow existing test patterns in the project.',
+    answer: 'Answer the user\'s question based on the document search results provided above. Cite which documents you\'re referencing. If the results don\'t contain enough information to answer fully, say so clearly.',
   };
 
   // Feature 5: Custom prompt files from .codesync/prompts/
