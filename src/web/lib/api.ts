@@ -281,6 +281,46 @@ export async function deleteComment(commentId: string) {
   return apiFetch(`/api/comments/${commentId}`, { method: 'DELETE' });
 }
 
+// --- Artifacts ---
+export interface Artifact {
+  id: string;
+  task_id: string;
+  job_id: string | null;
+  phase: string | null;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  storage_path: string;
+  repo_path: string | null;
+  url: string;
+  created_at: string;
+}
+
+export async function getArtifacts(taskId: string): Promise<Artifact[]> {
+  return apiFetch(`/api/artifacts?task_id=${taskId}`);
+}
+
+export async function uploadArtifact(taskId: string, file: File): Promise<Artifact> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  const base64 = btoa(binary);
+  return apiFetch('/api/artifacts', {
+    method: 'POST',
+    body: JSON.stringify({
+      task_id: taskId,
+      filename: file.name,
+      mime_type: file.type || 'application/octet-stream',
+      data: base64,
+    }),
+  });
+}
+
+export async function deleteArtifact(id: string) {
+  return apiFetch(`/api/artifacts/${id}`, { method: 'DELETE' });
+}
+
 // --- Notifications ---
 export async function getNotifications() {
   return apiFetch('/api/notifications');

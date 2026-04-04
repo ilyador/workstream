@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import { useComments } from '../hooks/useComments';
 import { useMembers } from '../hooks/useMembers';
+import { useArtifacts } from '../hooks/useArtifacts';
 import { useModal } from '../hooks/useModal';
 import { timeAgo, elapsed } from '../lib/time';
 import { LiveLogs } from './LiveLogs';
@@ -390,15 +391,7 @@ function IdleDetail({
         </span>
       </div>
 
-      {task.images && task.images.length > 0 && (
-        <div className={s.images}>
-          {task.images.map((url, i) => (
-            <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-              <img src={url} alt={`Attachment ${i + 1}`} className={s.imageFull} />
-            </a>
-          ))}
-        </div>
-      )}
+      <TaskAttachments taskId={task.id} />
 
       <div className={s.actions}>
         <div className={s.actionsLeft}>
@@ -431,6 +424,70 @@ function IdleDetail({
 
       <CardComments taskId={task.id} projectId={projectId} />
     </>
+  );
+}
+
+/** Attachments section using artifacts API */
+function TaskAttachments({ taskId }: { taskId: string }) {
+  const { artifacts, upload, remove } = useArtifacts(taskId);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    for (const file of Array.from(e.dataTransfer.files)) upload(file);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    for (const file of Array.from(e.target.files || [])) upload(file);
+    e.target.value = '';
+  };
+
+  const getIcon = (mime: string) => {
+    if (mime.startsWith('image/')) return '🖼';
+    if (mime.startsWith('video/')) return '🎬';
+    if (mime === 'application/pdf') return '📕';
+    if (mime.includes('zip')) return '📦';
+    return '📄';
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)}KB`;
+    return `${(bytes / 1048576).toFixed(1)}MB`;
+  };
+
+  return (
+    <div className={s.attachments}>
+      <div className={s.attachmentsHeader}>
+        <span>Attachments{artifacts.length > 0 ? ` (${artifacts.length})` : ''}</span>
+        <button className={s.attachAddBtn} onClick={() => fileInputRef.current?.click()}>+ Add</button>
+        <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileSelect} />
+      </div>
+      {artifacts.length > 0 ? (
+        <div className={s.attachList}>
+          {artifacts.map(a => (
+            <div key={a.id} className={s.attachItem}>
+              {a.mime_type.startsWith('image/') ? (
+                <a href={a.url} target="_blank" rel="noopener noreferrer">
+                  <img src={a.url} alt={a.filename} className={s.attachThumb} />
+                </a>
+              ) : (
+                <span className={s.attachIcon}>{getIcon(a.mime_type)}</span>
+              )}
+              <div className={s.attachInfo}>
+                <a href={a.url} target="_blank" rel="noopener noreferrer" className={s.attachName}>{a.filename}</a>
+                <span className={s.attachSize}>{formatSize(a.size_bytes)}</span>
+              </div>
+              <button className={s.attachDelete} onClick={() => remove(a.id)} title="Remove">&times;</button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={s.attachDropZone} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
+          Drop files here
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -37,6 +37,7 @@ export interface TaskFormData {
   images: string[];
   workstream_id: string | null;
   priority: string;
+  chaining: string;
 }
 
 export interface EditTaskData {
@@ -53,6 +54,7 @@ export interface EditTaskData {
   images?: string[];
   workstream_id?: string | null;
   priority?: string;
+  chaining?: string;
 }
 
 interface Props {
@@ -99,6 +101,7 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
   const [multiagent, setMultiagent] = useState(editTask?.multiagent || 'auto');
   const [autoContinue, setAutoContinue] = useState(editTask?.auto_continue ?? true);
   const [priority, setPriority] = useState(editTask?.priority || 'backlog');
+  const [chaining, setChaining] = useState(editTask?.chaining || 'none');
   const [images, setImages] = useState<string[]>(editTask?.images || []);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -284,6 +287,7 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
         images,
         workstream_id: workstreamId || null,
         priority,
+        chaining,
       });
       onClose();
     } catch (err: any) {
@@ -483,6 +487,18 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
               </label>
             )}
           </div>
+
+          {!assignee && (
+            <div className={s.field}>
+              <label className={s.label}>File chaining</label>
+              <select className={s.select} value={chaining} onChange={e => setChaining(e.target.value)}>
+                <option value="none">None</option>
+                <option value="accept">Accept files from previous task</option>
+                <option value="produce">Produce files for next task</option>
+                <option value="both">Accept and produce files</option>
+              </select>
+            </div>
+          )}
 
           <div className={s.imagesSection}>
             <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFileSelect} />
