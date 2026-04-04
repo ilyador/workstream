@@ -188,7 +188,17 @@ executionRouter.post('/api/jobs/:id/continue', requireAuth, async (req, res) => 
   const { data: maxLog } = await supabase.from('job_logs').select('id').eq('job_id', jobId).order('id', { ascending: false }).limit(1).single();
   const logOffset = maxLog?.id || 0;
 
-  await supabase.from('jobs').update({ status: 'queued', question: null, log_offset: logOffset }).eq('id', jobId);
+  // Rebuild flow_snapshot from current flow_steps so updated instructions take effect
+  let newSnapshot = job.flow_snapshot;
+  if (job.flow_id) {
+    const { data: flow } = await supabase.from('flows').select('*, flow_steps(*)').eq('id', job.flow_id).single();
+    if (flow) {
+      const { buildFlowSnapshot } = await import('../runner.js');
+      newSnapshot = buildFlowSnapshot(flow);
+    }
+  }
+
+  await supabase.from('jobs').update({ status: 'queued', question: null, log_offset: logOffset, flow_snapshot: newSnapshot }).eq('id', jobId);
   await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', job.task_id);
 
   await supabase.from('job_logs').insert({
