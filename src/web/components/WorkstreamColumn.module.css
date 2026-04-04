@@ -302,11 +302,11 @@
   justify-content: space-between;
   gap: 8px;
   padding: 10px 14px;
-  background: var(--green-bg);
+  background: none;
   color: var(--green);
   font-size: 13px;
   font-weight: 600;
-  border-top: 1px solid rgba(22, 163, 74, 0.12);
+  border-top: 1px solid var(--divider);
 }
 
 .completeBannerActions {
@@ -343,8 +343,7 @@
 }
 
 .mergedBanner {
-  background: rgba(22, 163, 74, 0.08);
-  border-top-color: rgba(22, 163, 74, 0.15);
+  background: none;
 }
 
 /* Shared banner pill button base */

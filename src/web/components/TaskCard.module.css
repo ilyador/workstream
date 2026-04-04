@@ -30,7 +30,7 @@
   border-left: 3px solid var(--red);
 }
 .statusDone {
-  border-left: 3px solid var(--divider);
+  border-left: 3px solid var(--green);
 }
 .statusDone .title {
   color: var(--text-3);
