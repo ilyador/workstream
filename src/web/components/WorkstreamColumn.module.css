@@ -263,6 +263,22 @@
   position: relative;
 }
 
+/* Chain group: wraps consecutive producer→consumer tasks */
+.chainGroup {
+  border: 1.5px solid rgba(45,111,191,0.12);
+  border-radius: 10px;
+  padding: 4px;
+  background: rgba(45,111,191,0.02);
+  transition: opacity 0.2s;
+}
+
+.chainGroupDragging {
+  opacity: 0.25;
+  border-style: dashed;
+  border-color: var(--text-4);
+  background: var(--bg-hover);
+}
+
 /* Drop indicator — CSS-only line, no DOM insertion, no layout shift */
 .dropBefore::before {
   content: '';

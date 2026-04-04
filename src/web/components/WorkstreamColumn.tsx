@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useModal } from '../hooks/useModal';
 import { TaskCard } from './TaskCard';
+import { ArtifactConnector } from './ArtifactConnector';
 import type { JobView } from './job-types';
 import s from './WorkstreamColumn.module.css';
 import taskStyles from './TaskCard.module.css';
@@ -18,6 +19,7 @@ interface Task {
   images?: string[];
   status?: string;
   priority?: string;
+  chaining?: 'none' | 'produce' | 'accept' | 'both';
 }
 
 interface Workstream {
@@ -42,7 +44,9 @@ interface WorkstreamColumnProps {
   focusTaskId: string | null;
   // Task drag
   draggedTaskId: string | null;
+  draggedGroupIds?: string[];
   onDragTaskStart: (taskId: string) => void;
+  onDragGroupStart?: (taskIds: string[]) => void;
   onDragTaskEnd: () => void;
   onDropTask: (workstreamId: string | null, dropBeforeTaskId: string | null) => void;
   // Column drag
@@ -81,7 +85,9 @@ export function WorkstreamColumn({
   commentCounts,
   focusTaskId,
   draggedTaskId,
+  draggedGroupIds,
   onDragTaskStart,
+  onDragGroupStart,
   onDragTaskEnd,
   onDropTask,
   draggedWsId,
@@ -116,6 +122,39 @@ export function WorkstreamColumn({
   const dragCountRef = useRef(0); // track enter/leave balance to handle child elements
   const colDragCountRef = useRef(0);
   const columnScrollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const groupGhostRef = useRef<HTMLElement | null>(null);
+
+  // Detect chains: consecutive tasks where prev produces and current accepts
+  const chainGroups = useMemo(() => {
+    const groups: Array<{ taskIds: string[]; startIndex: number }> = [];
+    let i = 0;
+    while (i < tasks.length) {
+      if (i > 0) {
+        const prev = tasks[i - 1];
+        const task = tasks[i];
+        const prevProduces = prev.chaining === 'produce' || prev.chaining === 'both';
+        const currentAccepts = task.chaining === 'accept' || task.chaining === 'both';
+        if (prevProduces && currentAccepts) {
+          const lastGroup = groups[groups.length - 1];
+          if (lastGroup && lastGroup.taskIds.includes(prev.id)) {
+            lastGroup.taskIds.push(task.id);
+          } else {
+            groups.push({ taskIds: [prev.id, task.id], startIndex: i - 1 });
+          }
+          i++;
+          continue;
+        }
+      }
+      i++;
+    }
+    return groups;
+  }, [tasks]);
+
+  // Helper: find which chain group a task belongs to
+  const getChainGroup = useCallback((taskId: string) => {
+    return chainGroups.find(g => g.taskIds.includes(taskId)) || null;
+  }, [chainGroups]);
 
   const wsId = workstream?.id || null;
   const doneTasks = tasks.filter(t => t.status === 'done').length;
@@ -210,9 +249,10 @@ export function WorkstreamColumn({
     return () => cancelAnimationFrame(rafId);
   }, [focusTaskId, tasks]);
 
-  // Clean up column scroll interval on unmount
+  // Clean up column scroll interval and group ghost on unmount
   useEffect(() => () => {
     if (columnScrollInterval.current) clearInterval(columnScrollInterval.current);
+    groupGhostRef.current?.remove();
   }, []);
 
   // Focus name input when editing
@@ -244,32 +284,69 @@ export function WorkstreamColumn({
   const updateDropIndicator = useCallback((clientY: number) => {
     const container = tasksRef.current;
     if (!container || !draggedTaskId) return;
-    // Get all card wraps, excluding the one being dragged
-    const allWraps = Array.from(container.querySelectorAll<HTMLElement>(`.${s.cardWrap}`));
-    const wraps = allWraps.filter(el => el.dataset.taskId !== draggedTaskId);
     clearDropIndicator();
 
-    // Find which non-dragged card the cursor is above
+    // IDs being dragged (single task or entire group)
+    const draggedIds = new Set(draggedGroupIds && draggedGroupIds.length > 0 ? draggedGroupIds : [draggedTaskId]);
+
+    // Build list of drop targets: each is either a single cardWrap or a chainGroup
+    const targets: Array<{ element: HTMLElement; taskId: string; isGroup: boolean }> = [];
+
+    // Collect chain groups (not being dragged)
+    const groupedTaskIds = new Set<string>();
+    const groups = container.querySelectorAll<HTMLElement>(`.${s.chainGroup}`);
+    groups.forEach(g => {
+      const ids = (g.dataset.groupIds || '').split(',');
+      if (ids.some(id => draggedIds.has(id))) return; // skip dragged group
+      ids.forEach(id => groupedTaskIds.add(id));
+      targets.push({ element: g, taskId: ids[0], isGroup: true });
+    });
+
+    // Collect individual cardWraps (not in a group, not being dragged)
+    const wraps = container.querySelectorAll<HTMLElement>(`.${s.cardWrap}`);
+    wraps.forEach(w => {
+      const tid = w.dataset.taskId || '';
+      if (draggedIds.has(tid) || groupedTaskIds.has(tid)) return;
+      targets.push({ element: w, taskId: tid, isGroup: false });
+    });
+
+    // Sort by DOM order (top position)
+    targets.sort((a, b) => a.element.getBoundingClientRect().top - b.element.getBoundingClientRect().top);
+
+    // Find drop target
     let dropBeforeTaskId: string | null = null;
-    for (const wrap of wraps) {
-      const rect = wrap.getBoundingClientRect();
+    for (const target of targets) {
+      const rect = target.element.getBoundingClientRect();
       if (clientY < rect.top + rect.height / 2) {
-        dropBeforeTaskId = wrap.dataset.taskId || null;
+        dropBeforeTaskId = target.taskId;
         break;
       }
     }
 
-    // Store the task ID to drop before (null = drop at end)
     dropIndexRef.current = dropBeforeTaskId;
 
-    // Show visual indicator
+    // Show indicator
     if (dropBeforeTaskId) {
-      const targetWrap = wraps.find(el => el.dataset.taskId === dropBeforeTaskId);
-      targetWrap?.classList.add(s.dropBefore);
-    } else if (wraps.length > 0) {
-      wraps[wraps.length - 1].classList.add(s.dropAfter);
+      const targetEl = targets.find(t => t.taskId === dropBeforeTaskId);
+      if (targetEl) {
+        if (targetEl.isGroup) {
+          // Show indicator above the first cardWrap inside the group
+          const firstWrap = targetEl.element.querySelector<HTMLElement>(`.${s.cardWrap}`);
+          firstWrap?.classList.add(s.dropBefore);
+        } else {
+          targetEl.element.classList.add(s.dropBefore);
+        }
+      }
+    } else if (targets.length > 0) {
+      const last = targets[targets.length - 1];
+      if (last.isGroup) {
+        const lastWraps = last.element.querySelectorAll<HTMLElement>(`.${s.cardWrap}`);
+        lastWraps[lastWraps.length - 1]?.classList.add(s.dropAfter);
+      } else {
+        last.element.classList.add(s.dropAfter);
+      }
     }
-  }, [draggedTaskId, clearDropIndicator]);
+  }, [draggedTaskId, draggedGroupIds, clearDropIndicator]);
 
   const clearColumnScroll = useCallback(() => {
     if (columnScrollInterval.current) {
@@ -521,43 +598,149 @@ export function WorkstreamColumn({
             {isBacklog ? 'No tasks in backlog' : 'Drop tasks here'}
           </div>
         )}
-        {tasks.map((task) => {
-          const job = taskJobMap[task.id] || null;
-          return (
-            <div key={task.id} className={s.cardWrap} data-task-id={task.id}>
-              <TaskCard
-                task={task}
-                job={job}
-                canRunAi={canRunAi}
-                showPriority={isBacklog}
-                projectId={projectId || undefined}
-                hasUnreadMention={mentionedTaskIds.has(task.id)}
-                commentCount={commentCounts?.[task.id] || 0}
-                isExpanded={expandedIds.has(task.id)}
-                onToggleExpand={() => setExpandedIds(prev => {
-                  const next = new Set(prev);
-                  if (next.has(task.id)) next.delete(task.id);
-                  else next.add(task.id);
-                  return next;
-                })}
-                onRun={isBacklog ? undefined : onRunTask}
-                onEdit={onEditTask ? () => onEditTask(task) : undefined}
-                onDelete={onDeleteTask ? () => onDeleteTask(task.id) : undefined}
-                onUpdateTask={onUpdateTask}
-                onTerminate={onTerminate}
-                onReply={onReply}
-                onApprove={onApprove}
-                onReject={onReject}
-                onRevert={onRevert}
-                onDeleteJob={onDeleteJob}
-                onDragStart={() => onDragTaskStart(task.id)}
-                onDragEnd={onDragTaskEnd}
-                isDragging={draggedTaskId === task.id}
-                dragDisabled={dragDisabled}
-              />
-            </div>
-          );
-        })}
+        {(() => {
+          const rendered = new Set<string>();
+          return tasks.map((task, index) => {
+            if (rendered.has(task.id)) return null;
+
+            const group = getChainGroup(task.id);
+            if (group && index === group.startIndex) {
+              // Render entire chain group
+              const groupTasks = group.taskIds.map(id => tasks.find(t => t.id === id)!);
+              const isGroupDragging = draggedGroupIds ? group.taskIds.some(id => draggedGroupIds.includes(id)) : false;
+              group.taskIds.forEach(id => rendered.add(id));
+
+              const handleGroupDragStart = (e?: React.DragEvent) => {
+                if (e) {
+                  // Find the chainGroup wrapper and clone it for the ghost
+                  const chainGroupEl = (e.target as HTMLElement).closest(`.${s.chainGroup}`) as HTMLElement;
+                  if (chainGroupEl) {
+                    const clone = chainGroupEl.cloneNode(true) as HTMLElement;
+                    clone.style.width = `${chainGroupEl.offsetWidth}px`;
+                    clone.style.transform = 'rotate(2deg) scale(1.02)';
+                    clone.style.boxShadow = '0 12px 32px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.1)';
+                    clone.style.borderRadius = '10px';
+                    clone.style.opacity = '0.92';
+                    clone.style.position = 'fixed';
+                    clone.style.top = '-9999px';
+                    clone.style.left = '-9999px';
+                    clone.style.pointerEvents = 'none';
+                    clone.id = '__drag-preview__';
+                    // Remove any existing ghost first
+                    document.getElementById('__drag-preview__')?.remove();
+                    document.body.appendChild(clone);
+                    e.dataTransfer.setDragImage(clone, chainGroupEl.offsetWidth / 2, 20);
+                    groupGhostRef.current = clone;
+                  }
+                }
+                onDragGroupStart?.(group.taskIds);
+              };
+
+              const handleGroupDragEnd = () => {
+                groupGhostRef.current?.remove();
+                groupGhostRef.current = null;
+                document.getElementById('__drag-preview__')?.remove();
+                onDragTaskEnd();
+              };
+
+              return (
+                <div
+                  key={`chain-${group.taskIds[0]}`}
+                  className={`${s.chainGroup} ${isGroupDragging ? s.chainGroupDragging : ''}`}
+                  data-group-ids={group.taskIds.join(',')}
+                >
+                  {groupTasks.map((gt, gi) => {
+                    const job = taskJobMap[gt.id] || null;
+                    return (
+                      <React.Fragment key={gt.id}>
+                        {gi > 0 && <ArtifactConnector taskId={groupTasks[gi - 1].id} />}
+                        <div className={s.cardWrap} data-task-id={gt.id}>
+                          <TaskCard
+                            task={gt}
+                            job={job}
+                            canRunAi={canRunAi}
+                            showPriority={isBacklog}
+                            projectId={projectId || undefined}
+                            hasUnreadMention={mentionedTaskIds.has(gt.id)}
+                            commentCount={commentCounts?.[gt.id] || 0}
+                            isExpanded={expandedIds.has(gt.id)}
+                            onToggleExpand={() => setExpandedIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(gt.id)) next.delete(gt.id);
+                              else next.add(gt.id);
+                              return next;
+                            })}
+                            onRun={isBacklog ? undefined : onRunTask}
+                            onEdit={onEditTask ? () => onEditTask(gt) : undefined}
+                            onDelete={onDeleteTask ? () => onDeleteTask(gt.id) : undefined}
+                            onUpdateTask={onUpdateTask}
+                            onTerminate={onTerminate}
+                            onReply={onReply}
+                            onApprove={onApprove}
+                            onReject={onReject}
+                            onRevert={onRevert}
+                            onDeleteJob={onDeleteJob}
+                            onDragStart={handleGroupDragStart}
+                            onDragEnd={handleGroupDragEnd}
+                            isDragging={isGroupDragging}
+                            dragDisabled={dragDisabled}
+                            skipDragGhost
+                          />
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              );
+            }
+
+            if (group) return null; // Part of a group rendered at startIndex
+
+            // Normal unchained task -- connector logic for non-chained tasks
+            const prevTask = index > 0 ? tasks[index - 1] : null;
+            const showConnector = prevTask && prevTask.status === 'done' &&
+              task.chaining && ['accept', 'both'].includes(task.chaining) &&
+              !getChainGroup(task.id);
+            const job = taskJobMap[task.id] || null;
+            return (
+              <div key={task.id}>
+                {showConnector && <ArtifactConnector taskId={prevTask.id} />}
+                <div className={s.cardWrap} data-task-id={task.id}>
+                  <TaskCard
+                    task={task}
+                    job={job}
+                    canRunAi={canRunAi}
+                    showPriority={isBacklog}
+                    projectId={projectId || undefined}
+                    hasUnreadMention={mentionedTaskIds.has(task.id)}
+                    commentCount={commentCounts?.[task.id] || 0}
+                    isExpanded={expandedIds.has(task.id)}
+                    onToggleExpand={() => setExpandedIds(prev => {
+                      const next = new Set(prev);
+                      if (next.has(task.id)) next.delete(task.id);
+                      else next.add(task.id);
+                      return next;
+                    })}
+                    onRun={isBacklog ? undefined : onRunTask}
+                    onEdit={onEditTask ? () => onEditTask(task) : undefined}
+                    onDelete={onDeleteTask ? () => onDeleteTask(task.id) : undefined}
+                    onUpdateTask={onUpdateTask}
+                    onTerminate={onTerminate}
+                    onReply={onReply}
+                    onApprove={onApprove}
+                    onReject={onReject}
+                    onRevert={onRevert}
+                    onDeleteJob={onDeleteJob}
+                    onDragStart={() => onDragTaskStart(task.id)}
+                    onDragEnd={onDragTaskEnd}
+                    isDragging={draggedTaskId === task.id}
+                    dragDisabled={dragDisabled}
+                  />
+                </div>
+              </div>
+            );
+          });
+        })()}
       </div>
 
       {allDone && !isBacklog && wsStatus === 'pending review' && (
