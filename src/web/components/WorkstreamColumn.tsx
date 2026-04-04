@@ -818,15 +818,32 @@ export function WorkstreamColumn({
         <div className={`${s.completeBanner} ${s.mergedBanner}`}>
           <span>&#10003; PR merged</span>
           <div className={s.completeBannerActions}>
-            {workstream?.reviewer_id && members && (() => {
-              const reviewer = members.find(m => m.id === workstream.reviewer_id);
-              return reviewer ? (
-                <span className={s.reviewerChip}>
-                  <span className={s.reviewerAvatar}>{reviewer.initials}</span>
-                  {reviewer.name}
-                </span>
-              ) : null;
-            })()}
+            {workstream && members && members.length > 0 && onUpdateWorkstream && (
+              workstream.reviewer_id ? (() => {
+                const reviewer = members.find(m => m.id === workstream.reviewer_id);
+                return reviewer ? (
+                  <span className={s.reviewerChip}>
+                    <span className={s.reviewerAvatar}>{reviewer.initials}</span>
+                    {reviewer.name}
+                  </span>
+                ) : null;
+              })() : (
+                <select
+                  className={s.reviewerSelect}
+                  defaultValue=""
+                  onChange={e => {
+                    if (e.target.value) {
+                      onUpdateWorkstream(workstream.id, { reviewer_id: e.target.value });
+                    }
+                  }}
+                >
+                  <option value="">Assign reviewer</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              )
+            )}
             {workstream?.pr_url && (
               <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
                 View PR

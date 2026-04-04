@@ -297,7 +297,7 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
             <textarea
               ref={textareaRef}
               className={s.textarea}
-              placeholder="Description (optional) — type / to insert a skill"
+              placeholder={mode === 'ai' ? "Description (optional) — type / to insert a skill" : "Description (optional)"}
               value={description}
               onChange={handleDescriptionChange}
               onKeyDown={handleDescriptionKeyDown}
