@@ -349,6 +349,7 @@ export function TaskCard({
                     <span key={p.name} className={s.phaseWrap}>
                       {i > 0 && <span className={s.arrow}>&rarr;</span>}
                       <span className={`${s.phase} ${s[`ph${cap(p.status)}`]} ${s[`pn${cap(p.name)}`] || ''}`}>
+                        {p.status === 'completed' && <span style={{ color: 'var(--green)', marginRight: 3 }}>&#10003;</span>}
                         {p.name}
                       </span>
                     </span>
@@ -357,11 +358,14 @@ export function TaskCard({
               )}
               {job.question && <div className={s.errorMsg}>{job.question}</div>}
               <div className={s.failActions}>
-                {onContinue && job.phases?.some(p => p.status === 'completed') && (
-                  <button className="btn btnPrimary btnSm" onClick={() => onContinue(job.id)}>
-                    Continue
-                  </button>
-                )}
+                {onContinue && job.phases?.some(p => p.status === 'completed') && (() => {
+                  const nextPhase = job.phases?.find(p => p.status !== 'completed');
+                  return (
+                    <button className="btn btnPrimary btnSm" onClick={() => onContinue(job.id)}>
+                      Retry {nextPhase?.name || 'next step'}
+                    </button>
+                  );
+                })()}
                 {canRunAi && onRun && (!task.assignee || task.assignee.type === 'ai') && (
                   <button className="btn btnDanger btnSm" onClick={() => onRun(task.id)}>
                     Restart
