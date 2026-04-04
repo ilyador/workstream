@@ -327,7 +327,7 @@
 .gateIcon {
   font-size: 14px;
   flex-shrink: 0;
-  color: var(--amber);
+  color: var(--text-3);
   line-height: 1;
 }
 
@@ -573,7 +573,7 @@
 /* Gate section */
 .gateSection {
   padding: 8px 10px;
-  background: var(--amber-bg);
+  background: var(--bg-hover);
   border-radius: 6px;
   display: flex;
   flex-direction: column;
