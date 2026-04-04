@@ -495,7 +495,11 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
           // Get project_id from task
           const { data: taskRow } = await supabase.from('tasks').select('project_id').eq('id', ctx.taskId).single();
-          const storagePath = `${taskRow?.project_id}/${ctx.taskId}/${filename}`;
+          if (!taskRow?.project_id) {
+            onLog(`[artifact] Skipping ${filename}: could not resolve project_id\n`);
+            continue;
+          }
+          const storagePath = `${taskRow.project_id}/${ctx.taskId}/${filename}`;
 
           await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
             contentType: mimeType, upsert: true
@@ -1284,7 +1288,11 @@ export async function runJob(ctx: JobContext): Promise<void> {
           const mimeType = mimeMap[ext] || 'application/octet-stream';
 
           const { data: taskRow } = await supabase.from('tasks').select('project_id').eq('id', ctx.taskId).single();
-          const storagePath = `${taskRow?.project_id}/${ctx.taskId}/${filename}`;
+          if (!taskRow?.project_id) {
+            onLog(`[artifact] Skipping ${filename}: could not resolve project_id\n`);
+            continue;
+          }
+          const storagePath = `${taskRow.project_id}/${ctx.taskId}/${filename}`;
 
           await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
             contentType: mimeType, upsert: true

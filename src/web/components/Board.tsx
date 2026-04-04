@@ -179,10 +179,12 @@ export function Board({
         // Dropped at start
         basePosition = targetTasks[0].position - idsToMove.length;
       } else if (dropIdx > 0) {
-        // Dropped between two items
+        // Dropped between two items — ensure all group members fit in the gap
         const before = targetTasks[dropIdx - 1];
         const after = targetTasks[dropIdx];
-        basePosition = (before.position + after.position) / 2 - (idsToMove.length - 1) * 0.001;
+        const gap = after.position - before.position;
+        const spacing = gap / (idsToMove.length + 1);
+        basePosition = before.position + spacing;
       } else {
         // dropBeforeTaskId not found -- drop at end
         const last = targetTasks[targetTasks.length - 1];
@@ -190,9 +192,10 @@ export function Board({
       }
     }
 
-    // Move all tasks in the group with sequential positions
+    // Move all tasks in the group with evenly spaced positions
+    const step = idsToMove.length > 1 ? 0.001 : 0;
     for (let i = 0; i < idsToMove.length; i++) {
-      await onMoveTask(idsToMove[i], targetWsId, basePosition + i * 0.001);
+      await onMoveTask(idsToMove[i], targetWsId, basePosition + i * step);
     }
 
     setDraggedTaskId(null);

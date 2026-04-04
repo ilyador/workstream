@@ -302,11 +302,15 @@ export async function getArtifacts(taskId: string): Promise<Artifact[]> {
 }
 
 export async function uploadArtifact(taskId: string, file: File): Promise<Artifact> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  const base64 = btoa(binary);
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1]); // strip "data:mime;base64," prefix
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
   return apiFetch('/api/artifacts', {
     method: 'POST',
     body: JSON.stringify({

@@ -395,7 +395,7 @@ function IdleDetail({
         </span>
       </div>
 
-      <TaskAttachments taskId={task.id} />
+      <TaskAttachments taskId={task.id} legacyImages={task.images} />
 
       <div className={s.actions}>
         <div className={s.actionsLeft}>
@@ -432,8 +432,18 @@ function IdleDetail({
 }
 
 /** Attachments section using artifacts API */
-function TaskAttachments({ taskId }: { taskId: string }) {
+function TaskAttachments({ taskId, legacyImages }: { taskId: string; legacyImages?: string[] }) {
   const { artifacts, upload, remove } = useArtifacts(taskId);
+  // Include legacy task.images as read-only artifacts for backward compat
+  const legacyArtifacts = (legacyImages || []).map((url, i) => ({
+    id: `legacy-${i}`,
+    url,
+    filename: url.split('/').pop() || `image-${i + 1}`,
+    mime_type: 'image/*',
+    size_bytes: 0,
+    isLegacy: true,
+  }));
+  const allFiles = [...artifacts.map(a => ({ ...a, isLegacy: false })), ...legacyArtifacts];
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = (e: React.DragEvent) => {
@@ -463,13 +473,13 @@ function TaskAttachments({ taskId }: { taskId: string }) {
   return (
     <div className={s.attachments}>
       <div className={s.attachmentsHeader}>
-        <span>Attachments{artifacts.length > 0 ? ` (${artifacts.length})` : ''}</span>
+        <span>Attachments{allFiles.length > 0 ? ` (${allFiles.length})` : ''}</span>
         <button className={s.attachAddBtn} onClick={() => fileInputRef.current?.click()}>+ Add</button>
         <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileSelect} />
       </div>
-      {artifacts.length > 0 ? (
+      {allFiles.length > 0 ? (
         <div className={s.attachList} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
-          {artifacts.map(a => (
+          {allFiles.map(a => (
             <div key={a.id} className={s.attachItem}>
               {a.mime_type.startsWith('image/') ? (
                 <a href={a.url} target="_blank" rel="noopener noreferrer">
@@ -480,9 +490,9 @@ function TaskAttachments({ taskId }: { taskId: string }) {
               )}
               <div className={s.attachInfo}>
                 <a href={a.url} target="_blank" rel="noopener noreferrer" className={s.attachName}>{a.filename}</a>
-                <span className={s.attachSize}>{formatSize(a.size_bytes)}</span>
+                {a.size_bytes > 0 && <span className={s.attachSize}>{formatSize(a.size_bytes)}</span>}
               </div>
-              <button className={s.attachDelete} onClick={() => remove(a.id)} title="Remove">&times;</button>
+              {!a.isLegacy && <button className={s.attachDelete} onClick={() => remove(a.id)} title="Remove">&times;</button>}
             </div>
           ))}
         </div>
