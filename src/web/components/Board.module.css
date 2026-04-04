@@ -19,17 +19,17 @@
 @media (max-width: 768px) {
   .board {
     gap: 12px;
-    padding: 10px 8px;
+    padding: 10px 12px;
     height: calc(100dvh - 48px);
     scroll-snap-type: x mandatory;
   }
   .addColumn {
-    flex: 0 0 calc(100vw - 24px);
-    min-width: calc(100vw - 24px);
+    flex: 0 0 calc(100vw - 32px);
+    min-width: calc(100vw - 32px);
     scroll-snap-align: start;
   }
   .addForm {
-    min-width: calc(100vw - 24px);
+    min-width: calc(100vw - 32px);
     scroll-snap-align: start;
   }
 }

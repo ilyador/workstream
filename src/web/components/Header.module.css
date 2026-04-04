@@ -39,13 +39,17 @@
 }
 
 @media (max-width: 768px) {
-  .bar { padding: 0 12px; height: 48px; }
-  .left, .right { gap: 8px; }
-  .logo { font-size: 14px; }
+  .bar { padding: 0 10px; height: 48px; gap: 4px; }
+  .left { gap: 4px; flex: 1; min-width: 0; overflow-x: auto; }
+  .right { gap: 4px; flex-shrink: 0; }
+  .logo { font-size: 13px; flex-shrink: 0; }
   .sep { display: none; }
   .localPath { display: none; }
-  .headerNav { margin-left: 4px; gap: 0; }
-  .navLink, .navLinkActive { font-size: 12px; padding: 3px 6px; }
+  .project { font-size: 13px; padding: 3px 4px; flex-shrink: 0; }
+  .headerNav { margin-left: 2px; gap: 0; flex-shrink: 0; }
+  .navLink, .navLinkActive { font-size: 11px; padding: 3px 5px; white-space: nowrap; }
+  .icon, .themeToggle { padding: 6px; }
+  .avatar { width: 26px; height: 26px; font-size: 10px; }
 }
 .logo {
   font-size: 16px;

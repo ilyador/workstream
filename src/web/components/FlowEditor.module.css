@@ -689,13 +689,13 @@
 @media (max-width: 768px) {
   .board {
     gap: 12px;
-    padding: 10px 8px;
+    padding: 10px 12px;
     height: calc(100dvh - 48px);
     scroll-snap-type: x mandatory;
   }
   .column {
-    flex: 0 0 calc(100vw - 24px);
-    min-width: calc(100vw - 24px);
+    flex: 0 0 calc(100vw - 32px);
+    min-width: calc(100vw - 32px);
     max-width: none;
     max-height: calc(100dvh - 80px);
     border-radius: 10px;
@@ -708,12 +708,12 @@
     font-size: 13px;
   }
   .steps {
-    padding: 6px 6px;
+    padding: 6px 8px;
     gap: 4px;
   }
   .addColumn {
-    flex: 0 0 calc(100vw - 24px);
-    min-width: calc(100vw - 24px);
+    flex: 0 0 calc(100vw - 32px);
+    min-width: calc(100vw - 32px);
     scroll-snap-align: start;
   }
   .stepCompact {
@@ -721,12 +721,44 @@
   }
   .stepBody {
     padding: 0 10px 12px;
+    gap: 10px;
   }
   .stepName {
     font-size: 13px;
   }
+  .segmented {
+    flex-wrap: nowrap;
+  }
+  .segmentedBtn {
+    font-size: 12px;
+    padding: 6px 4px;
+  }
+  .checkboxGrid {
+    gap: 4px 10px;
+  }
+  .checkboxLabel {
+    font-size: 11px;
+  }
+  .chipGrid {
+    gap: 4px;
+  }
+  .chip {
+    font-size: 10px;
+    padding: 2px 7px;
+  }
   .gateRow {
     flex-direction: column;
     gap: 8px;
+  }
+  .label {
+    font-size: 10px;
+  }
+  .input, .textarea, .select {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+  .mdPreview, .mdPreviewEmpty {
+    font-size: 12px;
+    padding: 6px 8px;
   }
 }
