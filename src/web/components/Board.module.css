@@ -18,9 +18,13 @@
 
 @media (max-width: 768px) {
   .board {
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     gap: 12px;
-    padding: 58px 12px 0;
-    min-height: calc(100dvh - 48px);
+    padding: 10px 12px 0;
     height: auto;
     scroll-snap-type: x mandatory;
     scroll-padding: 0 12px;
