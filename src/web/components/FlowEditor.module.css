@@ -537,26 +537,30 @@
   gap: 5px;
 }
 .chip {
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: 14px;
   font-size: 11px;
   font-weight: 500;
   border: 1.5px solid var(--divider);
   background: var(--white);
-  color: var(--text-3);
+  color: var(--text-4);
   cursor: pointer;
-  transition: all 0.12s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
   user-select: none;
 }
 .chip:hover {
-  border-color: var(--text-4);
+  border-color: rgba(37, 99, 235, 0.2);
   color: var(--text-2);
+  background: var(--blue-bg);
 }
 .chipActive {
   background: var(--blue-bg);
-  border-color: rgba(37, 99, 235, 0.25);
+  border-color: rgba(37, 99, 235, 0.3);
   color: var(--blue);
-  font-weight: 600;
+}
+.chipActive:hover {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.4);
 }
 
 /* Inline row for toggles */
