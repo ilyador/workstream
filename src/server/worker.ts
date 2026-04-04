@@ -179,7 +179,7 @@ async function startJob(job: any): Promise<void> {
 
   // Determine fresh start vs resume
   const phasesAlreadyCompleted: any[] = (job.phases_completed as any[]) || [];
-  const isResume = phasesAlreadyCompleted.length > 0 && job.answer != null;
+  const isResume = phasesAlreadyCompleted.length > 0;
 
   // Create checkpoint for fresh starts only
   if (!isResume) {

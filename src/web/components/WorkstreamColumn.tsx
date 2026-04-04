@@ -74,6 +74,7 @@ interface WorkstreamColumnProps {
   onReject?: (jobId: string) => void;
   onRework?: (jobId: string, note: string) => void;
   onDeleteJob?: (jobId: string) => void;
+  onContinue?: (jobId: string) => void;
   onCreatePr?: () => void;
   onArchive?: () => void;
 }
@@ -114,6 +115,7 @@ export function WorkstreamColumn({
   onReject,
   onRework,
   onDeleteJob,
+  onContinue,
   onCreatePr,
   onArchive,
 }: WorkstreamColumnProps) {
@@ -759,6 +761,7 @@ export function WorkstreamColumn({
                             onReject={onReject}
                             onRework={onRework}
                             onDeleteJob={onDeleteJob}
+                    onContinue={onContinue}
                             onDragStart={handleGroupDragStart}
                             onDragEnd={handleGroupDragEnd}
                             isDragging={isGroupDragging}
@@ -811,6 +814,7 @@ export function WorkstreamColumn({
                     onReject={onReject}
                     onRework={onRework}
                     onDeleteJob={onDeleteJob}
+                    onContinue={onContinue}
                     onDragStart={() => onDragTaskStart(task.id)}
                     onDragEnd={onDragTaskEnd}
                     isDragging={draggedTaskId === task.id}

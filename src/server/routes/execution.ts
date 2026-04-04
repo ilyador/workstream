@@ -107,7 +107,9 @@ executionRouter.get('/api/jobs/:id/events', async (req, res) => {
   res.write('retry: 3000\n\n');
   res.write(`event: connected\ndata: ${JSON.stringify({ status: 'ok' })}\n\n`);
 
-  let lastId = parseInt(req.headers['last-event-id'] as string) || 0;
+  const { data: jobRow } = await supabase.from('jobs').select('log_offset').eq('id', jobId).single();
+  const offset = jobRow?.log_offset || 0;
+  let lastId = parseInt(req.headers['last-event-id'] as string) || offset;
   let closed = false;
 
   const pollInterval = setInterval(async () => {
@@ -168,6 +170,32 @@ executionRouter.post('/api/jobs/:id/reply', requireAuth, async (req, res) => {
   // Mark job queued with answer — worker picks it up
   await supabase.from('jobs').update({ status: 'queued', answer }).eq('id', jobId);
   await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', task.id);
+
+  res.json({ ok: true });
+});
+
+// Continue a failed job from last completed phase
+executionRouter.post('/api/jobs/:id/continue', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+
+  const { data: job } = await supabase.from('jobs').select('*').eq('id', jobId).single();
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  if (job.status !== 'failed') return res.status(400).json({ error: 'Job is not failed' });
+
+  const phasesCompleted = job.phases_completed || [];
+  if (phasesCompleted.length === 0) return res.status(400).json({ error: 'No completed phases to continue from' });
+
+  const { data: maxLog } = await supabase.from('job_logs').select('id').eq('job_id', jobId).order('id', { ascending: false }).limit(1).single();
+  const logOffset = maxLog?.id || 0;
+
+  await supabase.from('jobs').update({ status: 'queued', question: null, log_offset: logOffset }).eq('id', jobId);
+  await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', job.task_id);
+
+  await supabase.from('job_logs').insert({
+    job_id: jobId,
+    event: 'log',
+    data: { text: `[continue] Resuming from phase ${phasesCompleted.length + 1} (${phasesCompleted.length} phases already completed)` },
+  });
 
   res.json({ ok: true });
 });

@@ -10,7 +10,7 @@ import { useCommentCounts } from './hooks/useCommentCounts';
 import { useWebNotifications } from './hooks/useWebNotifications';
 import { useFlows } from './hooks/useFlows';
 import { useCustomTypes } from './hooks/useCustomTypes';
-import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, reworkJob, revertJob, terminateJob, deleteJob, updateTask, reviewAndCreatePr } from './lib/api';
+import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, reworkJob, revertJob, terminateJob, deleteJob, continueJob, updateTask, reviewAndCreatePr } from './lib/api';
 import { Routes, Route, useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
@@ -435,6 +435,15 @@ export default function App() {
                 jobs.reload();
               } catch (err: any) {
                 await modal.alert('Error', err.message || 'Failed to dismiss job');
+              }
+            }}
+            onContinue={async (jobId) => {
+              try {
+                await continueJob(jobId);
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                await modal.alert('Error', err.message || 'Failed to continue job');
               }
             }}
             onCreatePr={async (workstreamId) => {

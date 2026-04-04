@@ -450,6 +450,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
           output: output.substring(0, 10000),
         };
         phasesCompleted.push(phaseOutput);
+        await supabase.from('jobs').update({ phases_completed: phasesCompleted }).eq('id', jobId);
         onPhaseComplete(step.name, phaseOutput);
 
         // Check if claude asked a question
@@ -1191,6 +1192,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
           output: output.substring(0, 10000), // Cap output size
         };
         phasesCompleted.push(phaseOutput);
+        await supabase.from('jobs').update({ phases_completed: phasesCompleted }).eq('id', jobId);
         onPhaseComplete(phase, phaseOutput);
 
         // Check if claude asked a question (simple heuristic: ends with ?)

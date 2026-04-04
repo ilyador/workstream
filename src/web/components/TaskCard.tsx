@@ -46,6 +46,7 @@ interface TaskCardProps {
   onReject?: (jobId: string) => void;
   onRework?: (jobId: string, note: string) => void;
   onDeleteJob?: (jobId: string) => void;
+  onContinue?: (jobId: string) => void;
   onDragStart?: (e?: React.DragEvent) => void;
   onDragEnd?: () => void;
   isDragging?: boolean;
@@ -83,6 +84,7 @@ export function TaskCard({
   onReject,
   onRework,
   onDeleteJob,
+  onContinue,
   onDragStart,
   onDragEnd,
   isDragging,
@@ -341,8 +343,25 @@ export function TaskCard({
           {/* FAILED */}
           {jobStatus === 'failed' && job && (
             <div className={s.failedSection}>
+              {job.phases && job.phases.length > 0 && (
+                <div className={s.phases}>
+                  {job.phases.map((p, i) => (
+                    <span key={p.name} className={s.phaseWrap}>
+                      {i > 0 && <span className={s.arrow}>&rarr;</span>}
+                      <span className={`${s.phase} ${s[`ph${cap(p.status)}`]} ${s[`pn${cap(p.name)}`] || ''}`}>
+                        {p.name}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
               {job.question && <div className={s.errorMsg}>{job.question}</div>}
               <div className={s.failActions}>
+                {onContinue && job.phases?.some(p => p.status === 'completed') && (
+                  <button className="btn btnPrimary btnSm" onClick={() => onContinue(job.id)}>
+                    Continue
+                  </button>
+                )}
                 {canRunAi && onRun && (!task.assignee || task.assignee.type === 'ai') && (
                   <button className="btn btnDanger btnSm" onClick={() => onRun(task.id)}>
                     Restart

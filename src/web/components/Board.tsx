@@ -63,6 +63,7 @@ interface BoardProps {
   onReject: (jobId: string) => void;
   onRework: (jobId: string, note: string) => void;
   onDeleteJob: (jobId: string) => void;
+  onContinue: (jobId: string) => void;
   onCreatePr: (workstreamId: string) => void;
 }
 
@@ -94,6 +95,7 @@ export function Board({
   onReject,
   onRework,
   onDeleteJob,
+  onContinue,
   onCreatePr,
 }: BoardProps) {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -302,6 +304,7 @@ export function Board({
         onReject={onReject}
         onRework={onRework}
         onDeleteJob={onDeleteJob}
+          onContinue={onContinue}
       />
 
       {/* Workstream columns */}
@@ -343,6 +346,7 @@ export function Board({
           onReject={onReject}
           onRework={onRework}
           onDeleteJob={onDeleteJob}
+          onContinue={onContinue}
           onCreatePr={() => onCreatePr(ws.id)}
           onArchive={async () => {
             try {

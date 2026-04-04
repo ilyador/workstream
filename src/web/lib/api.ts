@@ -228,6 +228,10 @@ export async function terminateJob(jobId: string) {
   return apiFetch(`/api/jobs/${jobId}/terminate`, { method: 'POST' });
 }
 
+export async function continueJob(jobId: string) {
+  return apiFetch(`/api/jobs/${jobId}/continue`, { method: 'POST' });
+}
+
 export async function deleteJob(jobId: string) {
   return apiFetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
 }
