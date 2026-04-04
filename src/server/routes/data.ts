@@ -749,13 +749,18 @@ const VERIFY_STEP = {
 - Do NOT attempt to fix failing tests.
 - Report what passed and what failed.
 
-Run the test suite and verify the changes work.
+CRITICAL — when tests fail, you MUST determine if the failure is caused by THIS task's changes:
+1. Run \`git diff HEAD\` to see what was changed.
+2. Look at the failing test — is it testing code that was modified? Is the error related to the changes?
+3. Based on this analysis:
+   - RELATED failure (test fails because of code this task changed): report passed: false
+   - UNRELATED or UNSURE: ask the user "Test X failed. It appears unrelated to this task's changes because [reason]. Should I treat this as a failure?" — this will pause the job for your input. Do NOT auto-pass or auto-fail.
 
 IMPORTANT: You MUST end your response with a JSON verdict block:
 \`\`\`json
 {"passed": true}
 \`\`\`
-or if tests fail:
+or ONLY if tests fail DUE TO THIS TASK'S CHANGES:
 \`\`\`json
 {"passed": false, "reason": "Brief description of what failed"}
 \`\`\``,
