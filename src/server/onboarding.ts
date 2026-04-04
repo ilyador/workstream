@@ -20,23 +20,23 @@ function run(cmd: string, args: string[] = []): { ok: boolean; output: string } 
 export async function runChecks(localPath?: string): Promise<Check[]> {
   const checks: Check[] = [];
 
-  // Claude Code
-  const claude = run('which', ['claude']);
+  // Opencode Code
+  const opencode = run('which', ['opencode']);
   checks.push({
-    id: 'claude',
-    label: 'Claude Code',
-    ok: claude.ok,
-    help: 'Install Claude Code: https://claude.com/download',
+    id: 'opencode',
+    label: 'Opencode Code',
+    ok: opencode.ok,
+    help: 'Install Opencode Code: https://opencode.com/download',
     required: true,
   });
 
-  if (claude.ok) {
-    const ver = run('claude', ['--version']);
+  if (opencode.ok) {
+    const ver = run('opencode', ['--version']);
     checks.push({
-      id: 'claude-auth',
-      label: 'Claude Code authenticated',
+      id: 'opencode-auth',
+      label: 'Opencode Code authenticated',
       ok: ver.ok,
-      help: 'Run `claude` in your terminal and log in with your Anthropic account',
+      help: 'Run `opencode` in your terminal and log in with your Anthropic account',
       required: true,
     });
   }

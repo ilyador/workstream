@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-black.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-black.svg)](https://react.dev/)
-[![Claude Code](https://img.shields.io/badge/Claude_Code-Powered-black.svg)](https://claude.ai/)
+[![Opencode Code](https://img.shields.io/badge/Opencode_Code-Powered-black.svg)](https://opencode.ai/)
 
 > A task manager where the tasks do themselves.
 
@@ -30,7 +30,7 @@ But those are just defaults. Build your own: an AI designer that generates layou
 4. Each completed task is auto-committed to the stream's branch
 5. When the stream is done, click **Create PR**
 
-Workers only get the context they need. The execute step gets your CLAUDE.md, skills, and project files. The verify step gets "run tests" and nothing else (~200 tokens). The review step gets the git diff and architecture docs -- fresh eyes that never saw the implementation. Roughly half the tokens of sending everything everywhere.
+Workers only get the context they need. The execute step gets your OPENCODE.md, skills, and project files. The verify step gets "run tests" and nothing else (~200 tokens). The review step gets the git diff and architecture docs -- fresh eyes that never saw the implementation. Roughly half the tokens of sending everything everywhere.
 
 ## What Else
 
@@ -41,7 +41,7 @@ Workers only get the context they need. The execute step gets your CLAUDE.md, sk
 - **Skills** -- type `/skillname` in descriptions to inject methodologies
 - **Realtime** -- watch workers execute live, push notifications when done
 - **Telegram bot** -- create tasks from your phone, check status from bed
-- **MCP server** -- 9 tools for interacting from Claude Code CLI
+- **MCP server** -- 9 tools for interacting from Opencode Code CLI
 - **RAG** -- local embeddings via LM Studio for doc search in worker context
 
 ## Two Ways to Run
@@ -68,7 +68,7 @@ Browser <-> Express API <-> Supabase (Postgres)
                               ^
                           Worker polls for jobs
                               |
-                          Claude Code CLI
+                          Opencode Code CLI
 ```
 
 ## Tech Stack
@@ -76,7 +76,7 @@ Browser <-> Express API <-> Supabase (Postgres)
 **Frontend:** React 19, Vite 8, TypeScript, CSS Modules
 **Backend:** Express 5, tsx
 **Database:** Supabase (Postgres, Auth, RLS, Realtime)
-**AI:** Claude Code CLI, MCP SDK
+**AI:** Opencode Code CLI, MCP SDK
 **Embeddings:** LM Studio (local, optional)
 
 ## License

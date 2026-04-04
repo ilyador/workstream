@@ -131,11 +131,11 @@ async function buildStepPrompt(
 
   for (const source of step.context_sources) {
     switch (source) {
-      case 'claude_md': {
-        const claudeMdPath = join(localPath, 'CLAUDE.md');
-        if (existsSync(claudeMdPath)) {
-          const content = readFileSync(claudeMdPath, 'utf-8');
-          prompt += `## Project Context (from CLAUDE.md)\n${content.substring(0, 8000)}\n\n`;
+      case 'opencode_md': {
+        const opencodeMdPath = join(localPath, 'OPENCODE.md');
+        if (existsSync(opencodeMdPath)) {
+          const content = readFileSync(opencodeMdPath, 'utf-8');
+          prompt += `## Project Context (from OPENCODE.md)\n${content.substring(0, 8000)}\n\n`;
         }
         break;
       }
@@ -359,7 +359,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
       const prompt = await buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer);
 
-      // Build claude args
+      // Build opencode args
       const args = ['-p', '--verbose', '--output-format', 'stream-json'];
       if (step.tools.length > 0) {
         args.push('--allowedTools', step.tools.join(','));
@@ -373,7 +373,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
       onLog(`\n--- Step: ${step.name} (attempt ${attempt}/${maxAttempts}) ---\n`);
 
       try {
-        const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
+        const output = await spawnOpencode(jobId, args, localPath, onLog, prompt);
 
         const phaseOutput = {
           phase: step.name,
@@ -383,7 +383,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         phasesCompleted.push(phaseOutput);
         onPhaseComplete(step.name, phaseOutput);
 
-        // Check if claude asked a question
+        // Check if opencode asked a question
         // Filter out RULES/instruction lines to avoid false-positive pause detection
         const candidateLines = output.trim().split('\n').slice(-5).filter(l => {
           const trimmed = l.trim();
@@ -690,12 +690,12 @@ function loadTaskTypeConfig(localPath: string, taskType: string): TaskTypeConfig
 }
 
 async function buildPrompt(phase: string, task: any, previousOutputs: any[], localPath: string, phaseConfig: PhaseConfig, taskType: TaskTypeConfig, answer?: string): Promise<string> {
-  // Inject project context from CLAUDE.md if it exists
+  // Inject project context from OPENCODE.md if it exists
   let projectContext = '';
-  const claudeMdPath = join(localPath, 'CLAUDE.md');
-  if (existsSync(claudeMdPath)) {
-    const content = readFileSync(claudeMdPath, 'utf-8');
-    projectContext = `## Project Context (from CLAUDE.md)\n${content.substring(0, 8000)}\n\n`;
+  const opencodeMdPath = join(localPath, 'OPENCODE.md');
+  if (existsSync(opencodeMdPath)) {
+    const content = readFileSync(opencodeMdPath, 'utf-8');
+    projectContext = `## Project Context (from OPENCODE.md)\n${content.substring(0, 8000)}\n\n`;
   }
 
   let prompt = `You are working on a task in this project's codebase.
@@ -874,8 +874,8 @@ or if issues found:
   // Feature 4: Skill field injection — read actual skill file if available
   if (phaseConfig.skill) {
     const skillPaths = [
-      join(localPath, '.claude', 'skills', phaseConfig.skill, 'SKILL.md'),
-      join(localPath, '.claude', 'commands', phaseConfig.skill + '.md'),
+      join(localPath, '.opencode', 'skills', phaseConfig.skill, 'SKILL.md'),
+      join(localPath, '.opencode', 'commands', phaseConfig.skill + '.md'),
     ];
     let skillContent: string | null = null;
     for (const sp of skillPaths) {
@@ -941,7 +941,7 @@ interface PhaseVerdict {
   reason: string;
 }
 
-/** Extract the last JSON verdict block from Claude's output. */
+/** Extract the last JSON verdict block from Opencode's output. */
 function extractVerdict(output: string): PhaseVerdict | null {
   const fenced = /```(?:json)?\s*(\{[\s\S]*?\})\s*```/g;
   let last: PhaseVerdict | null = null;
@@ -989,8 +989,8 @@ function legacyReviewCheck(output: string): boolean {
   return (hasIssues || hasFail) && !excluded;
 }
 
-/** Shared env for spawned claude processes. Ensures PATH includes ~/.local/bin for systemd. */
-export const claudeEnv = {
+/** Shared env for spawned opencode processes. Ensures PATH includes ~/.local/bin for systemd. */
+export const opencodeEnv = {
   ...process.env,
   TERM: 'dumb',
   PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}`,
@@ -1123,7 +1123,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
       const prompt = await buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
 
-      // Spawn claude -p (prompt piped via stdin to avoid arg length limits)
+      // Spawn opencode -p (prompt piped via stdin to avoid arg length limits)
       const args = ['-p', '--verbose', '--output-format', 'stream-json'];
       if (phaseConfig.tools.length > 0) {
         args.push('--allowedTools', phaseConfig.tools.join(','));
@@ -1148,7 +1148,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
       onLog(`\n--- Phase: ${phase} (attempt ${attempt}/${maxAttempts}) ---\n`);
 
       try {
-        const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
+        const output = await spawnOpencode(jobId, args, localPath, onLog, prompt);
 
         const phaseOutput = {
           phase,
@@ -1158,7 +1158,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
         phasesCompleted.push(phaseOutput);
         onPhaseComplete(phase, phaseOutput);
 
-        // Check if claude asked a question (simple heuristic: ends with ?)
+        // Check if opencode asked a question (simple heuristic: ends with ?)
         const lastLines = output.trim().split('\n').slice(-3).join('\n');
         if (lastLines.includes('?') && (lastLines.includes('Should I') || lastLines.includes('Could you') || lastLines.includes('Which') || lastLines.includes('clarif'))) {
           await supabase.from('jobs').update({
@@ -1183,7 +1183,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
             if (jumpIndex >= 0 && jumpIndex < i) {
               onLog(`\nVerify failed: ${reason}. Jumping back to '${jumpTarget}'...\n`);
               completedPhaseNames.delete(jumpTarget);
-              // Remove stale phase output so Claude doesn't see duplicate context
+              // Remove stale phase output so Opencode doesn't see duplicate context
               for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
                 if (phasesCompleted[pi].phase === jumpTarget) { phasesCompleted.splice(pi, 1); break; }
               }
@@ -1221,7 +1221,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
             if (jumpIndex >= 0 && jumpIndex < i) {
               onLog(`\nReview failed: ${reason}. Jumping back to '${jumpTarget}'...\n`);
               completedPhaseNames.delete(jumpTarget);
-              // Remove stale phase output so Claude doesn't see duplicate context
+              // Remove stale phase output so Opencode doesn't see duplicate context
               for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
                 if (phasesCompleted[pi].phase === jumpTarget) { phasesCompleted.splice(pi, 1); break; }
               }
@@ -1371,7 +1371,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
     }
   } catch { /* ignore git errors */ }
 
-  // Generate a clean summary by asking Claude to summarize the phase outputs
+  // Generate a clean summary by asking Opencode to summarize the phase outputs
   let finalSummary = 'Completed';
   try {
     const phaseLog = phasesCompleted.map((p: any) => {
@@ -1463,12 +1463,12 @@ function formatStreamEvent(event: any): string | null {
   return null;
 }
 
-/** Quick claude call for generating summaries. No tools, no streaming, just text in/out. */
+/** Quick opencode call for generating summaries. No tools, no streaming, just text in/out. */
 function generateSummary(prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('claude', ['-p', '--output-format', 'text', '--max-turns', '1', '--model', 'sonnet'], {
+    const proc = spawn('opencode', ['-p', '--output-format', 'text', '--max-turns', '1', '--model', 'sonnet'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: claudeEnv,
+      env: opencodeEnv,
       timeout: 30000,
     });
 
@@ -1478,18 +1478,18 @@ function generateSummary(prompt: string): Promise<string> {
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
     proc.on('close', (code) => {
       if (code === 0 || code === null) resolve(stdout.trim() || 'Completed');
-      else reject(new Error(`summary claude exited with code ${code}`));
+      else reject(new Error(`summary opencode exited with code ${code}`));
     });
     proc.on('error', reject);
   });
 }
 
-function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: string) => void, prompt?: string): Promise<string> {
+function spawnOpencode(jobId: string, args: string[], cwd: string, onLog: (text: string) => void, prompt?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('claude', args, {
+    const proc = spawn('opencode', args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: claudeEnv,
+      env: opencodeEnv,
     });
 
     activeProcesses.set(jobId, proc);
@@ -1550,7 +1550,7 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
         }
       }
       activeProcesses.delete(jobId);
-      // If claude streamed a result event but exited non-zero, treat as success.
+      // If opencode streamed a result event but exited non-zero, treat as success.
       // The CLI sometimes exits 1 after completing successfully (e.g. max turns reached).
       const hasResult = fullOutput.includes('[done] Phase complete');
       if (code === 0 || code === null || hasResult) {
@@ -1561,7 +1561,7 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
           .filter(l => !l.includes('stdin') && !l.includes('Warning'))
           .slice(-10).join('\n');
         const detail = stderrClean ? `\n${stderrClean}` : '';
-        reject(new Error(`claude exited with code ${code}${detail}`));
+        reject(new Error(`opencode exited with code ${code}${detail}`));
       }
     });
 

@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Bot, InlineKeyboard } from 'grammy';
 import { execFile } from 'child_process';
 import { supabase } from './supabase.js';
-import { claudeEnv } from './runner.js';
+import { opencodeEnv } from './runner.js';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -85,12 +85,12 @@ async function buildProjectSummary(projectId: string): Promise<string> {
   return md;
 }
 
-function askClaude(systemPrompt: string, userMessage: string): Promise<string> {
+function askOpencode(systemPrompt: string, userMessage: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = execFile('claude', ['-p', '--output-format', 'text', '--max-turns', '3'], {
+    const proc = execFile('opencode', ['-p', '--output-format', 'text', '--max-turns', '3'], {
       timeout: 120000,
       maxBuffer: 1024 * 1024,
-      env: claudeEnv,
+      env: opencodeEnv,
     }, (err, stdout) => {
       if (err) reject(err);
       else resolve(stdout.trim());
@@ -271,7 +271,7 @@ bot.on('message:text', async (ctx) => {
     const summary = await buildProjectSummary(projectId);
     const systemPrompt = buildSystemPrompt(project?.name || 'Unknown', summary);
 
-    const response = await askClaude(systemPrompt, userMsg);
+    const response = await askOpencode(systemPrompt, userMsg);
     const { text, actions } = parseActions(response);
 
     // Execute actions

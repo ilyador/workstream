@@ -83,7 +83,7 @@ declare
   -- Shared verify/review instructions
   verify_instr text := E'RULES:\n- Run the test suite. Do nothing else.\n- Do NOT modify any files.\n- Do NOT attempt to fix failing tests.\n- Report what passed and what failed.\n\nRun the test suite and verify the changes work.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if tests fail:\n```json\n{"passed": false, "reason": "Brief description of what failed"}\n```';
   review_instr text := E'RULES:\n- Review the git diff only. Do NOT modify files.\n- Check: code quality, architecture alignment, completeness.\n- Compare against review criteria and architecture docs if provided.\n- Focus on real issues, not style nitpicks.\n\nReview the changes made for correctness and quality.\n\nIMPORTANT: You MUST end your response with a JSON verdict block:\n```json\n{"passed": true}\n```\nor if issues found:\n```json\n{"passed": false, "reason": "Brief description of issues"}\n```';
-  exec_ctx text[] := '{"claude_md","agents_md","task_description","skills","task_images","followup_notes"}';
+  exec_ctx text[] := '{"opencode_md","agents_md","task_description","skills","task_images","followup_notes"}';
   verify_ctx text[] := '{"task_description"}';
   review_ctx text[] := '{"task_description","architecture_md","review_criteria","git_diff"}';
 begin

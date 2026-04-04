@@ -100,7 +100,7 @@ export function LiveLogs({ jobId }: { jobId: string }) {
           <span style={{ color: 'var(--text-4)' }}>Waiting for output...</span>
         )}
         {lines.length === 0 && connState === 'open' && (
-          <span className={s.noOutput}>Claude is working... output will appear when the phase completes.</span>
+          <span className={s.noOutput}>Opencode is working... output will appear when the phase completes.</span>
         )}
         {lines.map((line, i) => (
           <div key={i} className={line.type === 'phase' ? s.logPhase : s.logLine}>

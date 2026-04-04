@@ -52,7 +52,7 @@ export function revertToCheckpoint(localPath: string, jobId: string): { reverted
   // Restore all tracked files from the checkpoint
   git(['checkout', ref, '--', '.'], localPath);
 
-  // Remove any new files Claude created that weren't in the checkpoint
+  // Remove any new files Opencode created that weren't in the checkpoint
   // But only files — don't remove directories that might have been there
   try {
     git(['clean', '-fd', '--exclude=.codesync'], localPath);

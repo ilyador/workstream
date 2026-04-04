@@ -14,7 +14,7 @@ interface FlowEditorProps {
 
 const ALL_TOOLS = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'];
 const ALL_CONTEXT_SOURCES = [
-  'claude_md', 'task_description', 'task_images',
+  'opencode_md', 'task_description', 'task_images',
   'skills', 'architecture_md', 'review_criteria', 'followup_notes', 'git_diff', 'rag',
 ];
 const MODEL_OPTIONS = ['opus', 'sonnet'];
@@ -28,7 +28,7 @@ function makeBlankStep(position: number): FlowStep {
     instructions: '',
     model: 'sonnet',
     tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'],
-    context_sources: ['claude_md', 'task_description'],
+    context_sources: ['opencode_md', 'task_description'],
     is_gate: false,
     on_fail_jump_to: null,
     max_retries: 1,

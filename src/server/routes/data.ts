@@ -613,15 +613,15 @@ export function discoverSkills(localPath?: string): SkillInfo[] {
 
   // Project-level commands (highest priority)
   if (localPath) {
-    addFromDir(join(localPath, '.claude', 'commands'), 'project');
+    addFromDir(join(localPath, '.opencode', 'commands'), 'project');
   }
 
   // Global user commands
   const home = homedir();
-  addFromDir(join(home, '.claude', 'commands'), 'global');
+  addFromDir(join(home, '.opencode', 'commands'), 'global');
 
   // Installed plugins
-  const pluginsDir = join(home, '.claude', 'plugins', 'marketplaces');
+  const pluginsDir = join(home, '.opencode', 'plugins', 'marketplaces');
   if (existsSync(pluginsDir)) {
     try {
       for (const marketplace of readdirSync(pluginsDir)) {
@@ -773,7 +773,7 @@ or if issues found:
 \`\`\``,
 };
 
-const EXECUTE_CONTEXT = ['claude_md', 'agents_md', 'task_description', 'skills', 'task_images', 'followup_notes'];
+const EXECUTE_CONTEXT = ['opencode_md', 'agents_md', 'task_description', 'skills', 'task_images', 'followup_notes'];
 
 /** Maps task types to the default flow name that should handle them. */
 export const TYPE_TO_FLOW_NAME: Record<string, string> = {
