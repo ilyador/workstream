@@ -15,7 +15,7 @@
     <script>
       // Apply theme before paint to prevent flash
       (function() {
-        var stored = localStorage.getItem('codesync-theme');
+        var stored = localStorage.getItem('workstream-theme');
         var theme = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.dataset.theme = theme;
       })();
