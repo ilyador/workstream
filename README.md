@@ -5,75 +5,57 @@
 [![React](https://img.shields.io/badge/React-19-black.svg)](https://react.dev/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Powered-black.svg)](https://claude.ai/)
 
-> Hire AI workers. Assign them tasks. Review their PRs.
+> A task manager where the tasks do themselves.
 
-## Your AI Team
+## AI Workers
 
-WorkStream ships with four AI workers, each specialized for a different job:
+WorkStream lets you build AI workers and assign them tasks like you'd assign a teammate. A worker is a composable flow -- a sequence of steps with instructions, model selection, tool access, and context rules. You build them visually, no config files.
 
-| Worker | What it does | Steps |
-|--------|-------------|-------|
-| **AI Developer** | Plans and implements features | implement -> verify -> review |
-| **AI Bug Hunter** | Analyzes and fixes bugs | fix -> verify -> review |
-| **AI Refactorer** | Restructures code without breaking behavior | refactor -> verify -> review |
-| **AI Tester** | Writes test suites | write-tests -> verify -> review |
+Ships with four:
 
-Assign a worker to a task the same way you'd assign a teammate. It reads your codebase, does the work, runs tests, and asks you to review. You approve or reject. That's it.
+- **AI Developer** -- plans and implements features
+- **AI Bug Hunter** -- analyzes and fixes bugs
+- **AI Refactorer** -- restructures code without breaking behavior
+- **AI Tester** -- writes test suites following your existing patterns
 
-Workers are composable flows -- you can edit their instructions, change which AI model they use per step, control what context they see, and create entirely new ones. The flow editor is a visual builder where each worker's pipeline is a sequence of step cards you can customize.
+But those are just defaults. Build your own: an AI designer that generates layouts from Figma screenshots. A copywriter that drafts release notes from your git log. A security auditor that reviews diffs against OWASP. Hook up RAG with local embeddings and your workers can search your docs, specs, and design files before writing a single line of code. The flow editor is visual -- drag steps, toggle models, pick what context each step sees.
 
 <img width="1365" height="1048" alt="Screenshot 2026-04-02 at 14 13 22" src="https://github.com/user-attachments/assets/31876ed3-1adf-48b2-8ad0-09930e60f781" />
 
 ## How It Works
 
 1. Create a **stream** -- a sequence of tasks that lead to a feature
-2. Assign each task to an **AI worker** or a human teammate
-3. Click **Run** -- the worker reads your codebase, implements the task, runs tests
+2. Assign each task to an **AI worker** or a human
+3. Click **Run** -- the worker reads your codebase, does the work, runs tests
 4. Each completed task is auto-committed to the stream's branch
 5. When the stream is done, click **Create PR**
 
-## Token-Efficient by Design
-
-Each worker step only gets the context it actually needs:
-
-- **Execute step**: CLAUDE.md, task description, skills, images -- full project context
-- **Verify step**: just "run the tests" -- ~200 tokens instead of ~15,000
-- **Review step**: git diff + architecture docs -- fresh eyes, never saw the implementation
-
-This cuts token usage roughly in half compared to sending everything to every step.
+Workers only get the context they need. The execute step gets your CLAUDE.md, skills, and project files. The verify step gets "run tests" and nothing else (~200 tokens). The review step gets the git diff and architecture docs -- fresh eyes that never saw the implementation. Roughly half the tokens of sending everything everywhere.
 
 ## What Else
 
-- **Pause & resume** -- worker pauses when stuck, you answer inline, it continues
-- **Auto-revert** -- git checkpoint before each task, auto-rollback on failure
-- **Git worktrees** -- each stream gets its own branch, your main stays clean
-- **Human tasks** -- assign to a person for design reviews, QA, manual work
-- **Skills** -- type `/skillname` in task descriptions to inject methodologies
+- **Pause & resume** -- workers pause when stuck, you answer inline, they continue
+- **Auto-revert** -- git checkpoint before each task, rolls back on failure
+- **Git worktrees** -- each stream gets its own branch, main stays clean
+- **Human tasks** -- assign to people for design reviews, QA, manual work
+- **Skills** -- type `/skillname` in descriptions to inject methodologies
 - **Realtime** -- watch workers execute live, push notifications when done
-- **Telegram bot** -- create tasks and check status from your phone
+- **Telegram bot** -- create tasks from your phone, check status from bed
 - **MCP server** -- 9 tools for interacting from Claude Code CLI
-- **Team roles** -- admin, dev, manager (managers can't trigger AI execution)
+- **RAG** -- local embeddings via LM Studio for doc search in worker context
 
 ## Two Ways to Run
 
-**Locally** -- run on your machine, sync through Supabase. Good for solo devs.
+**Locally** -- on your machine, sync through Supabase. Solo dev with an AI partner.
 
-**On a VPS** -- AI workers grind tasks 24/7 while you sleep. Good for teams.
+**On a VPS** -- AI workers grind 24/7 while you sleep. Teams and background automation.
 
 ## Quick Start
 
 ```bash
 git clone git@github.com:ilyador/workstream.git
-cd workstream
-pnpm install
-cp .env.example .env
-
-npx supabase start
-npx supabase db reset
-
-# Fill .env with keys from:
-npx supabase status
-
+cd workstream && pnpm install && cp .env.example .env
+npx supabase start && npx supabase db reset
 pnpm dev
 ```
 
@@ -89,17 +71,13 @@ Browser <-> Express API <-> Supabase (Postgres)
                           Claude Code CLI
 ```
 
-- **Express server** -- stateless HTTP/SSE, restarts don't affect running jobs
-- **Worker process** -- polls DB for queued jobs, spawns `claude -p`, streams logs
-- **Supabase** -- auth, DB, RLS policies, realtime (local Docker or cloud)
-
 ## Tech Stack
 
 **Frontend:** React 19, Vite 8, TypeScript, CSS Modules
 **Backend:** Express 5, tsx
 **Database:** Supabase (Postgres, Auth, RLS, Realtime)
 **AI:** Claude Code CLI, MCP SDK
-**Bot:** grammy (Telegram)
+**Embeddings:** LM Studio (local, optional)
 
 ## License
 
