@@ -90,6 +90,7 @@ export default function App() {
   const modal = useModal();
   const [searchParams, setSearchParams] = useSearchParams();
   const focusTaskId = searchParams.get('task');
+  const focusWsId = searchParams.get('ws');
 
   // Compute which tasks have unread @mentions
   const mentionedTaskIds = useMemo(() => {
@@ -100,13 +101,13 @@ export default function App() {
     return ids;
   }, [notifs.notifications]);
 
-  // Clear ?task= param after a short delay so it doesn't stick
+  // Clear ?task= and ?ws= params after a short delay so they don't stick
   useEffect(() => {
-    if (focusTaskId) {
+    if (focusTaskId || focusWsId) {
       const timer = setTimeout(() => setSearchParams({}, { replace: true }), 1000);
       return () => clearTimeout(timer);
     }
-  }, [focusTaskId, setSearchParams]);
+  }, [focusTaskId, focusWsId, setSearchParams]);
 
   // Build a task-title lookup from all tasks
   const taskTitleMap = useMemo(() => {
@@ -308,6 +309,7 @@ export default function App() {
             mentionedTaskIds={mentionedTaskIds}
             commentCounts={commentCounts.counts}
             focusTaskId={focusTaskId}
+            focusWsId={focusWsId}
             onCreateWorkstream={async (name, description, has_code) => {
               await workstreams.createWorkstream(name, description, has_code);
             }}

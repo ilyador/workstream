@@ -43,6 +43,7 @@ interface BoardProps {
   mentionedTaskIds: Set<string>;
   commentCounts: Record<string, number>;
   focusTaskId: string | null;
+  focusWsId?: string | null;
   // Workstream actions
   onCreateWorkstream: (name: string, description?: string, has_code?: boolean) => Promise<void>;
   onUpdateWorkstream: (id: string, data: Record<string, unknown>) => Promise<void>;
@@ -76,6 +77,7 @@ export function Board({
   mentionedTaskIds,
   commentCounts,
   focusTaskId,
+  focusWsId,
   onCreateWorkstream,
   onUpdateWorkstream,
   onDeleteWorkstream,
@@ -316,6 +318,7 @@ export function Board({
           mentionedTaskIds={mentionedTaskIds}
         commentCounts={commentCounts}
           focusTaskId={focusTaskId}
+          focusWsId={focusWsId}
           draggedTaskId={draggedTaskId}
           draggedGroupIds={draggedGroupIds}
           draggedWsId={draggedWsId}

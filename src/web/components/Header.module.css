@@ -45,7 +45,7 @@
   }
   .left { gap: 4px; flex: 1; min-width: 0; }
   .right { gap: 4px; flex-shrink: 0; }
-  .logo { font-size: 13px; flex-shrink: 0; }
+  .logo { display: none; }
   .sep { display: none; }
   .localPath { display: none; }
   .project { font-size: 13px; padding: 3px 4px; flex-shrink: 0; }

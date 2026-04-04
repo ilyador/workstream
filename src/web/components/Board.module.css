@@ -19,9 +19,11 @@
 @media (max-width: 768px) {
   .board {
     gap: 12px;
-    padding: 58px 12px 10px;
-    height: 100dvh;
+    padding: 58px 12px 0;
+    min-height: calc(100dvh - 48px);
+    height: auto;
     scroll-snap-type: x mandatory;
+    scroll-padding: 0 12px;
   }
   .addColumn {
     flex: 0 0 calc(100vw - 24px);

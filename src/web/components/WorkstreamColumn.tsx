@@ -44,6 +44,7 @@ interface WorkstreamColumnProps {
   mentionedTaskIds: Set<string>;
   commentCounts?: Record<string, number>;
   focusTaskId: string | null;
+  focusWsId?: string | null;
   // Task drag
   draggedTaskId: string | null;
   draggedGroupIds?: string[];
@@ -88,6 +89,7 @@ export function WorkstreamColumn({
   mentionedTaskIds,
   commentCounts,
   focusTaskId,
+  focusWsId,
   draggedTaskId,
   draggedGroupIds,
   onDragTaskStart,
@@ -253,6 +255,18 @@ export function WorkstreamColumn({
     });
     return () => cancelAnimationFrame(rafId);
   }, [focusTaskId, tasks]);
+
+  // Focus workstream from ?ws= URL param: scroll into view, highlight column
+  const focusedWsRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusWsId || !workstream || workstream.id !== focusWsId || focusedWsRef.current === focusWsId) return;
+    focusedWsRef.current = focusWsId;
+    const col = columnRef.current;
+    if (!col) return;
+    col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    col.classList.add(s.columnHighlight);
+    col.addEventListener('animationend', () => col.classList.remove(s.columnHighlight), { once: true });
+  }, [focusWsId, workstream]);
 
   // Clean up column scroll interval and group ghost on unmount
   useEffect(() => () => {

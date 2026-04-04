@@ -205,6 +205,18 @@ dataRouter.patch('/api/workstreams/:id', requireAuth, async (req, res) => {
     .select()
     .single();
   if (error) return res.status(400).json({ error: error.message });
+
+  // Notify reviewer when assigned
+  const userId = (req as any).userId;
+  if (updates.reviewer_id && updates.reviewer_id !== userId) {
+    await supabase.from('notifications').insert({
+      user_id: updates.reviewer_id,
+      type: 'review_request',
+      workstream_id: data.id,
+      message: `You were assigned to review "${data.name}"`,
+    });
+  }
+
   res.json(data);
 });
 

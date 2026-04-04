@@ -598,8 +598,13 @@ export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteF
     }
   }, [projectId, onCreateFlow]);
 
+  const boardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (boardRef.current) boardRef.current.scrollLeft = 0;
+  }, []);
+
   return (
-    <div className={s.board}>
+    <div className={s.board} ref={boardRef}>
       {flows.map(flow => (
         <FlowColumn
           key={flow.id}

@@ -393,23 +393,26 @@
   border-color: var(--text-4);
 }
 
-/* Reviewer selector in PR banners */
+/* Reviewer selector in PR banners — matches bannerBtn sizing */
 .reviewerSelect {
-  font-family: var(--font);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 3px 8px;
-  border: 1px solid var(--divider);
-  border-radius: 6px;
-  background: var(--white);
+  composes: bannerBtn;
   color: var(--text-3);
+  background: var(--white);
   cursor: pointer;
-  outline: none;
   appearance: auto;
 }
 .reviewerSelect:hover {
   border-color: var(--text-4);
   color: var(--text-2);
+}
+
+/* Column highlight animation (triggered by ?ws= URL param) */
+.columnHighlight {
+  animation: columnPulse 5s ease-out;
+}
+@keyframes columnPulse {
+  0%, 60% { box-shadow: 0 0 0 3px var(--blue); }
+  100% { box-shadow: none; }
 }
 
 .reviewerChip {

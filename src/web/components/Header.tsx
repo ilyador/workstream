@@ -13,6 +13,7 @@ interface Notification {
   id: string;
   type: string;
   task_id: string | null;
+  workstream_id?: string | null;
   message: string;
   read: boolean;
   created_at: string;
@@ -174,6 +175,7 @@ export function Header({
                       onClick={() => {
                         if (!n.read) onMarkRead?.(n.id);
                         if (n.task_id) navigate(`/?task=${n.task_id}`);
+                        else if (n.workstream_id) navigate(`/?ws=${n.workstream_id}`);
                         setNotifOpen(false);
                       }}
                     >
