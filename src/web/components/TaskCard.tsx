@@ -254,6 +254,9 @@ export function TaskCard({
                   </span>
                 </div>
               )}
+              {job.question && (
+                <div className={s.retryBanner}>{job.question}</div>
+              )}
               <LiveLogs jobId={job.id} footer={
                 onTerminate && (
                   <button className="btn btnDanger btnSm" onClick={() => onTerminate(job.id)}>Terminate</button>

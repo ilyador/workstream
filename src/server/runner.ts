@@ -424,6 +424,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
       await supabase.from('jobs').update({
         current_phase: step.name,
         attempt,
+        question: null,
       }).eq('id', jobId);
 
       const prompt = await buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer);
@@ -485,6 +486,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
               if (jumpIndex >= 0 && jumpIndex < i) {
                 const retryMsg = `${step.name} failed (attempt ${attempt}/${maxAttempts}): ${reason}. Retrying from '${steps[jumpIndex].name}'...`;
                 onLog(`\n${retryMsg}\n`);
+                await supabase.from('jobs').update({ question: retryMsg }).eq('id', jobId);
                 await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
                 // Clear ALL steps from jumpIndex through i (not just the target)
                 for (let ci = jumpIndex; ci <= i; ci++) {
@@ -501,6 +503,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
             }
             const retryMsg = `${step.name} failed (attempt ${attempt}/${maxAttempts}): ${reason}. Retrying...`;
             onLog(`\n${retryMsg}\n`);
+            await supabase.from('jobs').update({ question: retryMsg }).eq('id', jobId);
             await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
             continue;
           }

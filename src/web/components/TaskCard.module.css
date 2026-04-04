@@ -426,6 +426,16 @@
   background: var(--red-bg);
   border-radius: 8px;
 }
+.retryBanner {
+  font-size: 12px;
+  color: var(--amber);
+  line-height: 1.4;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: var(--amber-bg);
+  border-radius: 8px;
+  font-weight: 500;
+}
 .failActions {
   display: flex;
   gap: 8px;
