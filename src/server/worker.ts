@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { homedir } from 'os';
 import { runJob, runFlowJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
 import type { FlowConfig } from './runner.js';
 import { supabase } from './supabase.js';
@@ -130,7 +131,7 @@ async function startJob(job: any): Promise<void> {
 
   // Expand ~ to home directory (Node doesn't do this automatically)
   if (localPath.startsWith('~/')) {
-    localPath = localPath.replace('~', process.env.HOME || '/home/sixbox');
+    localPath = localPath.replace('~', process.env.HOME || homedir());
   }
 
   // Mark running
@@ -212,7 +213,7 @@ async function startJob(job: any): Promise<void> {
         await writeLog(jobId, 'review', result);
         // Auto-approve: mark job done + checkpoint cleaned, task done, clean checkpoint
         const now = new Date().toISOString();
-        try { deleteCheckpoint(localPath, jobId); } catch {}
+        try { deleteCheckpoint(localPath, jobId); } catch (e: any) { console.warn(`[worker] Checkpoint delete failed for job ${jobId}:`, e.message); }
         await Promise.all([
           supabase.from('jobs').update({ status: 'done', completed_at: now, checkpoint_status: 'cleaned' }).eq('id', jobId),
           supabase.from('tasks').update({ status: 'done', completed_at: now }).eq('id', task.id),
@@ -356,7 +357,9 @@ setInterval(async () => {
         if (job.local_path) {
           try {
             revertToCheckpoint(job.local_path, job.id);
-          } catch { /* checkpoint may not exist for queued jobs */ }
+          } catch (e: any) {
+            console.warn(`[worker] Checkpoint revert failed for canceled job ${job.id}:`, e.message);
+          }
         }
 
         await supabase.from('jobs').update({

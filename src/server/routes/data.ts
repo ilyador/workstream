@@ -198,7 +198,6 @@ dataRouter.patch('/api/workstreams/:id', requireAuth, async (req, res) => {
   for (const key of allowed) {
     if (key in req.body) updates[key] = req.body[key];
   }
-  console.log('[workstream PATCH]', req.params.id, JSON.stringify(updates));
   const { data, error } = await supabase
     .from('workstreams')
     .update(updates)
@@ -206,10 +205,8 @@ dataRouter.patch('/api/workstreams/:id', requireAuth, async (req, res) => {
     .select()
     .single();
   if (error) {
-    console.error('[workstream PATCH error]', error);
     return res.status(400).json({ error: error.message });
   }
-  console.log('[workstream PATCH success]', data?.id, data?.reviewer_id);
 
   // Notify reviewer when assigned
   const userId = (req as any).userId;
@@ -538,10 +535,8 @@ dataRouter.get('/api/artifacts/:id/download', requireAuth, async (req, res) => {
   const safeFilename = artifact.filename.replace(/["\r\n\\]/g, '_');
   res.setHeader('Content-Type', artifact.mime_type);
   res.setHeader('Content-Disposition', `inline; filename="${safeFilename}"`);
-  // Stream the file instead of buffering entirely in memory
-  const stream = fileData.stream();
-  // @ts-ignore -- Node ReadableStream is pipeable
-  stream.pipeTo(new WritableStream({ write(chunk) { res.write(chunk); }, close() { res.end(); } }));
+  const buffer = Buffer.from(await fileData.arrayBuffer());
+  res.send(buffer);
 });
 
 dataRouter.delete('/api/artifacts/:id', requireAuth, async (req, res) => {
@@ -790,17 +785,6 @@ or if issues found:
 
 const EXECUTE_CONTEXT = ['claude_md', 'agents_md', 'task_description', 'skills', 'task_images', 'followup_notes'];
 
-/** Maps task types to the default flow name that should handle them. */
-export const TYPE_TO_FLOW_NAME: Record<string, string> = {
-  'bug-fix': 'Bug Hunter',
-  'feature': 'Developer',
-  'ui-fix': 'Developer',
-  'design': 'Developer',
-  'chore': 'Developer',
-  'refactor': 'Refactorer',
-  'test': 'Tester',
-  'doc-search': 'Doc Search',
-};
 
 const DEFAULT_FLOWS: Array<{ name: string; description: string; steps: any[] }> = [
   {

@@ -16,7 +16,7 @@ const PHASE_DESCRIPTIONS: Record<string, string> = {
 };
 
 /** Shows live SSE log lines for a running job */
-export function LiveLogs({ jobId }: { jobId: string }) {
+export function LiveLogs({ jobId, footer }: { jobId: string; footer?: React.ReactNode }) {
   const [lines, setLines] = useState<{ text: string; type: 'log' | 'phase' | 'status' }[]>([]);
   const [connState, setConnState] = useState<ConnectionState>('connecting');
   const [connVisible, setConnVisible] = useState(true);
@@ -91,10 +91,6 @@ export function LiveLogs({ jobId }: { jobId: string }) {
 
   return (
     <>
-      <div className={`${s.connBar} ${s[`conn${connState.charAt(0).toUpperCase()}${connState.slice(1)}`]} ${!showConn ? s.connHidden : ''}`}>
-        <span className={s.connDot} />
-        {connLabel}
-      </div>
       <div ref={scrollRef} className={s.logBox}>
         {lines.length === 0 && connState === 'connecting' && (
           <span style={{ color: 'var(--text-4)' }}>Waiting for output...</span>
@@ -107,6 +103,13 @@ export function LiveLogs({ jobId }: { jobId: string }) {
             {line.text}
           </div>
         ))}
+      </div>
+      <div className={s.logFooter}>
+        <div className={`${s.connBar} ${s[`conn${connState.charAt(0).toUpperCase()}${connState.slice(1)}`]} ${!showConn ? s.connHidden : ''}`}>
+          <span className={s.connDot} />
+          {connLabel}
+        </div>
+        {footer}
       </div>
     </>
   );

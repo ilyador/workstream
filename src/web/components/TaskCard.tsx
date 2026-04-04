@@ -246,22 +246,17 @@ export function TaskCard({
                       </span>
                     </span>
                   ))}
+                  <span className={s.runStats}>
+                    <span>attempt {job.attempt || 1}/{job.maxAttempts || 3}</span>
+                    {elapsedText && <span className={s.elapsed}>{elapsedText}</span>}
+                  </span>
                 </div>
               )}
-              <div className={s.runMeta}>
-                <span>{job.currentPhase || 'Starting'}</span>
-                <span>attempt {job.attempt || 1}/{job.maxAttempts || 3}</span>
-                {elapsedText && <strong>{elapsedText}</strong>}
-              </div>
-              <LiveLogs jobId={job.id} />
-              {onTerminate && (
-                <div className={s.terminateWrap}>
-                  <button
-                    className="btn btnDanger btnSm"
-                    onClick={() => onTerminate(job.id)}
-                  >Terminate</button>
-                </div>
-              )}
+              <LiveLogs jobId={job.id} footer={
+                onTerminate && (
+                  <button className="btn btnDanger btnSm" onClick={() => onTerminate(job.id)}>Terminate</button>
+                )
+              } />
             </>
           )}
 

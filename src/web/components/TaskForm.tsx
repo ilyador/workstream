@@ -3,6 +3,7 @@ import { getSkills, type SkillInfo, type Flow } from '../lib/api';
 import { MdField } from './MdField';
 import mdStyles from './MdField.module.css';
 import { useSlashCommands } from '../hooks/useSlashCommands';
+import { computeSkillInsert } from '../lib/skill-insert';
 import { useArtifacts } from '../hooks/useArtifacts';
 import { getFileIcon, formatFileSize } from '../lib/file-utils';
 import s from './TaskForm.module.css';
@@ -76,7 +77,7 @@ interface Props {
   onClose: () => void;
 }
 
-const BUILT_IN_TYPES = ['feature', 'bug-fix', 'ui-fix', 'refactor', 'test', 'design', 'chore'];
+import { BUILT_IN_TYPES } from '../lib/constants';
 
 const PIPELINE_OPTIONS = [
   { value: 'feature', label: 'feature (plan → implement → verify → review)' },
@@ -152,25 +153,15 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
   const insertSkill = useCallback((skillName: string) => {
     const ta = textareaRef.current;
     if (!ta) return;
-    const cursor = ta.selectionStart;
-    const before = description.slice(0, cursor);
-    // Find the slash that started the query
-    const slashMatch = before.match(/(?:^|[\s\n])(\/[a-zA-Z0-9_:-]*)$/);
-    if (!slashMatch) return;
-    const slashStart = before.length - slashMatch[1].length;
-    const prefix = description.substring(0, slashStart);
-    const after = description.substring(cursor);
-    const newDesc = prefix + '/' + skillName + ' ' + after;
-    setDescription(newDesc);
+    const result = computeSkillInsert(description, ta.selectionStart, skillName);
+    if (!result) return;
+    setDescription(result.newText);
     slash.dismiss();
     requestAnimationFrame(() => {
-      if (ta) {
-        ta.focus();
-        const pos = prefix.length + skillName.length + 2;
-        ta.selectionStart = ta.selectionEnd = pos;
-        ta.style.height = 'auto';
-        ta.style.height = ta.scrollHeight + 'px';
-      }
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = result.newCursor;
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
     });
   }, [description, slash]);
 

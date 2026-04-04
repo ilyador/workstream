@@ -290,7 +290,7 @@
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 10px 0 8px;
+  padding: 10px 0;
   flex-wrap: wrap;
 }
 .phaseWrap {
@@ -342,17 +342,21 @@
   color: #7D6680;
 }
 
-/* Running status line */
-.runMeta {
+/* Attempt + elapsed time, pushed right of phase pills */
+.runStats {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--text-3);
-  padding: 4px 0 8px;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-4);
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.runMeta strong {
-  color: var(--text-2);
+.elapsed {
+  color: var(--text-3);
+  font-weight: 600;
 }
 
 /* ─── Paused: question callout ─── */
@@ -522,12 +526,6 @@
 
 /* (humanActions and idleActions merged into .actions / .actionsLeft / .actionsRight) */
 
-/* Terminate button area */
-.terminateWrap {
-  padding-top: 8px;
-  display: flex;
-  justify-content: flex-end;
-}
 
 /* Comment row with hover-reveal delete */
 .comment {

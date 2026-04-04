@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getSkills, type SkillInfo } from '../lib/api';
 import { useSlashCommands } from '../hooks/useSlashCommands';
+import { computeSkillInsert } from '../lib/skill-insert';
 import s from './ReplyInput.module.css';
 
 export function ReplyInput({ onReply, localPath }: { onReply: (answer: string) => void; localPath?: string }) {
@@ -17,22 +18,13 @@ export function ReplyInput({ onReply, localPath }: { onReply: (answer: string) =
   const insertSkill = useCallback((skillName: string) => {
     const el = inputRef.current;
     if (!el) return;
-    const cursor = el.selectionStart ?? val.length;
-    const before = val.slice(0, cursor);
-    const slashMatch = before.match(/(?:^|[\s])\/([a-zA-Z0-9_:-]*)$/);
-    if (!slashMatch) return;
-    const slashStart = before.length - slashMatch[0].length + (slashMatch[0].startsWith('/') ? 0 : 1);
-    const prefix = val.substring(0, slashStart);
-    const after = val.substring(cursor);
-    const newVal = prefix + '/' + skillName + ' ' + after;
-    setVal(newVal);
+    const result = computeSkillInsert(val, el.selectionStart ?? val.length, skillName);
+    if (!result) return;
+    setVal(result.newText);
     slash.dismiss();
     requestAnimationFrame(() => {
-      if (el) {
-        el.focus();
-        const pos = prefix.length + skillName.length + 2;
-        el.selectionStart = el.selectionEnd = pos;
-      }
+      el.focus();
+      el.selectionStart = el.selectionEnd = result.newCursor;
     });
   }, [val, slash]);
 

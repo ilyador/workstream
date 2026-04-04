@@ -1,8 +1,59 @@
 import { spawn, ChildProcess, execFileSync } from 'child_process';
-import { readFileSync, existsSync, readdirSync, statSync, unlinkSync, rmdirSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
 import { join } from 'path';
 import { supabase } from './supabase.js';
 import { discoverSkills } from './routes/data.js';
+
+const MIME_MAP: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  svg: 'image/svg+xml', webp: 'image/webp', pdf: 'application/pdf',
+  md: 'text/markdown', txt: 'text/plain', json: 'application/json',
+  csv: 'text/csv', html: 'text/html', mp4: 'video/mp4', mp3: 'audio/mpeg',
+};
+
+/** Scan .artifacts/ directory, upload to storage, insert records, then clean up. */
+async function scanAndUploadArtifacts(
+  localPath: string,
+  taskId: string,
+  jobId: string,
+  lastPhase: string,
+  onLog: (text: string) => void,
+): Promise<void> {
+  const artifactsDir = join(localPath, '.artifacts');
+  if (!existsSync(artifactsDir)) return;
+
+  const files = readdirSync(artifactsDir);
+  const { data: taskRow } = await supabase.from('tasks').select('project_id').eq('id', taskId).single();
+  if (!taskRow?.project_id) {
+    onLog(`[artifact] Skipping artifacts: could not resolve project_id\n`);
+    return;
+  }
+
+  for (const filename of files) {
+    const filePath = join(artifactsDir, filename);
+    try {
+      const fileStat = statSync(filePath);
+      if (!fileStat.isFile()) continue;
+      const fileBuffer = readFileSync(filePath);
+      const ext = filename.split('.').pop()?.toLowerCase() || '';
+      const mimeType = MIME_MAP[ext] || 'application/octet-stream';
+      const storagePath = `${taskRow.project_id}/${taskId}/${filename}`;
+
+      await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
+        contentType: mimeType, upsert: true,
+      });
+      await supabase.from('task_artifacts').insert({
+        task_id: taskId, job_id: jobId, phase: lastPhase,
+        filename, mime_type: mimeType, size_bytes: fileStat.size, storage_path: storagePath,
+      });
+      onLog(`[artifact] Captured: ${filename} (${mimeType}, ${fileStat.size} bytes)\n`);
+    } catch (err: any) {
+      onLog(`[artifact] Failed to capture ${filename}: ${err.message}\n`);
+    }
+  }
+  // Clean up
+  try { rmSync(artifactsDir, { recursive: true, force: true }); } catch { /* best effort */ }
+}
 
 interface PhaseConfig {
   skill: string | null;
@@ -511,59 +562,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
   // Scan .artifacts/ directory for produced files
   if (ctx.task.chaining === 'produce' || ctx.task.chaining === 'both') {
-    const artifactsDir = join(localPath, '.artifacts');
-    if (existsSync(artifactsDir)) {
-      const files = readdirSync(artifactsDir);
-      for (const filename of files) {
-        const filePath = join(artifactsDir, filename);
-        try {
-          const stat = statSync(filePath);
-          if (!stat.isFile()) continue;
-          const fileBuffer = readFileSync(filePath);
-          const ext = filename.split('.').pop()?.toLowerCase() || '';
-          const mimeMap: Record<string, string> = {
-            png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
-            svg: 'image/svg+xml', webp: 'image/webp', pdf: 'application/pdf',
-            md: 'text/markdown', txt: 'text/plain', json: 'application/json',
-            csv: 'text/csv', html: 'text/html', mp4: 'video/mp4', mp3: 'audio/mpeg',
-          };
-          const mimeType = mimeMap[ext] || 'application/octet-stream';
-
-          // Get project_id from task
-          const { data: taskRow } = await supabase.from('tasks').select('project_id').eq('id', ctx.taskId).single();
-          if (!taskRow?.project_id) {
-            onLog(`[artifact] Skipping ${filename}: could not resolve project_id\n`);
-            continue;
-          }
-          const storagePath = `${taskRow.project_id}/${ctx.taskId}/${filename}`;
-
-          await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
-            contentType: mimeType, upsert: true
-          });
-
-          await supabase.from('task_artifacts').insert({
-            task_id: ctx.taskId,
-            job_id: jobId,
-            phase: phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown',
-            filename,
-            mime_type: mimeType,
-            size_bytes: stat.size,
-            storage_path: storagePath,
-          });
-
-          onLog(`[artifact] Captured: ${filename} (${mimeType}, ${stat.size} bytes)\n`);
-        } catch (err: any) {
-          onLog(`[artifact] Failed to capture ${filename}: ${err.message}\n`);
-        }
-      }
-      // Clean up the .artifacts directory
-      try {
-        for (const f of readdirSync(artifactsDir)) {
-          unlinkSync(join(artifactsDir, f));
-        }
-        rmdirSync(artifactsDir);
-      } catch { /* best effort cleanup */ }
-    }
+    await scanAndUploadArtifacts(localPath, ctx.taskId, jobId, phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown', onLog);
   }
 
   let filesChanged = 0;
@@ -1322,58 +1321,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
   // Scan .artifacts/ directory for produced files
   if (ctx.task.chaining === 'produce' || ctx.task.chaining === 'both') {
-    const artifactsDir = join(localPath, '.artifacts');
-    if (existsSync(artifactsDir)) {
-      const files = readdirSync(artifactsDir);
-      for (const filename of files) {
-        const filePath = join(artifactsDir, filename);
-        try {
-          const fstat = statSync(filePath);
-          if (!fstat.isFile()) continue;
-          const fileBuffer = readFileSync(filePath);
-          const ext = filename.split('.').pop()?.toLowerCase() || '';
-          const mimeMap: Record<string, string> = {
-            png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
-            svg: 'image/svg+xml', webp: 'image/webp', pdf: 'application/pdf',
-            md: 'text/markdown', txt: 'text/plain', json: 'application/json',
-            csv: 'text/csv', html: 'text/html', mp4: 'video/mp4', mp3: 'audio/mpeg',
-          };
-          const mimeType = mimeMap[ext] || 'application/octet-stream';
-
-          const { data: taskRow } = await supabase.from('tasks').select('project_id').eq('id', ctx.taskId).single();
-          if (!taskRow?.project_id) {
-            onLog(`[artifact] Skipping ${filename}: could not resolve project_id\n`);
-            continue;
-          }
-          const storagePath = `${taskRow.project_id}/${ctx.taskId}/${filename}`;
-
-          await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
-            contentType: mimeType, upsert: true
-          });
-
-          await supabase.from('task_artifacts').insert({
-            task_id: ctx.taskId,
-            job_id: jobId,
-            phase: phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown',
-            filename,
-            mime_type: mimeType,
-            size_bytes: fstat.size,
-            storage_path: storagePath,
-          });
-
-          onLog(`[artifact] Captured: ${filename} (${mimeType}, ${fstat.size} bytes)\n`);
-        } catch (err: any) {
-          onLog(`[artifact] Failed to capture ${filename}: ${err.message}\n`);
-        }
-      }
-      // Clean up the .artifacts directory
-      try {
-        for (const f of readdirSync(artifactsDir)) {
-          unlinkSync(join(artifactsDir, f));
-        }
-        rmdirSync(artifactsDir);
-      } catch { /* best effort cleanup */ }
-    }
+    await scanAndUploadArtifacts(localPath, ctx.taskId, jobId, phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown', onLog);
   }
 
   const reviewOutput = phasesCompleted[phasesCompleted.length - 1];

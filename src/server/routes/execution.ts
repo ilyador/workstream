@@ -1,21 +1,10 @@
 import { Router } from 'express';
-import { loadTaskTypeConfig, buildFlowSnapshot } from '../runner.js';
 import { supabase } from '../supabase.js';
 import { requireAuth } from '../auth-middleware.js';
 import { revertToCheckpoint, deleteCheckpoint } from '../checkpoint.js';
 import { queueNextWorkstreamTask } from '../auto-continue.js';
 import { autoCommit } from '../git-utils.js';
-import { TYPE_TO_FLOW_NAME } from '../routes/data.js';
-
-/** Resolve a flow's snapshot, first phase, and maxAttempts from a loaded flow row. */
-function resolveFlow(flow: any): { flowSnapshot: any; firstPhase: string; maxAttempts: number } {
-  const flowSnapshot = buildFlowSnapshot(flow);
-  const firstPhase = flowSnapshot.steps[0]?.name || 'plan';
-  const maxAttempts = flowSnapshot.steps.length > 0
-    ? Math.max(...flowSnapshot.steps.map((s: any) => s.max_retries + 1))
-    : 1;
-  return { flowSnapshot, firstPhase, maxAttempts };
-}
+import { resolveFlowForTask } from '../flow-resolution.js';
 
 export const executionRouter = Router();
 
@@ -47,7 +36,7 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
     .from('jobs')
     .select('id')
     .eq('task_id', taskId)
-    .in('status', ['queued', 'running', 'paused'])
+    .in('status', ['queued', 'running', 'paused', 'review'])
     .limit(1);
 
   if (existingJobs && existingJobs.length > 0) {
@@ -69,36 +58,7 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Only AI tasks can be run' });
   }
 
-  // Build flow snapshot if task has a flow, otherwise fall back to legacy task type
-  let flowSnapshot: any = null;
-  let firstPhase: string;
-  let maxAttempts: number;
-
-  if (task.flow_id) {
-    const { data: flow } = await supabase
-      .from('flows')
-      .select('*, flow_steps(*)')
-      .eq('id', task.flow_id)
-      .single();
-    if (flow) {
-      ({ flowSnapshot, firstPhase, maxAttempts } = resolveFlow(flow));
-    } else {
-      console.warn(`[execution] Flow ${task.flow_id} not found for task ${taskId}, falling back to legacy type`);
-      const taskType = loadTaskTypeConfig(localPath, task.type);
-      firstPhase = taskType.phases[0];
-      maxAttempts = taskType.verify_retries + 1;
-    }
-  } else {
-    // No flow_id on task -- try to find a flow with this type in default_types
-    const { data: flow } = await supabase.from('flows').select('*, flow_steps(*)').eq('project_id', projectId).contains('default_types', [task.type]).limit(1).single();
-    if (flow) {
-      ({ flowSnapshot, firstPhase, maxAttempts } = resolveFlow(flow));
-    } else {
-      const taskType = loadTaskTypeConfig(localPath, task.type);
-      firstPhase = taskType.phases[0];
-      maxAttempts = taskType.verify_retries + 1;
-    }
-  }
+  const { flowSnapshot, firstPhase, maxAttempts, flowId } = await resolveFlowForTask(task, projectId, localPath);
 
   // Create job with queued status — worker picks it up
   const { data: job, error: jobErr } = await supabase
@@ -110,7 +70,7 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
       status: 'queued',
       current_phase: firstPhase,
       max_attempts: maxAttempts,
-      flow_id: task.flow_id || null,
+      flow_id: flowId,
       flow_snapshot: flowSnapshot,
     })
     .select()
@@ -176,8 +136,8 @@ executionRouter.get('/api/jobs/:id/events', async (req, res) => {
           return;
         }
       }
-    } catch {
-      // Ignore poll errors — next tick will retry
+    } catch (err: any) {
+      console.warn(`[execution] SSE poll error for job ${jobId}:`, err.message);
     }
   }, 500);
 
@@ -343,42 +303,19 @@ executionRouter.post('/api/jobs/:id/rework', requireAuth, async (req, res) => {
   const { data: task } = await supabase.from('tasks').select('*').eq('id', job.task_id).single();
   if (!task) return res.status(404).json({ error: 'Task not found' });
 
-  let flowSnapshot: any = null;
-  let firstPhase: string;
-  let maxAttempts: number;
-
-  if (task.flow_id) {
-    const { data: flow } = await supabase.from('flows').select('*, flow_steps(*)').eq('id', task.flow_id).single();
-    if (flow) {
-      ({ flowSnapshot, firstPhase, maxAttempts } = resolveFlow(flow));
-    } else {
-      const taskType = loadTaskTypeConfig(localPath || job.local_path, task.type);
-      firstPhase = taskType.phases[0];
-      maxAttempts = taskType.verify_retries + 1;
-    }
-  } else {
-    const flowName = TYPE_TO_FLOW_NAME[task.type];
-    const { data: flow } = flowName
-      ? await supabase.from('flows').select('*, flow_steps(*)').eq('project_id', projectId || job.project_id).eq('name', flowName).single()
-      : { data: null };
-    if (flow) {
-      ({ flowSnapshot, firstPhase, maxAttempts } = resolveFlow(flow));
-    } else {
-      const taskType = loadTaskTypeConfig(localPath || job.local_path, task.type);
-      firstPhase = taskType.phases[0];
-      maxAttempts = taskType.verify_retries + 1;
-    }
-  }
+  const reworkProjectId = projectId || job.project_id;
+  const reworkLocalPath = localPath || job.local_path;
+  const { flowSnapshot, firstPhase, maxAttempts, flowId } = await resolveFlowForTask(task, reworkProjectId, reworkLocalPath);
 
   // Create new job
   const { data: newJob, error: jobErr } = await supabase.from('jobs').insert({
     task_id: job.task_id,
-    project_id: projectId || job.project_id,
-    local_path: localPath || job.local_path,
+    project_id: reworkProjectId,
+    local_path: reworkLocalPath,
     status: 'queued',
-    current_phase: firstPhase!,
-    max_attempts: maxAttempts!,
-    flow_id: task.flow_id || null,
+    current_phase: firstPhase,
+    max_attempts: maxAttempts,
+    flow_id: flowId,
     flow_snapshot: flowSnapshot,
   }).select().single();
 

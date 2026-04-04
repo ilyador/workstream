@@ -13,15 +13,7 @@ interface FlowEditorProps {
   taskTypes?: string[];
 }
 
-const BUILT_IN_TYPES = ['feature', 'bug-fix', 'ui-fix', 'refactor', 'test', 'design', 'chore', 'doc-search'];
-
-const ALL_TOOLS = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'];
-const ALL_CONTEXT_SOURCES = [
-  'claude_md', 'task_description', 'task_images',
-  'skills', 'architecture_md', 'review_criteria', 'followup_notes', 'git_diff', 'rag',
-];
-const MODEL_OPTIONS = ['opus', 'sonnet'];
-const ON_MAX_RETRIES_OPTIONS = ['pause', 'fail', 'skip'];
+import { BUILT_IN_TYPES, ALL_TOOLS, ALL_CONTEXT_SOURCES, MODEL_OPTIONS, ON_MAX_RETRIES_OPTIONS } from '../lib/constants';
 
 function makeBlankStep(position: number): FlowStep {
   return {
