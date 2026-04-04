@@ -488,14 +488,20 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
                 onLog(`\n${retryMsg}\n`);
                 await supabase.from('jobs').update({ question: retryMsg }).eq('id', jobId);
                 await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
-                // Clear ALL steps from jumpIndex through i (not just the target)
+                // Clear steps from jumpIndex through i so they re-run
+                // BUT preserve the failed step's output as followup_notes so the
+                // retry knows what went wrong (prevents blind re-exploration)
+                const failedOutput = phasesCompleted.find(p => p.phase === step.name)?.output;
                 for (let ci = jumpIndex; ci <= i; ci++) {
                   completedPhaseNames.delete(steps[ci].name);
                 }
-                // Remove stale output for all intermediate steps
                 for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
                   const stepIdx = steps.findIndex(s => s.name === phasesCompleted[pi].phase);
                   if (stepIdx >= jumpIndex && stepIdx <= i) { phasesCompleted.splice(pi, 1); }
+                }
+                // Inject failure reason so the retried step knows what to fix
+                if (failedOutput) {
+                  task.followup_notes = `Previous ${step.name} failed: ${reason}\n\nFull output:\n${failedOutput.substring(0, 3000)}`;
                 }
                 i = jumpIndex;
                 break;
