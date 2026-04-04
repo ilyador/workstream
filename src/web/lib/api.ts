@@ -406,7 +406,6 @@ export interface Flow {
   is_builtin: boolean;
   agents_md: string | null;
   default_types: string[];
-  position: number;
   flow_steps: FlowStep[];
   created_at: string;
 }

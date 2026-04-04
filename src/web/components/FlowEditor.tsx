@@ -1,18 +1,19 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { Flow, FlowStep } from '../lib/api';
 import { MdField } from './MdField';
-import { BUILT_IN_TYPES, ALL_TOOLS, ALL_CONTEXT_SOURCES, MODEL_OPTIONS, ON_MAX_RETRIES_OPTIONS } from '../lib/constants';
 import s from './FlowEditor.module.css';
 
 interface FlowEditorProps {
   flows: Flow[];
-  onSave: (flowId: string, updates: { name?: string; description?: string; agents_md?: string; default_types?: string[]; position?: number }) => Promise<void>;
+  onSave: (flowId: string, updates: { name?: string; description?: string; agents_md?: string; default_types?: string[] }) => Promise<void>;
   onSaveSteps: (flowId: string, steps: any[]) => Promise<void>;
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: any[] }) => Promise<Flow>;
   onDeleteFlow: (flowId: string) => Promise<void>;
   projectId: string;
   taskTypes?: string[];
 }
+
+import { BUILT_IN_TYPES, ALL_TOOLS, ALL_CONTEXT_SOURCES, MODEL_OPTIONS, ON_MAX_RETRIES_OPTIONS } from '../lib/constants';
 
 function makeBlankStep(position: number): FlowStep {
   return {
@@ -46,7 +47,7 @@ function useFlowColumnState(flow: Flow) {
   const [editSteps, setEditSteps] = useState<FlowStep[]>(
     cloneSteps(flow.flow_steps.sort((a, b) => a.position - b.position))
   );
-  const [editingStepIdx, setEditingStepIdx] = useState<number | null>(null);
+  const [expandedStep, setExpandedStep] = useState<number | null>(null);
   const [agentsMdOpen, setAgentsMdOpen] = useState(!!flow.agents_md);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -54,6 +55,7 @@ function useFlowColumnState(flow: Flow) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
+  // Sync when flow data changes externally
   useEffect(() => {
     setEditName(flow.name);
     setEditAgentsMd(flow.agents_md ?? '');
@@ -66,7 +68,7 @@ function useFlowColumnState(flow: Flow) {
     editName, setEditName,
     editAgentsMd, setEditAgentsMd,
     editSteps, setEditSteps,
-    editingStepIdx, setEditingStepIdx,
+    expandedStep, setExpandedStep,
     agentsMdOpen, setAgentsMdOpen,
     saving, setSaving,
     error, setError,
@@ -76,197 +78,7 @@ function useFlowColumnState(flow: Flow) {
   };
 }
 
-/* ─── Step edit modal ─── */
-function StepModal({
-  step,
-  idx,
-  allSteps,
-  onUpdate,
-  onToggleTool,
-  onToggleContext,
-  onDelete,
-  onClose,
-}: {
-  step: FlowStep;
-  idx: number;
-  allSteps: FlowStep[];
-  onUpdate: (patch: Partial<FlowStep>) => void;
-  onToggleTool: (tool: string) => void;
-  onToggleContext: (src: string) => void;
-  onDelete: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className={s.overlay} onClick={onClose}>
-      <div className={s.stepModal} onClick={e => e.stopPropagation()}>
-        <div className={s.modalHeader}>
-          <h2 className={s.modalHeading}>Step {idx + 1}{step.name ? `: ${step.name}` : ''}</h2>
-          <button className={s.modalClose} onClick={onClose}>&times;</button>
-        </div>
-
-        <div className={s.modalBody}>
-          {/* Name */}
-          <div className={s.field}>
-            <label className={s.label}>Name</label>
-            <input
-              className={s.input}
-              value={step.name}
-              onChange={e => onUpdate({ name: e.target.value })}
-              placeholder={`Step ${idx + 1}`}
-              autoFocus
-            />
-          </div>
-
-          {/* Instructions */}
-          <div className={s.field}>
-            <label className={s.label}>Instructions</label>
-            <MdField
-              value={step.instructions}
-              onChange={val => onUpdate({ instructions: val })}
-              placeholder="What should the AI do in this step..."
-            />
-          </div>
-
-          {/* Model */}
-          <div className={s.field}>
-            <label className={s.label}>Model</label>
-            <div className={s.segmented}>
-              {MODEL_OPTIONS.map(m => (
-                <button
-                  key={m}
-                  type="button"
-                  className={`${s.segmentedBtn} ${step.model === m ? s.segmentedActive : ''}`}
-                  onClick={() => onUpdate({ model: m })}
-                >
-                  {m.charAt(0).toUpperCase() + m.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Tools */}
-          <div className={s.field}>
-            <label className={s.label}>Tools</label>
-            <div className={s.checkboxGrid}>
-              {ALL_TOOLS.map(tool => (
-                <label key={tool} className={s.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={step.tools.includes(tool)}
-                    onChange={() => onToggleTool(tool)}
-                  />
-                  {tool}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Context Sources */}
-          <div className={s.field}>
-            <label className={s.label}>Context Sources</label>
-            <div className={s.chipGrid}>
-              {ALL_CONTEXT_SOURCES.map(src => (
-                <button
-                  key={src}
-                  type="button"
-                  className={`${s.chip} ${step.context_sources.includes(src) ? s.chipActive : ''}`}
-                  onClick={() => onToggleContext(src)}
-                >
-                  {src}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Gate toggle */}
-          <div className={s.row}>
-            <label className={s.checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={step.is_gate}
-                onChange={e => onUpdate({ is_gate: e.target.checked })}
-              />
-              Gate step (pass/fail verdict)
-            </label>
-          </div>
-
-          {/* Gate config */}
-          {step.is_gate && (
-            <div className={s.gateSection}>
-              <div className={s.gateRow}>
-                <div className={s.field}>
-                  <label className={s.label}>On fail jump to</label>
-                  <select
-                    className={s.select}
-                    value={step.on_fail_jump_to ?? ''}
-                    onChange={e => {
-                      const v = e.target.value;
-                      onUpdate({ on_fail_jump_to: v === '' ? null : Number(v) });
-                    }}
-                  >
-                    <option value="">None</option>
-                    {allSteps.map((_, i) => (
-                      i !== idx && <option key={i} value={i + 1}>Step {i + 1}{allSteps[i].name ? ` - ${allSteps[i].name}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className={s.field}>
-                  <label className={s.label}>Max retries</label>
-                  <input
-                    className={s.input}
-                    type="number"
-                    min={0}
-                    max={10}
-                    value={step.max_retries}
-                    onChange={e => onUpdate({ max_retries: Number(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className={s.field}>
-                  <label className={s.label}>On max retries</label>
-                  <select
-                    className={s.select}
-                    value={step.on_max_retries}
-                    onChange={e => onUpdate({ on_max_retries: e.target.value })}
-                  >
-                    {ON_MAX_RETRIES_OPTIONS.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Include agents.md toggle */}
-          <div className={s.row}>
-            <label className={s.checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={step.include_agents_md}
-                onChange={e => onUpdate({ include_agents_md: e.target.checked })}
-              />
-              Include agents.md context
-            </label>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className={s.modalFooter}>
-          <button
-            className="btn btnDanger btnSm"
-            type="button"
-            onClick={onDelete}
-          >
-            Delete step
-          </button>
-          <button className="btn btnPrimary btnSm" onClick={onClose}>Done</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── FlowColumn: one flow rendered as a column ─── */
+/* ─── FlowColumn: one flow rendered as a WorkstreamColumn-style column ─── */
 function FlowColumn({
   flow,
   onSave,
@@ -274,12 +86,6 @@ function FlowColumn({
   onDeleteFlow,
   allFlows,
   taskTypes = BUILT_IN_TYPES,
-  onColumnDragStart,
-  onColumnDragOver,
-  onColumnDragEnd,
-  onColumnDrop,
-  showDropLeft,
-  showDropRight,
 }: {
   flow: Flow;
   onSave: FlowEditorProps['onSave'];
@@ -287,16 +93,11 @@ function FlowColumn({
   onDeleteFlow: FlowEditorProps['onDeleteFlow'];
   allFlows: Flow[];
   taskTypes?: string[];
-  onColumnDragStart: (flowId: string) => void;
-  onColumnDragOver: (e: React.DragEvent, flowId: string) => void;
-  onColumnDragEnd: () => void;
-  onColumnDrop: (targetFlowId: string) => void;
-  showDropLeft: boolean;
-  showDropRight: boolean;
 }) {
   const state = useFlowColumnState(flow);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
+  // Focus name input when editing
   useEffect(() => {
     if (state.editing && nameInputRef.current) {
       nameInputRef.current.focus();
@@ -326,20 +127,19 @@ function FlowColumn({
   }, [state.setEditSteps]);
 
   const addStep = useCallback(() => {
-    const newIdx = state.editSteps.length;
     state.setEditSteps(prev => [...prev, makeBlankStep(prev.length + 1)]);
-    state.setEditingStepIdx(newIdx);
-  }, [state.editSteps.length, state.setEditSteps, state.setEditingStepIdx]);
+    state.setExpandedStep(state.editSteps.length);
+  }, [state.editSteps.length, state.setEditSteps, state.setExpandedStep]);
 
   const deleteStep = useCallback((idx: number) => {
     state.setEditSteps(prev => {
       const next = prev.filter((_, i) => i !== idx);
       return next.map((st, i) => ({ ...st, position: i + 1 }));
     });
-    state.setEditingStepIdx(null);
-  }, [state.setEditSteps, state.setEditingStepIdx]);
+    state.setExpandedStep(null);
+  }, [state.setEditSteps, state.setExpandedStep]);
 
-  // ---- Step drag reorder ----
+  // ---- Drag reorder ----
   const handleDragStart = useCallback((idx: number) => {
     state.setDragIdx(idx);
   }, [state.setDragIdx]);
@@ -411,6 +211,7 @@ function FlowColumn({
     }
   }, [flow.id, flow.name, state.editName, state.editAgentsMd, state.editSteps, onSave, onSaveSteps, state.setSaving, state.setError]);
 
+  // ---- Delete flow ----
   const handleDeleteFlow = useCallback(async () => {
     if (!confirm(`Delete flow "${flow.name}" and all its steps? This cannot be undone.`)) return;
     state.setSaving(true);
@@ -421,8 +222,9 @@ function FlowColumn({
       state.setError(err.message || 'Failed to delete flow');
       state.setSaving(false);
     }
-  }, [flow.id, flow.name, onDeleteFlow, state.setSaving, state.setError]);
+  }, [flow.id, flow.name, flow.is_builtin, onDeleteFlow, state.setSaving, state.setError]);
 
+  // ---- Rename ----
   const handleRename = useCallback(async () => {
     const trimmed = state.editName.trim();
     if (!trimmed) {
@@ -438,171 +240,138 @@ function FlowColumn({
     state.setEditing(false);
   }, [state.editName, flow.id, flow.name, state.setEditName, state.setEditing, state.setError, onSave]);
 
-  const colDragCountRef = useRef(0);
-
   return (
-    <div className={s.columnOuter}>
-      {showDropLeft && <div className={s.columnDropLine} />}
-      <div
-        className={s.column}
-        onDragOver={e => onColumnDragOver(e, flow.id)}
-        onDragEnter={() => { colDragCountRef.current++; }}
-        onDragLeave={() => { colDragCountRef.current--; }}
-        onDrop={e => { e.preventDefault(); onColumnDrop(flow.id); colDragCountRef.current = 0; }}
-      >
-        {/* Header */}
-        <div className={s.headerWrap}>
-          <div className={s.header}>
-            <span
-              className={s.handle}
-              draggable
-              onDragStart={e => {
-                e.stopPropagation();
-                const ghost = document.createElement('div');
-                ghost.textContent = state.editName || flow.name;
-                ghost.style.cssText = 'padding:6px 16px;background:var(--text);color:var(--bg);border-radius:20px;font-size:13px;font-weight:600;position:fixed;top:-9999px;pointer-events:none;';
-                ghost.id = '__flow-drag-preview__';
-                document.body.appendChild(ghost);
-                e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 20);
-                e.dataTransfer.effectAllowed = 'move';
-                onColumnDragStart(flow.id);
-              }}
-              onDragEnd={() => {
-                document.getElementById('__flow-drag-preview__')?.remove();
-                onColumnDragEnd();
-              }}
-              onClick={e => e.stopPropagation()}
-              title="Drag to reorder flow"
-            >&#8942;&#8942;</span>
-
-            {state.editing ? (
-              <input
-                ref={nameInputRef}
-                className={s.nameInput}
-                value={state.editName}
-                onChange={e => state.setEditName(e.target.value)}
-                onBlur={handleRename}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleRename();
-                  if (e.key === 'Escape') {
-                    state.setEditName(flow.name);
-                    state.setEditing(false);
-                  }
-                }}
-              />
-            ) : (
-              <span
-                className={s.name}
-                onDoubleClick={() => {
+    <div className={s.column}>
+      {/* Header */}
+      <div className={s.headerWrap}>
+        <div className={s.header}>
+          {state.editing ? (
+            <input
+              ref={nameInputRef}
+              className={s.nameInput}
+              value={state.editName}
+              onChange={e => state.setEditName(e.target.value)}
+              onBlur={handleRename}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleRename();
+                if (e.key === 'Escape') {
                   state.setEditName(flow.name);
-                  state.setEditing(true);
-                }}
-                title="Double-click to rename"
-              >
-                {state.editName || flow.name}
-              </span>
-            )}
-
-            <select
-              className={s.typeSelect}
-              value=""
-              onChange={e => {
-                const type = e.target.value;
-                if (!type) return;
-                const current = flow.default_types || [];
-                const updated = current.includes(type)
-                  ? current.filter(t => t !== type)
-                  : [...current, type];
-                onSave(flow.id, { default_types: updated });
+                  state.setEditing(false);
+                }
               }}
-              title="Default task types for this flow"
+            />
+          ) : (
+            <span
+              className={s.name}
+              onDoubleClick={() => {
+                state.setEditName(flow.name);
+                state.setEditing(true);
+              }}
+              title="Double-click to rename"
             >
-              <option value="">{(flow.default_types || []).length > 0 ? (flow.default_types || []).join(', ') : 'types'}</option>
-              {taskTypes.map(t => {
-                const ownedByOther = allFlows.some(f => f.id !== flow.id && (f.default_types || []).includes(t));
-                const owned = (flow.default_types || []).includes(t);
-                return (
-                  <option key={t} value={t} disabled={ownedByOther}>
-                    {owned ? '\u2713 ' : ''}{t}{ownedByOther ? ' (other flow)' : ''}
-                  </option>
-                );
-              })}
-            </select>
-
-            <span className={s.stepCount}>
-              {state.editSteps.length} {state.editSteps.length === 1 ? 'step' : 'steps'}
+              {state.editName || flow.name}
             </span>
+          )}
 
-            <button
-              className={s.addBtn}
-              onClick={addStep}
-              title="Add step"
-            >+</button>
-
-            {state.saving && <span className={s.savingText}>Saving...</span>}
-
-            {isDirty && (
-              <button
-                className={s.saveBtn}
-                onClick={handleSave}
-                disabled={state.saving}
-                title="Save flow"
-              >
-                Save
-              </button>
-            )}
-
-            <button
-              className={`${s.actionBtn} ${s.actionBtnDanger}`}
-              onClick={handleDeleteFlow}
-              disabled={state.saving}
-              title="Delete flow"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Agents.md collapsible section */}
-        <div className={s.agentsMdSection}>
-          <button
-            className={s.sectionToggle}
-            onClick={() => state.setAgentsMdOpen(v => !v)}
-            type="button"
+          <select
+            className={s.typeSelect}
+            value=""
+            onChange={e => {
+              const type = e.target.value;
+              if (!type) return;
+              const current = flow.default_types || [];
+              const updated = current.includes(type)
+                ? current.filter(t => t !== type)
+                : [...current, type];
+              onSave(flow.id, { default_types: updated });
+            }}
+            title="Default task types for this flow"
           >
-            <span className={`${s.sectionArrow} ${state.agentsMdOpen ? s.sectionArrowOpen : ''}`}>&#9654;</span>
-            agents.md
-            {state.editAgentsMd && !state.agentsMdOpen && (
-              <span className={s.sectionHint}>(has content)</span>
-            )}
-          </button>
-          {state.agentsMdOpen && (
-            <div className={s.agentsMdBody}>
-              <MdField
-                value={state.editAgentsMd}
-                onChange={val => state.setEditAgentsMd(val)}
-                placeholder="Shared instructions for all steps in this flow (markdown)..."
-              />
-            </div>
-          )}
-        </div>
+            <option value="">{(flow.default_types || []).length > 0 ? (flow.default_types || []).join(', ') : 'types'}</option>
+            {taskTypes.map(t => {
+              const ownedByOther = allFlows.some(f => f.id !== flow.id && (f.default_types || []).includes(t));
+              const owned = (flow.default_types || []).includes(t);
+              return (
+                <option key={t} value={t} disabled={ownedByOther}>
+                  {owned ? '\u2713 ' : ''}{t}{ownedByOther ? ' (other flow)' : ''}
+                </option>
+              );
+            })}
+          </select>
 
-        {/* Step cards */}
-        <div className={s.steps}>
-          {state.editSteps.length === 0 && (
-            <div className={s.empty}>No steps yet</div>
+          <span className={s.stepCount}>
+            {state.editSteps.length} {state.editSteps.length === 1 ? 'step' : 'steps'}
+          </span>
+
+          {state.saving && <span className={s.savingText}>Saving...</span>}
+
+          {isDirty && (
+            <button
+              className={s.saveBtn}
+              onClick={handleSave}
+              disabled={state.saving}
+              title="Save flow"
+            >
+              Save
+            </button>
           )}
-          {state.editSteps.map((step, idx) => (
+
+          <button
+            className={`${s.actionBtn} ${s.actionBtnDanger}`}
+            onClick={handleDeleteFlow}
+            disabled={state.saving}
+            title="Delete flow"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Agents.md collapsible section */}
+      <div className={s.agentsMdSection}>
+        <button
+          className={s.sectionToggle}
+          onClick={() => state.setAgentsMdOpen(v => !v)}
+          type="button"
+        >
+          <span className={`${s.sectionArrow} ${state.agentsMdOpen ? s.sectionArrowOpen : ''}`}>&#9654;</span>
+          agents.md
+          {state.editAgentsMd && !state.agentsMdOpen && (
+            <span className={s.sectionHint}>(has content)</span>
+          )}
+        </button>
+        {state.agentsMdOpen && (
+          <div className={s.agentsMdBody}>
+            <MdField
+              value={state.editAgentsMd}
+              onChange={val => state.setEditAgentsMd(val)}
+              placeholder="Shared instructions for all steps in this flow (markdown)..."
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Step cards */}
+      <div className={s.steps}>
+        {state.editSteps.length === 0 && (
+          <div className={s.empty}>No steps yet</div>
+        )}
+        {state.editSteps.map((step, idx) => {
+          const isExpanded = state.expandedStep === idx;
+          return (
             <div
               key={step.id}
               className={`${s.stepCard} ${state.dragIdx === idx ? s.stepCardDragging : ''} ${state.dragOverIdx === idx && state.dragIdx !== idx ? s.stepCardDragOver : ''}`}
               onDragOver={e => handleDragOver(e, idx)}
               onDragEnd={handleDragEnd}
-              onClick={() => state.setEditingStepIdx(idx)}
             >
-              <div className={s.stepCompact}>
+              {/* Compact row */}
+              <div
+                className={s.stepCompact}
+                onClick={() => state.setExpandedStep(isExpanded ? null : idx)}
+              >
                 <span
                   className={s.dragHandle}
                   draggable
@@ -611,41 +380,173 @@ function FlowColumn({
                   title="Drag to reorder"
                 >&#8942;&#8942;</span>
                 <span className={s.stepName}>{step.name || `Step ${idx + 1}`}</span>
-                <div className={s.stepTags}>
-                  <span className={`${s.stepTag} ${step.model === 'opus' ? s.modelOpus : s.modelSonnet}`}>
-                    {step.model}
-                  </span>
-                  {step.is_gate && <span className={`${s.stepTag} ${s.gateTag}`}>gate</span>}
-                  <span className={`${s.stepTag} ${s.toolsTag}`}>{step.tools.length} tools</span>
-                </div>
+                <span className={`${s.modelBadge} ${step.model === 'opus' ? s.modelOpus : s.modelSonnet}`}>
+                  {step.model}
+                </span>
+                {step.is_gate && <span className={s.gateIcon} title="Gate step">&#9878;</span>}
+                <span className={`${s.stepExpandIcon} ${isExpanded ? s.stepExpandIconOpen : ''}`}>&#9654;</span>
               </div>
-              {step.instructions && (
-                <div className={s.stepPreview}>
-                  {step.instructions.slice(0, 200)}
+
+              {/* Expanded body */}
+              {isExpanded && (
+                <div className={s.stepBody}>
+                  {/* Name */}
+                  <div className={s.field}>
+                    <label className={s.label}>Name</label>
+                    <input
+                      className={s.input}
+                      value={step.name}
+                      onChange={e => updateStep(idx, { name: e.target.value })}
+                      placeholder={`Step ${idx + 1}`}
+                    />
+                  </div>
+
+                  {/* Instructions */}
+                  <div className={s.field}>
+                    <label className={s.label}>Instructions</label>
+                    <MdField
+                      value={step.instructions}
+                      onChange={val => updateStep(idx, { instructions: val })}
+                      placeholder="What should the AI do in this step..."
+                    />
+                  </div>
+
+                  {/* Model */}
+                  <div className={s.field}>
+                    <label className={s.label}>Model</label>
+                    <div className={s.segmented}>
+                      {MODEL_OPTIONS.map(m => (
+                        <button
+                          key={m}
+                          type="button"
+                          className={`${s.segmentedBtn} ${step.model === m ? s.segmentedActive : ''}`}
+                          onClick={() => updateStep(idx, { model: m })}
+                        >
+                          {m.charAt(0).toUpperCase() + m.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Tools */}
+                  <div className={s.field}>
+                    <label className={s.label}>Tools</label>
+                    <div className={s.checkboxGrid}>
+                      {ALL_TOOLS.map(tool => (
+                        <label key={tool} className={s.checkboxLabel}>
+                          <input
+                            type="checkbox"
+                            checked={step.tools.includes(tool)}
+                            onChange={() => toggleTool(idx, tool)}
+                          />
+                          {tool}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Context Sources */}
+                  <div className={s.field}>
+                    <label className={s.label}>Context Sources</label>
+                    <div className={s.chipGrid}>
+                      {ALL_CONTEXT_SOURCES.map(src => (
+                        <button
+                          key={src}
+                          type="button"
+                          className={`${s.chip} ${step.context_sources.includes(src) ? s.chipActive : ''}`}
+                          onClick={() => toggleContextSource(idx, src)}
+                        >
+                          {src}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Gate toggle */}
+                  <div className={s.row}>
+                    <label className={s.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={step.is_gate}
+                        onChange={e => updateStep(idx, { is_gate: e.target.checked })}
+                      />
+                      Gate step (pass/fail verdict)
+                    </label>
+                  </div>
+
+                  {/* Gate config */}
+                  {step.is_gate && (
+                    <div className={s.gateSection}>
+                      <div className={s.gateRow}>
+                        <div className={s.field}>
+                          <label className={s.label}>On fail jump to</label>
+                          <select
+                            className={s.select}
+                            value={step.on_fail_jump_to ?? ''}
+                            onChange={e => {
+                              const v = e.target.value;
+                              updateStep(idx, { on_fail_jump_to: v === '' ? null : Number(v) });
+                            }}
+                          >
+                            <option value="">None</option>
+                            {state.editSteps.map((_, i) => (
+                              i !== idx && <option key={i} value={i + 1}>Step {i + 1}{state.editSteps[i].name ? ` - ${state.editSteps[i].name}` : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className={s.field}>
+                          <label className={s.label}>Max retries</label>
+                          <input
+                            className={s.input}
+                            type="number"
+                            min={0}
+                            max={10}
+                            value={step.max_retries}
+                            onChange={e => updateStep(idx, { max_retries: Number(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className={s.field}>
+                          <label className={s.label}>On max retries</label>
+                          <select
+                            className={s.select}
+                            value={step.on_max_retries}
+                            onChange={e => updateStep(idx, { on_max_retries: e.target.value })}
+                          >
+                            {ON_MAX_RETRIES_OPTIONS.map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Delete step */}
+                  <div className={s.deleteStepRow}>
+                    <button
+                      className="btn btnDanger btnSm"
+                      type="button"
+                      onClick={() => deleteStep(idx)}
+                    >
+                      Delete step
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
-          ))}
-        </div>
-
-        {/* Error */}
-        {state.error && <div className={s.error}>{state.error}</div>}
-
-        {/* Step edit modal */}
-        {state.editingStepIdx !== null && state.editSteps[state.editingStepIdx] && (
-          <StepModal
-            step={state.editSteps[state.editingStepIdx]}
-            idx={state.editingStepIdx}
-            allSteps={state.editSteps}
-            onUpdate={patch => updateStep(state.editingStepIdx!, patch)}
-            onToggleTool={tool => toggleTool(state.editingStepIdx!, tool)}
-            onToggleContext={src => toggleContextSource(state.editingStepIdx!, src)}
-            onDelete={() => deleteStep(state.editingStepIdx!)}
-            onClose={() => state.setEditingStepIdx(null)}
-          />
-        )}
+          );
+        })}
       </div>
-      {showDropRight && <div className={s.columnDropLine} />}
+
+      {/* Add step button */}
+      <div className={s.addStepWrap}>
+        <button className={s.addStepBtn} type="button" onClick={addStep}>
+          + Add Step
+        </button>
+      </div>
+
+      {/* Error */}
+      {state.error && <div className={s.error}>{state.error}</div>}
     </div>
   );
 }
@@ -653,66 +554,17 @@ function FlowColumn({
 /* ─── FlowEditor: Board container ─── */
 export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, projectId, taskTypes }: FlowEditorProps) {
   const [creating, setCreating] = useState(false);
-  const [draggedFlowId, setDraggedFlowId] = useState<string | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  const [dropSide, setDropSide] = useState<'left' | 'right' | null>(null);
 
   const handleNewFlow = useCallback(async () => {
     setCreating(true);
     try {
-      const maxPos = flows.length > 0 ? Math.max(...flows.map(f => f.position ?? 0)) : 0;
       await onCreateFlow({ project_id: projectId, name: 'New Flow', description: '', steps: [] });
-      // Position will be set by the server default or we patch it after
     } catch (err: any) {
       console.error('Failed to create flow:', err);
     } finally {
       setCreating(false);
     }
-  }, [projectId, flows, onCreateFlow]);
-
-  const handleColumnDragStart = useCallback((flowId: string) => {
-    setDraggedFlowId(flowId);
-  }, []);
-
-  const handleColumnDragOver = useCallback((e: React.DragEvent, targetId: string) => {
-    if (!draggedFlowId || targetId === draggedFlowId) return;
-    e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const side = e.clientX < rect.left + rect.width / 2 ? 'left' : 'right';
-    setDropTargetId(targetId);
-    setDropSide(side);
-  }, [draggedFlowId]);
-
-  const handleColumnDragEnd = useCallback(() => {
-    setDraggedFlowId(null);
-    setDropTargetId(null);
-    setDropSide(null);
-  }, []);
-
-  const handleColumnDrop = useCallback(async (targetId: string) => {
-    if (!draggedFlowId || targetId === draggedFlowId || !dropSide) {
-      handleColumnDragEnd();
-      return;
-    }
-    const targetIdx = flows.findIndex(f => f.id === targetId);
-    if (targetIdx < 0) { handleColumnDragEnd(); return; }
-
-    let newPos: number;
-    if (dropSide === 'left') {
-      const prev = targetIdx > 0 ? (flows[targetIdx - 1].position ?? targetIdx - 1) : (flows[targetIdx].position ?? targetIdx) - 1;
-      newPos = (prev + (flows[targetIdx].position ?? targetIdx)) / 2;
-    } else {
-      const next = targetIdx < flows.length - 1 ? (flows[targetIdx + 1].position ?? targetIdx + 1) : (flows[targetIdx].position ?? targetIdx) + 1;
-      newPos = ((flows[targetIdx].position ?? targetIdx) + next) / 2;
-    }
-
-    try {
-      await onSave(draggedFlowId, { position: newPos });
-    } catch (err: any) {
-      console.error('Failed to reorder flow:', err);
-    }
-    handleColumnDragEnd();
-  }, [draggedFlowId, dropSide, flows, onSave, handleColumnDragEnd]);
+  }, [projectId, onCreateFlow]);
 
   const boardRef = useRef<HTMLDivElement>(null);
   const hasScrolledRef = useRef(false);
@@ -736,12 +588,6 @@ export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteF
           onDeleteFlow={onDeleteFlow}
           allFlows={flows}
           taskTypes={taskTypes?.length ? taskTypes : BUILT_IN_TYPES}
-          onColumnDragStart={handleColumnDragStart}
-          onColumnDragOver={handleColumnDragOver}
-          onColumnDragEnd={handleColumnDragEnd}
-          onColumnDrop={handleColumnDrop}
-          showDropLeft={dropTargetId === flow.id && dropSide === 'left' && draggedFlowId !== flow.id}
-          showDropRight={dropTargetId === flow.id && dropSide === 'right' && draggedFlowId !== flow.id}
         />
       ))}
 

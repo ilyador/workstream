@@ -25,19 +25,6 @@
   background: var(--text-4);
 }
 
-/* ─── Column outer: display:contents + drop line (mirrors WorkstreamColumn) ─── */
-.columnOuter {
-  display: contents;
-}
-.columnDropLine {
-  flex-shrink: 0;
-  width: 2px;
-  background: var(--blue);
-  border-radius: 1px;
-  align-self: stretch;
-  margin: 8px -10px;
-}
-
 /* ─── Column: one flow = one column (mirrors WorkstreamColumn.module.css) ─── */
 .column {
   flex: 1 1 500px;
@@ -69,28 +56,6 @@
   padding: 12px 14px;
   min-height: 44px;
 }
-
-/* Drag handle (mirrors TaskCard .handle) */
-.handle {
-  color: var(--text-4);
-  font-size: 12px;
-  cursor: grab;
-  user-select: none;
-  flex-shrink: 0;
-  padding: 4px 3px;
-  letter-spacing: -2px;
-  line-height: 1;
-  border-radius: 4px;
-  transition: color 0.1s, background 0.1s;
-}
-.handle:active {
-  cursor: grabbing;
-}
-.handle:hover {
-  color: var(--text-2);
-  background: var(--bg-active);
-}
-
 .name {
   font-size: 14px;
   font-weight: 600;
@@ -117,7 +82,7 @@
   outline: none;
 }
 
-/* Type select dropdown */
+/* Step count badge (like .backlogCount) */
 .typeSelect {
   font-family: var(--font);
   font-size: 11px;
@@ -135,7 +100,6 @@
   border-color: var(--text-2);
 }
 
-/* Step count badge */
 .stepCount {
   font-size: 12px;
   font-weight: 500;
@@ -147,31 +111,11 @@
   flex-shrink: 0;
 }
 
-/* Compact add-step button in header (mirrors WorkstreamColumn .addBtn) */
-.addBtn {
-  width: 28px;
-  height: 28px;
+/* Column action buttons (mirrors WorkstreamColumn .actionBtn) */
+.actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 1.5px solid var(--divider);
-  border-radius: 6px;
-  color: var(--text-4);
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 1;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
-  flex-shrink: 0;
+  gap: 2px;
 }
-.addBtn:hover {
-  background: var(--bg-hover);
-  color: var(--text-2);
-  border-color: var(--text-4);
-}
-
-/* Column action buttons */
 .actionBtn {
   width: 28px;
   height: 28px;
@@ -219,14 +163,6 @@
 .saveBtn:hover { opacity: 0.8; }
 .saveBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Saving indicator */
-.savingText {
-  font-size: 11px;
-  color: var(--text-3);
-  font-weight: 500;
-  flex-shrink: 0;
-}
-
 /* ─── Agents.md collapsible section ─── */
 .agentsMdSection {
   border-bottom: 1px solid var(--divider);
@@ -269,6 +205,26 @@
   max-height: 300px;
   overflow-y: auto;
 }
+.agentsMdTextarea {
+  width: 100%;
+  min-height: 80px;
+  max-height: 200px;
+  padding: 8px 10px;
+  background: var(--white);
+  border: 1.5px solid var(--divider);
+  border-radius: 8px;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+  overflow-y: auto;
+}
+.agentsMdTextarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-bg);
+}
 
 /* ─── Step list area (mirrors WorkstreamColumn .tasks) ─── */
 .steps {
@@ -308,7 +264,7 @@
   background: var(--white);
   cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s, opacity 0.2s, transform 0.2s cubic-bezier(0.2, 0, 0, 1);
-  overflow: hidden;
+  overflow: visible;
   position: relative;
 }
 .stepCard:hover {
@@ -329,12 +285,12 @@
 /* ─── Step compact row (mirrors TaskCard .compact) ─── */
 .stepCompact {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
   padding: 10px 12px;
 }
 
-/* Step drag handle (mirrors TaskCard .handle) */
+/* Drag handle (mirrors TaskCard .handle) */
 .dragHandle {
   color: var(--text-4);
   font-size: 12px;
@@ -363,23 +319,19 @@
   font-weight: 500;
   color: var(--text);
   line-height: 1.4;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Step tags container (mirrors TaskCard .tags) */
-.stepTags {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-/* Step tag badges (mirrors TaskCard .tag + .tagType) */
-.stepTag {
+/* Model badge pill (like TaskCard .tag) */
+.modelBadge {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   padding: 2px 8px;
-  border-radius: 5px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  text-transform: lowercase;
   white-space: nowrap;
 }
 .modelOpus {
@@ -390,93 +342,41 @@
   background: rgba(37, 99, 235, 0.08);
   color: var(--blue);
 }
-.gateTag {
-  background: var(--amber-bg);
-  color: var(--amber);
-}
-.toolsTag {
-  background: var(--bg-hover);
+
+/* Gate icon */
+.gateIcon {
+  font-size: 14px;
+  flex-shrink: 0;
   color: var(--text-3);
+  line-height: 1;
 }
 
-/* Step instruction preview (mirrors TaskCard .previewDesc) */
-.stepPreview {
-  padding: 0 12px 10px;
-  font-size: 13px;
-  color: var(--text-3);
-  line-height: 1.45;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* ─── Step edit modal (mirrors TaskForm .overlay / .modal) ─── */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-}
-.stepModal {
-  background: var(--bg);
-  border-radius: 12px;
-  width: 100%;
-  max-width: 600px;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-  border: 2px solid transparent;
-  display: flex;
-  flex-direction: column;
-}
-.modalHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 32px 0;
-}
-.modalHeading {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-.modalClose {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  border-radius: 6px;
+/* Expand chevron */
+.stepExpandIcon {
+  font-size: 10px;
   color: var(--text-4);
-  cursor: pointer;
-  font-size: 20px;
-  transition: background 0.1s, color 0.1s;
+  transition: transform 0.15s;
+  flex-shrink: 0;
 }
-.modalClose:hover {
-  background: var(--bg-hover);
-  color: var(--text-2);
-}
-.modalBody {
-  padding: 24px 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.modalFooter {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 32px 24px;
-  border-top: 1px solid var(--divider);
+.stepExpandIconOpen {
+  transform: rotate(90deg);
 }
 
-/* ─── Form elements (shared between modal fields) ─── */
+/* ─── Step expanded form (mirrors TaskCard .detail) ─── */
+.stepBody {
+  padding: 0 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--divider);
+  animation: fadeIn 0.15s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Form elements inside step body */
 .field {
   display: flex;
   flex-direction: column;
@@ -505,6 +405,78 @@
   border-color: var(--blue);
   box-shadow: 0 0 0 3px var(--blue-bg);
 }
+.textarea {
+  padding: 7px 10px;
+  background: var(--white);
+  border: 1.5px solid var(--divider);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-bg);
+}
+
+/* Markdown preview (click to edit) */
+.mdPreview {
+  padding: 7px 10px;
+  background: var(--white);
+  border: 1.5px solid var(--divider);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.55;
+  min-height: 40px;
+  cursor: text;
+  transition: border-color 0.15s;
+}
+.mdPreview:hover {
+  border-color: var(--text-4);
+}
+.mdPreview p { margin: 0 0 6px; }
+.mdPreview p:last-child { margin-bottom: 0; }
+.mdPreview code {
+  font-size: 12px;
+  padding: 1px 5px;
+  background: var(--bg-active);
+  border-radius: 3px;
+}
+.mdPreview pre {
+  background: var(--bg-active);
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  font-size: 12px;
+  margin: 6px 0;
+}
+.mdPreview pre code { padding: 0; background: none; }
+.mdPreview ul, .mdPreview ol { padding-left: 18px; margin: 4px 0; }
+.mdPreview li { margin: 2px 0; }
+.mdPreview strong { color: var(--text); }
+.mdPreviewEmpty {
+  padding: 7px 10px;
+  background: var(--white);
+  border: 1.5px dashed var(--divider);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-4);
+  min-height: 40px;
+  cursor: text;
+  font-style: italic;
+}
+.mdPreviewEmpty:hover {
+  border-color: var(--text-4);
+  color: var(--text-3);
+}
+
 .select {
   padding: 7px 10px;
   background: var(--white);
@@ -523,7 +495,7 @@
   box-shadow: 0 0 0 3px var(--blue-bg);
 }
 
-/* Segmented control (model picker) */
+/* Segmented control (model picker, like priority picker) */
 .segmented {
   display: flex;
   border: 1.5px solid var(--divider);
@@ -636,7 +608,41 @@
   flex: 1;
 }
 
-/* ─── Error banner ─── */
+/* Delete step row */
+.deleteStepRow {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+/* ─── Add Step button at column bottom ─── */
+.addStepWrap {
+  padding: 8px 10px 10px;
+}
+.addStepBtn {
+  width: 100%;
+  padding: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: none;
+  border: 1.5px dashed var(--divider);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-4);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.addStepBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-2);
+  border-color: var(--text-4);
+}
+
+/* ─── Error banner at column bottom ─── */
 .error {
   padding: 8px 12px;
   margin: 0 10px 10px;
@@ -644,6 +650,14 @@
   color: var(--red);
   background: var(--red-bg);
   border-radius: 8px;
+}
+
+/* ─── Saving indicator ─── */
+.savingText {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 500;
+  flex-shrink: 0;
 }
 
 /* ─── "+ Add flow" button at end (mirrors Board .addColumn) ─── */
@@ -731,27 +745,12 @@
   .stepCompact {
     padding: 8px 10px;
   }
+  .stepBody {
+    padding: 0 10px 12px;
+    gap: 10px;
+  }
   .stepName {
     font-size: 13px;
-  }
-  .stepModal {
-    max-width: 100%;
-    max-height: 100dvh;
-    border-radius: 0;
-    margin: 0;
-  }
-  .modalHeader {
-    padding: 16px 16px 0;
-  }
-  .modalBody {
-    padding: 16px;
-    gap: 12px;
-  }
-  .modalFooter {
-    padding: 12px 16px 16px;
-  }
-  .modalHeading {
-    font-size: 18px;
   }
   .segmented {
     flex-wrap: nowrap;
@@ -780,7 +779,11 @@
   .label {
     font-size: 10px;
   }
-  .input, .select {
+  .input, .textarea, .select {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+  .mdPreview, .mdPreviewEmpty {
     font-size: 12px;
     padding: 6px 8px;
   }

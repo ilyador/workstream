@@ -896,7 +896,6 @@ dataRouter.get('/api/flows', requireAuth, async (req, res) => {
     .from('flows')
     .select('*, flow_steps(*)')
     .eq('project_id', projectId)
-    .order('position')
     .order('name');
 
   if (flowErr) {
@@ -945,7 +944,7 @@ dataRouter.patch('/api/flows/:id', requireAuth, async (req, res) => {
   const { data: member } = await supabase.from('project_members').select('role').eq('project_id', flow.project_id).eq('user_id', userId).single();
   if (!member) return res.status(403).json({ error: 'Not a member of this project' });
 
-  const allowed = ['name', 'description', 'icon', 'agents_md', 'default_types', 'position'];
+  const allowed = ['name', 'description', 'icon', 'agents_md', 'default_types'];
   const updates: Record<string, any> = {};
   for (const key of allowed) {
     if (key in req.body) updates[key] = req.body[key];
