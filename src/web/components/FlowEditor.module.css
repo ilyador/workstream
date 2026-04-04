@@ -694,7 +694,8 @@
     height: auto;
     scroll-snap-type: x mandatory;
     scroll-padding: 0 12px;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: visible;
   }
   .column {
     flex: 0 0 calc(100vw - 24px);

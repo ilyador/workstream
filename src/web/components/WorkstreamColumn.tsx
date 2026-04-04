@@ -387,6 +387,29 @@ export function WorkstreamColumn({
   const showDropLeft = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'left';
   const showDropRight = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'right';
 
+  const renderReviewer = () => {
+    if (!workstream || !members || members.length === 0 || !onUpdateWorkstream) return null;
+    if (workstream.reviewer_id) {
+      const reviewer = members.find(m => m.id === workstream.reviewer_id);
+      return reviewer ? (
+        <span className={s.reviewerChip}>
+          <span className={s.reviewerAvatar}>{reviewer.initials}</span>
+          {reviewer.name}
+        </span>
+      ) : null;
+    }
+    return (
+      <select
+        className={s.reviewerSelect}
+        defaultValue=""
+        onChange={e => { if (e.target.value) onUpdateWorkstream(workstream.id, { reviewer_id: e.target.value }); }}
+      >
+        <option value="">Assign reviewer</option>
+        {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+      </select>
+    );
+  };
+
   return (
     <div className={s.columnOuter}>
       {showDropLeft && <div className={s.columnDropLine} />}
@@ -793,32 +816,7 @@ export function WorkstreamColumn({
         <div className={s.completeBanner}>
           <span>PR open</span>
           <div className={s.completeBannerActions}>
-            {workstream && members && members.length > 0 && onUpdateWorkstream && (
-              workstream.reviewer_id ? (() => {
-                const reviewer = members.find(m => m.id === workstream.reviewer_id);
-                return reviewer ? (
-                  <span className={s.reviewerChip}>
-                    <span className={s.reviewerAvatar}>{reviewer.initials}</span>
-                    {reviewer.name}
-                  </span>
-                ) : null;
-              })() : (
-                <select
-                  className={s.reviewerSelect}
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      onUpdateWorkstream(workstream.id, { reviewer_id: e.target.value });
-                    }
-                  }}
-                >
-                  <option value="">Assign reviewer</option>
-                  {members.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              )
-            )}
+            {renderReviewer()}
             {workstream?.pr_url && (
               <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
                 View PR
@@ -832,32 +830,7 @@ export function WorkstreamColumn({
         <div className={`${s.completeBanner} ${s.mergedBanner}`}>
           <span>&#10003; PR merged</span>
           <div className={s.completeBannerActions}>
-            {workstream && members && members.length > 0 && onUpdateWorkstream && (
-              workstream.reviewer_id ? (() => {
-                const reviewer = members.find(m => m.id === workstream.reviewer_id);
-                return reviewer ? (
-                  <span className={s.reviewerChip}>
-                    <span className={s.reviewerAvatar}>{reviewer.initials}</span>
-                    {reviewer.name}
-                  </span>
-                ) : null;
-              })() : (
-                <select
-                  className={s.reviewerSelect}
-                  defaultValue=""
-                  onChange={e => {
-                    if (e.target.value) {
-                      onUpdateWorkstream(workstream.id, { reviewer_id: e.target.value });
-                    }
-                  }}
-                >
-                  <option value="">Assign reviewer</option>
-                  {members.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              )
-            )}
+            {renderReviewer()}
             {workstream?.pr_url && (
               <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
                 View PR

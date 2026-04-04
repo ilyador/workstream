@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { getSkills, type SkillInfo, type Flow } from '../lib/api';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { useArtifacts } from '../hooks/useArtifacts';
+import { getFileIcon, formatFileSize } from '../lib/file-utils';
 import s from './TaskForm.module.css';
 
 interface Workstream {
@@ -531,19 +532,6 @@ function TaskAttachmentsEdit({ taskId }: { taskId: string }) {
     e.target.value = '';
   };
 
-  const getIcon = (mime: string) => {
-    if (mime.startsWith('image/')) return '\u{1F5BC}';
-    if (mime.startsWith('video/')) return '\u{1F3AC}';
-    if (mime === 'application/pdf') return '\u{1F4D5}';
-    if (mime.includes('zip')) return '\u{1F4E6}';
-    return '\u{1F4C4}';
-  };
-
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes}B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)}KB`;
-    return `${(bytes / 1048576).toFixed(1)}MB`;
-  };
 
   return (
     <div style={{ marginTop: 6 }}>
@@ -570,14 +558,14 @@ function TaskAttachmentsEdit({ taskId }: { taskId: string }) {
                   <img src={a.url} alt={a.filename} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
                 </a>
               ) : (
-                <span style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{getIcon(a.mime_type)}</span>
+                <span style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{getFileIcon(a.mime_type)}</span>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <a href={a.url} target="_blank" rel="noopener noreferrer" style={{
                   fontSize: 12, fontWeight: 500, color: 'var(--text)', textDecoration: 'none',
                   display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>{a.filename}</a>
-                {a.size_bytes > 0 && <span style={{ fontSize: 10, color: 'var(--text-4)' }}>{formatSize(a.size_bytes)}</span>}
+                {a.size_bytes > 0 && <span style={{ fontSize: 10, color: 'var(--text-4)' }}>{formatFileSize(a.size_bytes)}</span>}
               </div>
               <button
                 type="button"

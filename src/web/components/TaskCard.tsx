@@ -3,6 +3,7 @@ import Markdown from 'react-markdown';
 import { useComments } from '../hooks/useComments';
 import { useMembers } from '../hooks/useMembers';
 import { useArtifacts } from '../hooks/useArtifacts';
+import { getFileIcon, formatFileSize } from '../lib/file-utils';
 import { useModal } from '../hooks/useModal';
 import { timeAgo, elapsed } from '../lib/time';
 import { LiveLogs } from './LiveLogs';
@@ -459,19 +460,6 @@ function TaskAttachments({ taskId, legacyImages, readOnly }: { taskId: string; l
     e.target.value = '';
   };
 
-  const getIcon = (mime: string) => {
-    if (mime.startsWith('image/')) return '🖼';
-    if (mime.startsWith('video/')) return '🎬';
-    if (mime === 'application/pdf') return '📕';
-    if (mime.includes('zip')) return '📦';
-    return '📄';
-  };
-
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes}B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)}KB`;
-    return `${(bytes / 1048576).toFixed(1)}MB`;
-  };
 
   return (
     <div className={s.attachments}>
@@ -493,11 +481,11 @@ function TaskAttachments({ taskId, legacyImages, readOnly }: { taskId: string; l
                   <img src={a.url} alt={a.filename} className={s.attachThumb} />
                 </a>
               ) : (
-                <span className={s.attachIcon}>{getIcon(a.mime_type)}</span>
+                <span className={s.attachIcon}>{getFileIcon(a.mime_type)}</span>
               )}
               <div className={s.attachInfo}>
                 <a href={a.url} target="_blank" rel="noopener noreferrer" className={s.attachName}>{a.filename}</a>
-                {a.size_bytes > 0 && <span className={s.attachSize}>{formatSize(a.size_bytes)}</span>}
+                {a.size_bytes > 0 && <span className={s.attachSize}>{formatFileSize(a.size_bytes)}</span>}
               </div>
               {!readOnly && !a.isLegacy && <button className={s.attachDelete} onClick={() => remove(a.id)} title="Remove">&times;</button>}
             </div>

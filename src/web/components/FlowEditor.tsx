@@ -599,9 +599,15 @@ export function FlowEditor({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteF
   }, [projectId, onCreateFlow]);
 
   const boardRef = useRef<HTMLDivElement>(null);
+  const hasScrolledRef = useRef(false);
   useEffect(() => {
-    if (boardRef.current) boardRef.current.scrollLeft = 0;
-  }, []);
+    if (flows.length > 0 && !hasScrolledRef.current) {
+      hasScrolledRef.current = true;
+      requestAnimationFrame(() => {
+        if (boardRef.current) boardRef.current.scrollLeft = 0;
+      });
+    }
+  }, [flows.length]);
 
   return (
     <div className={s.board} ref={boardRef}>
