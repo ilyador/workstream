@@ -43,10 +43,11 @@ interface TaskCardProps {
   onReject?: (jobId: string) => void;
   onRevert?: (jobId: string) => void;
   onDeleteJob?: (jobId: string) => void;
-  onDragStart?: () => void;
+  onDragStart?: (e?: React.DragEvent) => void;
   onDragEnd?: () => void;
   isDragging?: boolean;
   dragDisabled?: boolean;
+  skipDragGhost?: boolean;
   showPriority?: boolean;
   projectId?: string;
   hasUnreadMention?: boolean;
@@ -82,6 +83,7 @@ export function TaskCard({
   onDragEnd,
   isDragging,
   dragDisabled,
+  skipDragGhost,
   showPriority,
   projectId,
   hasUnreadMention,
@@ -141,23 +143,25 @@ export function TaskCard({
             draggable
             onDragStart={(e) => {
               e.stopPropagation();
-              const card = (e.target as HTMLElement).closest(`.${s.card}`) as HTMLElement;
-              if (card) {
-                const clone = card.cloneNode(true) as HTMLElement;
-                clone.style.width = `${card.offsetWidth}px`;
-                clone.style.transform = 'rotate(2deg) scale(1.02)';
-                clone.style.boxShadow = '0 12px 32px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.1)';
-                clone.style.borderRadius = '10px';
-                clone.style.opacity = '0.92';
-                clone.style.position = 'fixed';
-                clone.style.top = '-9999px';
-                clone.style.left = '-9999px';
-                clone.style.pointerEvents = 'none';
-                clone.id = '__drag-preview__';
-                document.body.appendChild(clone);
-                e.dataTransfer.setDragImage(clone, card.offsetWidth / 2, 20);
+              if (!skipDragGhost) {
+                const card = (e.target as HTMLElement).closest(`.${s.card}`) as HTMLElement;
+                if (card) {
+                  const clone = card.cloneNode(true) as HTMLElement;
+                  clone.style.width = `${card.offsetWidth}px`;
+                  clone.style.transform = 'rotate(2deg) scale(1.02)';
+                  clone.style.boxShadow = '0 12px 32px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.1)';
+                  clone.style.borderRadius = '10px';
+                  clone.style.opacity = '0.92';
+                  clone.style.position = 'fixed';
+                  clone.style.top = '-9999px';
+                  clone.style.left = '-9999px';
+                  clone.style.pointerEvents = 'none';
+                  clone.id = '__drag-preview__';
+                  document.body.appendChild(clone);
+                  e.dataTransfer.setDragImage(clone, card.offsetWidth / 2, 20);
+                }
               }
-              onDragStart?.();
+              onDragStart?.(e);
               e.dataTransfer.effectAllowed = 'move';
             }}
             onDragEnd={(e) => {
