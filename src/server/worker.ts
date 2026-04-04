@@ -200,7 +200,7 @@ async function startJob(job: any): Promise<void> {
           completed_at: new Date().toISOString(),
           question: failMsg,
         }).eq('id', jobId);
-        await supabase.from('tasks').update({ status: 'backlog' }).eq('id', task.id);
+        await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
         return;
       }
       await writeLog(jobId, 'log', { text: `[checkpoint] Warning: ${err.message}. Manual revert will not be available.` });
@@ -300,7 +300,7 @@ async function startJob(job: any): Promise<void> {
       completed_at: new Date().toISOString(),
       question: `Unexpected error: ${err.message}`,
     }).eq('id', jobId);
-    await supabase.from('tasks').update({ status: 'backlog' }).eq('id', task.id);
+    await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
     await notifyTaskFailure(task, err.message);
   }
 }
@@ -367,7 +367,7 @@ setInterval(async () => {
           completed_at: new Date().toISOString(),
           question: 'Job failed: canceled by user.',
         }).eq('id', job.id);
-        await supabase.from('tasks').update({ status: 'backlog' }).eq('id', job.task_id);
+        await supabase.from('tasks').update({ status: 'paused' }).eq('id', job.task_id);
         await writeLog(job.id, 'failed', { error: 'Job canceled by user' });
       } catch (err: any) {
         console.error(`[worker] Cancel error for job ${job.id}:`, err.message);
@@ -401,7 +401,7 @@ setInterval(async () => {
           completed_at: new Date().toISOString(),
           question: msg,
         }).eq('id', job.id);
-        await supabase.from('tasks').update({ status: 'backlog' }).eq('id', job.task_id);
+        await supabase.from('tasks').update({ status: 'paused' }).eq('id', job.task_id);
         await supabase.from('job_logs').insert({ job_id: job.id, event: 'failed', data: { error: msg } });
       }
       console.log(`[worker] Cleaned up ${stuck.length} stuck canceling job(s)`);

@@ -537,7 +537,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
                 completed_at: new Date().toISOString(),
                 question: failMsg,
               }).eq('id', jobId);
-              await supabase.from('tasks').update({ status: 'backlog' }).eq('id', task.id);
+              await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
               onFail(failMsg);
               return;
             }
@@ -568,7 +568,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
             completed_at: new Date().toISOString(),
             question: failMessage,
           }).eq('id', jobId);
-          await supabase.from('tasks').update({ status: 'backlog' }).eq('id', task.id);
+          await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
           onFail(failMessage);
           return;
         }
@@ -1106,7 +1106,7 @@ export async function cleanupOrphanedJobs(): Promise<number> {
       }).eq('id', job.id);
 
       await supabase.from('tasks').update({
-        status: 'backlog',
+        status: 'paused',
       }).eq('id', job.task_id);
 
       // Write to job_logs so SSE clients see the terminal event
@@ -1157,7 +1157,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
     const phaseConfig = taskType.phase_config[phase];
     if (!phaseConfig) {
-      await supabase.from('tasks').update({ status: 'backlog' }).eq('id', task.id);
+      await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
       onFail(`No config for phase: ${phase}`);
       return;
     }
@@ -1328,7 +1328,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
             checkpoint_status: revertSucceeded ? 'reverted' : 'active',
           }).eq('id', jobId);
           // Runner is sole authority: always update task status on failure
-          await supabase.from('tasks').update({ status: 'backlog' }).eq('id', ctx.taskId);
+          await supabase.from('tasks').update({ status: 'paused' }).eq('id', ctx.taskId);
           onFail(failMessage);
           return;
         }
