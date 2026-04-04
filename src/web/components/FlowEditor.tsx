@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Flow, FlowStep } from '../lib/api';
 import s from './FlowEditor.module.css';
 
@@ -46,7 +47,7 @@ function MdField({ value, onChange, placeholder, autoResizeFn }: {
 
   return (
     <div className={s.mdPreview} onClick={() => setEditing(true)}>
-      <Markdown>{value}</Markdown>
+      <Markdown remarkPlugins={[remarkGfm]}>{value}</Markdown>
     </div>
   );
 }

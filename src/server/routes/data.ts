@@ -198,13 +198,18 @@ dataRouter.patch('/api/workstreams/:id', requireAuth, async (req, res) => {
   for (const key of allowed) {
     if (key in req.body) updates[key] = req.body[key];
   }
+  console.log('[workstream PATCH]', req.params.id, JSON.stringify(updates));
   const { data, error } = await supabase
     .from('workstreams')
     .update(updates)
     .eq('id', req.params.id)
     .select()
     .single();
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    console.error('[workstream PATCH error]', error);
+    return res.status(400).json({ error: error.message });
+  }
+  console.log('[workstream PATCH success]', data?.id, data?.reviewer_id);
 
   // Notify reviewer when assigned
   const userId = (req as any).userId;

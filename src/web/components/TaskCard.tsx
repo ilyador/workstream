@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useComments } from '../hooks/useComments';
 import { useMembers } from '../hooks/useMembers';
 import { useArtifacts } from '../hooks/useArtifacts';
@@ -208,7 +209,7 @@ export function TaskCard({
         <div className={s.detail} onClick={(e) => e.stopPropagation()}>
           {/* Description (read-only) */}
           {task.description && (
-            <div className={s.desc}><Markdown>{task.description}</Markdown></div>
+            <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>
           )}
 
           {/* QUEUED */}
@@ -301,7 +302,7 @@ export function TaskCard({
       {!isActive && !isExpanded && task.description && (
         <div className={s.preview}>
           <div className={s.previewDesc}>
-            <Markdown>{task.description}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown>
           </div>
         </div>
       )}
@@ -385,7 +386,7 @@ function IdleDetail({
 
   return (
     <>
-      {task.description && <div className={s.desc}><Markdown>{task.description}</Markdown></div>}
+      {task.description && <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>}
       <div className={s.meta}>
         <span>effort: {task.effort}</span>
         {task.multiagent === 'yes' && <span>subagents: on</span>}
