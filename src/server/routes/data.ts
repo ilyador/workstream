@@ -794,7 +794,7 @@ or if issues found:
 \`\`\``,
 };
 
-const EXECUTE_CONTEXT = ['claude_md', 'agents_md', 'task_description', 'skills', 'task_images', 'followup_notes'];
+const EXECUTE_CONTEXT = ['claude_md', 'agents_md', 'task_description', 'skills', 'task_images', 'followup_notes', 'gate_feedback'];
 
 
 const DEFAULT_FLOWS: Array<{ name: string; description: string; default_types: string[]; steps: any[] }> = [

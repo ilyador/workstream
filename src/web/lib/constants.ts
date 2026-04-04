@@ -4,7 +4,7 @@ export const ALL_TOOLS = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'];
 
 export const ALL_CONTEXT_SOURCES = [
   'claude_md', 'task_description', 'task_images',
-  'skills', 'architecture_md', 'review_criteria', 'followup_notes', 'git_diff', 'rag',
+  'skills', 'architecture_md', 'review_criteria', 'followup_notes', 'git_diff', 'rag', 'gate_feedback',
 ];
 
 export const MODEL_OPTIONS = ['opus', 'sonnet'];

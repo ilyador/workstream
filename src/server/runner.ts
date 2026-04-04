@@ -293,6 +293,11 @@ async function buildStepPrompt(
         if (task._ragResults?.length > 0) prompt += formatRagResults(task._ragResults);
         prompt += `## Document Search Tool\nYou can search project documents for specific information using the Bash tool:\n\`\`\`\nnpx tsx src/server/rag-cli.ts ${task.project_id} "your search query"\n\`\`\`\nUse targeted queries to find rules, lore, specs, or any project documentation. You can run multiple searches.\n\n`;
         break;
+      case 'gate_feedback':
+        if (task._gateFeedback) {
+          prompt += `## Previous Step Feedback (retry reason)\n${task._gateFeedback}\n\n`;
+        }
+        break;
       case 'all_previous_steps':
         if (previousOutputs.length > 0) {
           prompt += '## Previous Phase Outputs\n';
@@ -489,8 +494,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
                 await supabase.from('jobs').update({ question: retryMsg }).eq('id', jobId);
                 await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
                 // Clear steps from jumpIndex through i so they re-run
-                // BUT preserve the failed step's output as followup_notes so the
-                // retry knows what went wrong (prevents blind re-exploration)
+                // Preserve failed step's output for retry context
                 const failedOutput = phasesCompleted.find(p => p.phase === step.name)?.output;
                 for (let ci = jumpIndex; ci <= i; ci++) {
                   completedPhaseNames.delete(steps[ci].name);
@@ -499,9 +503,9 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
                   const stepIdx = steps.findIndex(s => s.name === phasesCompleted[pi].phase);
                   if (stepIdx >= jumpIndex && stepIdx <= i) { phasesCompleted.splice(pi, 1); }
                 }
-                // Inject failure reason so the retried step knows what to fix
+                // Store gate feedback on the job -- steps with 'gate_feedback' context source will pick it up
                 if (failedOutput) {
-                  task.followup_notes = `Previous ${step.name} failed: ${reason}\n\nFull output:\n${failedOutput.substring(0, 3000)}`;
+                  task._gateFeedback = `${step.name} failed: ${reason}\n\nFull output:\n${failedOutput.substring(0, 3000)}`;
                 }
                 i = jumpIndex;
                 break;
