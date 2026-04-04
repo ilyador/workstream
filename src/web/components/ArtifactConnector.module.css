@@ -1,0 +1,25 @@
+.connector { display: flex; flex-direction: column; align-items: center; padding: 2px 0; }
+.line { width: 1px; height: 6px; background: var(--text-4); }
+.pill {
+  font-family: var(--font); font-size: 11px; font-weight: 500;
+  color: var(--text-3); background: var(--bg-hover);
+  border: 1px solid var(--divider); border-radius: 10px;
+  padding: 3px 10px; cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.pill:hover { background: var(--bg-active); color: var(--text-2); }
+.fileList {
+  display: flex; flex-direction: column; gap: 2px;
+  margin: 4px 0; padding: 6px 8px;
+  background: var(--bg-hover); border: 1px solid var(--divider);
+  border-radius: 8px; min-width: 160px;
+}
+.fileItem {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 4px; border-radius: 4px;
+  text-decoration: none; color: var(--text); font-size: 11px;
+  transition: background 0.1s;
+}
+.fileItem:hover { background: var(--bg-active); }
+.fileIcon { font-size: 13px; flex-shrink: 0; }
+.fileName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

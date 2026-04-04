@@ -231,7 +231,7 @@ dataRouter.get('/api/tasks', requireAuth, async (req, res) => {
 
 dataRouter.post('/api/tasks', requireAuth, async (req, res) => {
   const userId = (req as any).userId;
-  const { project_id, title, description, type, mode, effort, workstream_id, multiagent, assignee, auto_continue, images, priority, flow_id } = req.body;
+  const { project_id, title, description, type, mode, effort, workstream_id, multiagent, assignee, auto_continue, images, priority, flow_id, chaining } = req.body;
 
   // Get max position, scoped to workstream
   let posQuery = supabase
@@ -264,6 +264,7 @@ dataRouter.post('/api/tasks', requireAuth, async (req, res) => {
       workstream_id: workstream_id || null,
       flow_id: flow_id || null,
       priority: priority || 'backlog',
+      chaining: chaining || 'none',
       position: (maxTask?.position || 0) + 1,
       created_by: userId,
     })
@@ -274,7 +275,7 @@ dataRouter.post('/api/tasks', requireAuth, async (req, res) => {
 });
 
 dataRouter.patch('/api/tasks/:id', requireAuth, async (req, res) => {
-  const allowed = ['title', 'description', 'type', 'mode', 'effort', 'multiagent', 'status', 'assignee', 'workstream_id', 'position', 'images', 'followup_notes', 'auto_continue', 'priority', 'flow_id'];
+  const allowed = ['title', 'description', 'type', 'mode', 'effort', 'multiagent', 'status', 'assignee', 'workstream_id', 'position', 'images', 'followup_notes', 'auto_continue', 'priority', 'flow_id', 'chaining'];
   const updates: Record<string, any> = {};
   for (const key of allowed) {
     if (key in req.body) updates[key] = req.body[key];
@@ -451,6 +452,78 @@ dataRouter.delete('/api/comments/:id', requireAuth, async (req, res) => {
   if (!comment) return res.status(404).json({ error: 'Comment not found' });
   if (comment.user_id !== userId) return res.status(403).json({ error: 'Can only delete your own comments' });
   const { error } = await supabase.from('comments').delete().eq('id', req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+// --- Artifacts ---
+
+// Helper: verify user is a member of the task's project
+async function verifyTaskAccess(userId: string, taskId: string): Promise<{ projectId: string } | null> {
+  const { data: task } = await supabase.from('tasks').select('project_id').eq('id', taskId).single();
+  if (!task) return null;
+  const { data: member } = await supabase.from('project_members').select('user_id').eq('project_id', task.project_id).eq('user_id', userId).single();
+  if (!member) return null;
+  return { projectId: task.project_id };
+}
+
+dataRouter.post('/api/artifacts', requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const { task_id, filename, mime_type, data: fileData, repo_path } = req.body;
+  if (!task_id || !filename || !mime_type || !fileData) {
+    return res.status(400).json({ error: 'task_id, filename, mime_type, and data are required' });
+  }
+  const access = await verifyTaskAccess(userId, task_id);
+  if (!access) return res.status(403).json({ error: 'Not authorized to access this task' });
+
+  const buffer = Buffer.from(fileData, 'base64');
+  const storagePath = `${access.projectId}/${task_id}/${filename}`;
+
+  const { error: uploadErr } = await supabase.storage
+    .from('task-artifacts')
+    .upload(storagePath, buffer, { contentType: mime_type, upsert: true });
+  if (uploadErr) return res.status(500).json({ error: `Storage upload failed: ${uploadErr.message}` });
+
+  const { data: urlData } = supabase.storage.from('task-artifacts').getPublicUrl(storagePath);
+
+  const { data: artifact, error } = await supabase.from('task_artifacts').insert({
+    task_id,
+    filename,
+    mime_type,
+    size_bytes: buffer.length,
+    storage_path: storagePath,
+    repo_path: repo_path || null,
+  }).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ...artifact, url: urlData.publicUrl });
+});
+
+dataRouter.get('/api/artifacts', requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const taskId = req.query.task_id as string;
+  if (!taskId) return res.status(400).json({ error: 'task_id required' });
+  const access = await verifyTaskAccess(userId, taskId);
+  if (!access) return res.status(403).json({ error: 'Not authorized to access this task' });
+  const { data } = await supabase.from('task_artifacts').select('*').eq('task_id', taskId).order('created_at');
+  const artifacts = (data || []).map(a => {
+    const { data: urlData } = supabase.storage.from('task-artifacts').getPublicUrl(a.storage_path);
+    return { ...a, url: urlData.publicUrl };
+  });
+  res.json(artifacts);
+});
+
+dataRouter.delete('/api/artifacts/:id', requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const { data: artifact } = await supabase.from('task_artifacts').select('*, tasks!inner(project_id)').eq('id', req.params.id).single();
+  if (!artifact) return res.status(404).json({ error: 'Artifact not found' });
+  // Verify project membership
+  const projectId = (artifact as any).tasks?.project_id;
+  if (projectId) {
+    const { data: member } = await supabase.from('project_members').select('user_id').eq('project_id', projectId).eq('user_id', userId).single();
+    if (!member) return res.status(403).json({ error: 'Not authorized' });
+  }
+  await supabase.storage.from('task-artifacts').remove([artifact.storage_path]);
+  const { error } = await supabase.from('task_artifacts').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ error: error.message });
   res.json({ ok: true });
 });

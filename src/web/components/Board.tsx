@@ -94,6 +94,7 @@ export function Board({
   onCreatePr,
 }: BoardProps) {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [draggedGroupIds, setDraggedGroupIds] = useState<string[]>([]);
   const [draggedWsId, setDraggedWsId] = useState<string | null>(null);
   const [addingWs, setAddingWs] = useState(false);
   const [newWsName, setNewWsName] = useState('');
@@ -152,40 +153,53 @@ export function Board({
     [workstreams]
   );
 
+  const handleDragGroupStart = (taskIds: string[]) => {
+    setDraggedTaskId(taskIds[0]); // Primary for backwards compat
+    setDraggedGroupIds(taskIds);
+  };
+
   const handleDropTask = async (targetWsId: string | null, dropBeforeTaskId: string | null) => {
     if (!draggedTaskId) return;
-    const task = tasks.find(t => t.id === draggedTaskId);
-    if (!task) return;
 
-    // Get tasks in the target column, excluding the dragged task
+    const idsToMove = draggedGroupIds.length > 0 ? draggedGroupIds : [draggedTaskId];
+
+    // Get tasks in the target column, excluding all tasks being moved
     const targetKey = targetWsId || '__backlog__';
-    const targetTasks = (tasksByWorkstream[targetKey] || []).filter((t: any) => t.id !== draggedTaskId);
-    let newPosition: number;
+    const idsSet = new Set(idsToMove);
+    const targetTasks = (tasksByWorkstream[targetKey] || []).filter((t: any) => !idsSet.has(t.id));
+    let basePosition: number;
 
     if (!dropBeforeTaskId) {
       // Dropped at end
       const last = targetTasks[targetTasks.length - 1];
-      newPosition = last ? last.position + 1 : 1;
+      basePosition = last ? last.position + 1 : 1;
     } else {
       const dropIdx = targetTasks.findIndex((t: any) => t.id === dropBeforeTaskId);
       if (dropIdx === 0) {
         // Dropped at start
-        newPosition = targetTasks[0].position - 1;
+        basePosition = targetTasks[0].position - idsToMove.length;
       } else if (dropIdx > 0) {
-        // Dropped between two items
+        // Dropped between two items — ensure all group members fit in the gap
         const before = targetTasks[dropIdx - 1];
         const after = targetTasks[dropIdx];
-        newPosition = Math.floor((before.position + after.position) / 2);
-        if (newPosition === before.position) newPosition = before.position + 1;
+        const gap = after.position - before.position;
+        const spacing = gap / (idsToMove.length + 1);
+        basePosition = before.position + spacing;
       } else {
-        // dropBeforeTaskId not found — drop at end
+        // dropBeforeTaskId not found -- drop at end
         const last = targetTasks[targetTasks.length - 1];
-        newPosition = last ? last.position + 1 : 1;
+        basePosition = last ? last.position + 1 : 1;
       }
     }
 
-    await onMoveTask(draggedTaskId, targetWsId, newPosition);
+    // Move all tasks in the group with evenly spaced positions
+    const step = idsToMove.length > 1 ? 0.001 : 0;
+    for (let i = 0; i < idsToMove.length; i++) {
+      await onMoveTask(idsToMove[i], targetWsId, basePosition + i * step);
+    }
+
     setDraggedTaskId(null);
+    setDraggedGroupIds([]);
   };
 
   const handleBoardDragOver = (e: React.DragEvent) => {
@@ -218,6 +232,7 @@ export function Board({
 
   const handleDragEnd = () => {
     setDraggedTaskId(null);
+    setDraggedGroupIds([]);
     setDraggedWsId(null);
     if (scrollInterval.current) {
       clearInterval(scrollInterval.current);
@@ -263,7 +278,9 @@ export function Board({
         commentCounts={commentCounts}
         focusTaskId={focusTaskId}
         draggedTaskId={draggedTaskId}
+        draggedGroupIds={draggedGroupIds}
         onDragTaskStart={setDraggedTaskId}
+        onDragGroupStart={handleDragGroupStart}
         onDragTaskEnd={handleDragEnd}
         onDropTask={handleDropTask}
         onAddTask={() => onAddTask(null)}
@@ -293,8 +310,10 @@ export function Board({
         commentCounts={commentCounts}
           focusTaskId={focusTaskId}
           draggedTaskId={draggedTaskId}
+          draggedGroupIds={draggedGroupIds}
           draggedWsId={draggedWsId}
           onDragTaskStart={setDraggedTaskId}
+          onDragGroupStart={handleDragGroupStart}
           onDragTaskEnd={handleDragEnd}
           onDropTask={handleDropTask}
           onColumnDragStart={setDraggedWsId}

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import { useComments } from '../hooks/useComments';
 import { useMembers } from '../hooks/useMembers';
+import { useArtifacts } from '../hooks/useArtifacts';
 import { useModal } from '../hooks/useModal';
 import { timeAgo, elapsed } from '../lib/time';
 import { LiveLogs } from './LiveLogs';
@@ -42,10 +43,11 @@ interface TaskCardProps {
   onReject?: (jobId: string) => void;
   onRevert?: (jobId: string) => void;
   onDeleteJob?: (jobId: string) => void;
-  onDragStart?: () => void;
+  onDragStart?: (e?: React.DragEvent) => void;
   onDragEnd?: () => void;
   isDragging?: boolean;
   dragDisabled?: boolean;
+  skipDragGhost?: boolean;
   showPriority?: boolean;
   projectId?: string;
   hasUnreadMention?: boolean;
@@ -81,6 +83,7 @@ export function TaskCard({
   onDragEnd,
   isDragging,
   dragDisabled,
+  skipDragGhost,
   showPriority,
   projectId,
   hasUnreadMention,
@@ -140,23 +143,25 @@ export function TaskCard({
             draggable
             onDragStart={(e) => {
               e.stopPropagation();
-              const card = (e.target as HTMLElement).closest(`.${s.card}`) as HTMLElement;
-              if (card) {
-                const clone = card.cloneNode(true) as HTMLElement;
-                clone.style.width = `${card.offsetWidth}px`;
-                clone.style.transform = 'rotate(2deg) scale(1.02)';
-                clone.style.boxShadow = '0 12px 32px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.1)';
-                clone.style.borderRadius = '10px';
-                clone.style.opacity = '0.92';
-                clone.style.position = 'fixed';
-                clone.style.top = '-9999px';
-                clone.style.left = '-9999px';
-                clone.style.pointerEvents = 'none';
-                clone.id = '__drag-preview__';
-                document.body.appendChild(clone);
-                e.dataTransfer.setDragImage(clone, card.offsetWidth / 2, 20);
+              if (!skipDragGhost) {
+                const card = (e.target as HTMLElement).closest(`.${s.card}`) as HTMLElement;
+                if (card) {
+                  const clone = card.cloneNode(true) as HTMLElement;
+                  clone.style.width = `${card.offsetWidth}px`;
+                  clone.style.transform = 'rotate(2deg) scale(1.02)';
+                  clone.style.boxShadow = '0 12px 32px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.1)';
+                  clone.style.borderRadius = '10px';
+                  clone.style.opacity = '0.92';
+                  clone.style.position = 'fixed';
+                  clone.style.top = '-9999px';
+                  clone.style.left = '-9999px';
+                  clone.style.pointerEvents = 'none';
+                  clone.id = '__drag-preview__';
+                  document.body.appendChild(clone);
+                  e.dataTransfer.setDragImage(clone, card.offsetWidth / 2, 20);
+                }
               }
-              onDragStart?.();
+              onDragStart?.(e);
               e.dataTransfer.effectAllowed = 'move';
             }}
             onDragEnd={(e) => {
@@ -390,15 +395,7 @@ function IdleDetail({
         </span>
       </div>
 
-      {task.images && task.images.length > 0 && (
-        <div className={s.images}>
-          {task.images.map((url, i) => (
-            <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-              <img src={url} alt={`Attachment ${i + 1}`} className={s.imageFull} />
-            </a>
-          ))}
-        </div>
-      )}
+      <TaskAttachments taskId={task.id} legacyImages={task.images} />
 
       <div className={s.actions}>
         <div className={s.actionsLeft}>
@@ -431,6 +428,80 @@ function IdleDetail({
 
       <CardComments taskId={task.id} projectId={projectId} />
     </>
+  );
+}
+
+/** Attachments section using artifacts API */
+function TaskAttachments({ taskId, legacyImages }: { taskId: string; legacyImages?: string[] }) {
+  const { artifacts, upload, remove } = useArtifacts(taskId);
+  // Include legacy task.images as read-only artifacts for backward compat
+  const legacyArtifacts = (legacyImages || []).map((url, i) => ({
+    id: `legacy-${i}`,
+    url,
+    filename: url.split('/').pop() || `image-${i + 1}`,
+    mime_type: 'image/*',
+    size_bytes: 0,
+    isLegacy: true,
+  }));
+  const allFiles = [...artifacts.map(a => ({ ...a, isLegacy: false })), ...legacyArtifacts];
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    for (const file of Array.from(e.dataTransfer.files)) upload(file);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    for (const file of Array.from(e.target.files || [])) upload(file);
+    e.target.value = '';
+  };
+
+  const getIcon = (mime: string) => {
+    if (mime.startsWith('image/')) return '🖼';
+    if (mime.startsWith('video/')) return '🎬';
+    if (mime === 'application/pdf') return '📕';
+    if (mime.includes('zip')) return '📦';
+    return '📄';
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)}KB`;
+    return `${(bytes / 1048576).toFixed(1)}MB`;
+  };
+
+  return (
+    <div className={s.attachments}>
+      <div className={s.attachmentsHeader}>
+        <span>Attachments{allFiles.length > 0 ? ` (${allFiles.length})` : ''}</span>
+        <button className={s.attachAddBtn} onClick={() => fileInputRef.current?.click()}>+ Add</button>
+        <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileSelect} />
+      </div>
+      {allFiles.length > 0 ? (
+        <div className={s.attachList} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
+          {allFiles.map(a => (
+            <div key={a.id} className={s.attachItem}>
+              {a.mime_type.startsWith('image/') ? (
+                <a href={a.url} target="_blank" rel="noopener noreferrer">
+                  <img src={a.url} alt={a.filename} className={s.attachThumb} />
+                </a>
+              ) : (
+                <span className={s.attachIcon}>{getIcon(a.mime_type)}</span>
+              )}
+              <div className={s.attachInfo}>
+                <a href={a.url} target="_blank" rel="noopener noreferrer" className={s.attachName}>{a.filename}</a>
+                {a.size_bytes > 0 && <span className={s.attachSize}>{formatSize(a.size_bytes)}</span>}
+              </div>
+              {!a.isLegacy && <button className={s.attachDelete} onClick={() => remove(a.id)} title="Remove">&times;</button>}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={s.attachDropZone} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
+          Drop files here
+        </div>
+      )}
+    </div>
   );
 }
 
