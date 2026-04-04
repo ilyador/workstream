@@ -202,6 +202,8 @@
 }
 .agentsMdBody {
   padding: 6px 10px 10px;
+  max-height: 300px;
+  overflow-y: auto;
 }
 .agentsMdTextarea {
   width: 100%;
@@ -257,6 +259,7 @@
 /* ─── Step card (mirrors TaskCard .card) ─── */
 .stepCard {
   border: 1px solid var(--divider);
+  border-left: 3px solid var(--divider);
   border-radius: 10px;
   background: var(--white);
   cursor: pointer;

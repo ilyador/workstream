@@ -1,6 +1,7 @@
 /* ─── TaskCard: individual task within a column ─── */
 .card {
   border: 1px solid var(--divider);
+  border-left: 3px solid var(--divider);
   border-radius: 10px;
   background: var(--white);
   cursor: pointer;

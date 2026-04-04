@@ -77,6 +77,7 @@ interface WorkstreamColumnProps {
   onContinue?: (jobId: string) => void;
   onCreatePr?: () => void;
   onArchive?: () => void;
+  currentUserId?: string;
 }
 
 export function WorkstreamColumn({
@@ -118,6 +119,7 @@ export function WorkstreamColumn({
   onContinue,
   onCreatePr,
   onArchive,
+  currentUserId,
 }: WorkstreamColumnProps) {
   const modal = useModal();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -878,7 +880,7 @@ export function WorkstreamColumn({
                 View PR
               </a>
             )}
-            {onArchive && (
+            {onArchive && currentUserId && workstream?.reviewer_id === currentUserId && (
               <button className={s.archiveBtn} onClick={onArchive}>
                 Archive
               </button>

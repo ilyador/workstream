@@ -5,7 +5,7 @@
   border: 1.5px solid var(--divider);
   border-radius: 8px;
   font-family: var(--font);
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text);
   line-height: 1.55;
   width: 100%;
@@ -34,9 +34,23 @@
 .preview table { border-collapse: collapse; width: 100%; margin: 8px 0; }
 .preview th, .preview td { border: 1px solid var(--divider); padding: 4px 8px; text-align: left; }
 .preview th { background: var(--bg-hover); font-weight: 600; }
-.preview code { padding: 1px 5px; background: var(--bg-active); border-radius: 3px; }
-.preview pre { background: var(--bg-active); border-radius: 6px; padding: 8px 10px; overflow-x: auto; margin: 6px 0; }
-.preview pre code { padding: 0; background: none; }
+.preview code { font-size: 11px; padding: 1px 5px; background: var(--bg-active); border-radius: 3px; }
+.preview pre { background: var(--bg-active); border-radius: 6px; padding: 8px 10px; overflow-x: auto; margin: 6px 0; font-size: 11px; }
+.preview pre code { padding: 0; background: none; font-size: inherit; }
+.preview h1, .preview h2, .preview h3, .preview h4, .preview h5, .preview h6 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 10px 0 4px;
+  padding: 0;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+.preview h1 { border-bottom: 1px solid var(--divider); padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; font-size: 12px; }
+.preview h2 { border-bottom: 1px solid var(--divider); padding-bottom: 3px; }
+.preview h3 { font-weight: 600; color: var(--text-2); }
+.preview h4, .preview h5, .preview h6 { font-weight: 600; font-style: italic; color: var(--text-3); }
+.preview h1:first-child, .preview h2:first-child, .preview h3:first-child { margin-top: 0; }
 .preview ul, .preview ol { padding-left: 18px; margin: 4px 0; }
 .preview li { margin: 2px 0; }
 .preview strong { color: var(--text); }

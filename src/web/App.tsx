@@ -310,6 +310,7 @@ export default function App() {
             commentCounts={commentCounts.counts}
             focusTaskId={focusTaskId}
             focusWsId={focusWsId}
+            currentUserId={auth.profile?.id}
             onCreateWorkstream={async (name, description, has_code) => {
               await workstreams.createWorkstream(name, description, has_code);
             }}
