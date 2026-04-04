@@ -313,7 +313,7 @@ export function TaskCard({
       )}
 
       {/* Preview: description only (visible when collapsed and NOT active) */}
-      {!isActive && !isExpanded && task.description && (
+      {!isActive && (!isExpanded || taskDone) && task.description && (
         <div className={s.preview}>
           <div className={s.previewDesc}>
             <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown>
@@ -321,8 +321,27 @@ export function TaskCard({
         </div>
       )}
 
+      {/* Done section -- no border separator */}
+      {!isActive && isExpanded && taskDone && jobStatus === 'done' && job && (
+        <div onClick={(e) => e.stopPropagation()} style={{ padding: '0 12px 10px' }}>
+          <div className={s.doneSection}>
+            <div className={s.doneHeader}>
+              <span className={s.doneLabel}>&#10003; Completed {job.completedAgo}</span>
+              {onDeleteJob && (
+                <button className="btn btnGhost btnSm" onClick={() => onDeleteJob(job.id)}>Dismiss</button>
+              )}
+            </div>
+            {job.review?.summary && (
+              <div className={s.doneSummary}>{job.review.summary}</div>
+            )}
+            <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
+            <CardComments taskId={task.id} projectId={projectId} />
+          </div>
+        </div>
+      )}
+
       {/* Expanded detail for non-active states (click to toggle) */}
-      {!isActive && isExpanded && (
+      {!isActive && isExpanded && !taskDone && (
         <div className={s.detail} onClick={(e) => e.stopPropagation()}>
           {/* FAILED */}
           {jobStatus === 'failed' && job && (
@@ -340,24 +359,6 @@ export function TaskCard({
                   </button>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* DONE (job completed) */}
-          {jobStatus === 'done' && job && (
-            <div className={s.doneSection}>
-              <div className={s.doneHeader}>
-                <span className={s.doneLabel}>&#10003; Completed {job.completedAgo}</span>
-                {onDeleteJob && (
-                  <button className="btn btnGhost btnSm" onClick={() => onDeleteJob(job.id)}>
-                    Dismiss
-                  </button>
-                )}
-              </div>
-              {job.review?.summary && (
-                <div className={s.doneSummary}>{job.review.summary}</div>
-              )}
-              <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
             </div>
           )}
 
@@ -403,7 +404,7 @@ function IdleDetail({
     <>
       {task.description && <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>}
       <div className={s.meta}>
-        <span>effort: {task.effort}</span>
+        {task.mode === 'ai' && <span>effort: {task.effort}</span>}
         {task.multiagent === 'yes' && <span>subagents: on</span>}
         <span>
           assignee: {task.assignee && task.assignee.type !== 'ai'
@@ -416,7 +417,7 @@ function IdleDetail({
 
       <div className={s.actions}>
         <div className={s.actionsLeft}>
-          {task.assignee && task.assignee.type !== 'ai' && task.status === 'in_progress' && onUpdateTask && (
+          {task.assignee && task.assignee.type !== 'ai' && ['in_progress', 'todo', 'backlog'].includes(task.status || '') && onUpdateTask && (
             <>
               <button className="btn btnSuccess btnSm" onClick={() => onUpdateTask(task.id, { status: 'done' })}>
                 Done
