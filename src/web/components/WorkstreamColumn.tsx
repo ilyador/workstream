@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useModal } from '../hooks/useModal';
 import { TaskCard } from './TaskCard';
+import { ArtifactConnector } from './ArtifactConnector';
 import type { JobView } from './job-types';
 import s from './WorkstreamColumn.module.css';
 import taskStyles from './TaskCard.module.css';
@@ -18,6 +19,7 @@ interface Task {
   images?: string[];
   status?: string;
   priority?: string;
+  chaining?: 'none' | 'produce' | 'accept' | 'both';
 }
 
 interface Workstream {
@@ -521,40 +523,46 @@ export function WorkstreamColumn({
             {isBacklog ? 'No tasks in backlog' : 'Drop tasks here'}
           </div>
         )}
-        {tasks.map((task) => {
+        {tasks.map((task, index) => {
           const job = taskJobMap[task.id] || null;
+          const prevTask = index > 0 ? tasks[index - 1] : null;
+          const showConnector = prevTask && prevTask.status === 'done' &&
+            task.chaining && ['accept', 'both'].includes(task.chaining);
           return (
-            <div key={task.id} className={s.cardWrap} data-task-id={task.id}>
-              <TaskCard
-                task={task}
-                job={job}
-                canRunAi={canRunAi}
-                showPriority={isBacklog}
-                projectId={projectId || undefined}
-                hasUnreadMention={mentionedTaskIds.has(task.id)}
-                commentCount={commentCounts?.[task.id] || 0}
-                isExpanded={expandedIds.has(task.id)}
-                onToggleExpand={() => setExpandedIds(prev => {
-                  const next = new Set(prev);
-                  if (next.has(task.id)) next.delete(task.id);
-                  else next.add(task.id);
-                  return next;
-                })}
-                onRun={isBacklog ? undefined : onRunTask}
-                onEdit={onEditTask ? () => onEditTask(task) : undefined}
-                onDelete={onDeleteTask ? () => onDeleteTask(task.id) : undefined}
-                onUpdateTask={onUpdateTask}
-                onTerminate={onTerminate}
-                onReply={onReply}
-                onApprove={onApprove}
-                onReject={onReject}
-                onRevert={onRevert}
-                onDeleteJob={onDeleteJob}
-                onDragStart={() => onDragTaskStart(task.id)}
-                onDragEnd={onDragTaskEnd}
-                isDragging={draggedTaskId === task.id}
-                dragDisabled={dragDisabled}
-              />
+            <div key={task.id}>
+              {showConnector && <ArtifactConnector taskId={prevTask.id} />}
+              <div className={s.cardWrap} data-task-id={task.id}>
+                <TaskCard
+                  task={task}
+                  job={job}
+                  canRunAi={canRunAi}
+                  showPriority={isBacklog}
+                  projectId={projectId || undefined}
+                  hasUnreadMention={mentionedTaskIds.has(task.id)}
+                  commentCount={commentCounts?.[task.id] || 0}
+                  isExpanded={expandedIds.has(task.id)}
+                  onToggleExpand={() => setExpandedIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(task.id)) next.delete(task.id);
+                    else next.add(task.id);
+                    return next;
+                  })}
+                  onRun={isBacklog ? undefined : onRunTask}
+                  onEdit={onEditTask ? () => onEditTask(task) : undefined}
+                  onDelete={onDeleteTask ? () => onDeleteTask(task.id) : undefined}
+                  onUpdateTask={onUpdateTask}
+                  onTerminate={onTerminate}
+                  onReply={onReply}
+                  onApprove={onApprove}
+                  onReject={onReject}
+                  onRevert={onRevert}
+                  onDeleteJob={onDeleteJob}
+                  onDragStart={() => onDragTaskStart(task.id)}
+                  onDragEnd={onDragTaskEnd}
+                  isDragging={draggedTaskId === task.id}
+                  dragDisabled={dragDisabled}
+                />
+              </div>
             </div>
           );
         })}

@@ -1,5 +1,5 @@
 import { spawn, ChildProcess, execFileSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync, unlinkSync, rmdirSync } from 'fs';
 import { join } from 'path';
 import { supabase } from './supabase.js';
 import { discoverSkills } from './routes/data.js';
@@ -105,14 +105,14 @@ export function buildFlowSnapshot(flow: any): FlowConfig {
 }
 
 /** Build prompt for a single flow step, including only the requested context sources. */
-function buildStepPrompt(
+async function buildStepPrompt(
   step: FlowStepConfig,
   flow: FlowConfig,
   task: any,
   previousOutputs: any[],
   localPath: string,
   answer?: string,
-): string {
+): Promise<string> {
   let prompt = 'You are working on a task in this project\'s codebase.\n\n';
 
   // Agents.md -- always injected if the flow has it (applies to all steps)
@@ -219,12 +219,76 @@ function buildStepPrompt(
           }
         }
         break;
+      case 'previous_artifacts': {
+        // Get artifacts from the previous task in the workstream
+        const { data: currentTask } = await supabase
+          .from('tasks')
+          .select('workstream_id, position')
+          .eq('id', task.id)
+          .single();
+
+        if (currentTask?.workstream_id) {
+          // Find completed tasks earlier in the workstream
+          const { data: prevTasks } = await supabase
+            .from('tasks')
+            .select('id, title')
+            .eq('workstream_id', currentTask.workstream_id)
+            .eq('status', 'done')
+            .lt('position', currentTask.position)
+            .order('position', { ascending: false })
+            .limit(1);
+
+          if (prevTasks && prevTasks.length > 0) {
+            const prevTask = prevTasks[0];
+            const { data: artifacts } = await supabase
+              .from('task_artifacts')
+              .select('*')
+              .eq('task_id', prevTask.id)
+              .order('created_at');
+
+            if (artifacts && artifacts.length > 0) {
+              prompt += '\n## Artifacts from previous task\n';
+              prompt += `Previous task: "${prevTask.title}"\n\n`;
+              for (const a of artifacts) {
+                const { data: urlData } = supabase.storage.from('task-artifacts').getPublicUrl(a.storage_path);
+                const url = urlData.publicUrl;
+
+                // For text files, inline the content
+                if (a.mime_type.startsWith('text/') || a.mime_type === 'application/json') {
+                  try {
+                    const { data: fileData } = await supabase.storage.from('task-artifacts').download(a.storage_path);
+                    if (fileData) {
+                      const text = await fileData.text();
+                      prompt += `### ${a.filename}\n\`\`\`\n${text.substring(0, 5000)}\n\`\`\`\n\n`;
+                    }
+                  } catch {
+                    prompt += `- ${a.filename} (${a.mime_type}): ${url}\n`;
+                  }
+                } else {
+                  // For images and binary, provide URL
+                  prompt += `- ${a.filename} (${a.mime_type}): ${url}\n`;
+                }
+              }
+              prompt += '\n';
+            }
+          }
+        }
+        break;
+      }
     }
   }
 
   // Multi-agent injection
   if (task.multiagent === 'yes') {
     prompt += '## Multi-Agent Mode\nUse subagents to parallelize this work. Dispatch separate agents for independent subtasks.\n\n';
+  }
+
+  // Artifact acceptance hint for first step
+  if (
+    (task.chaining === 'accept' || task.chaining === 'both') &&
+    previousOutputs.length === 0
+  ) {
+    prompt += '## Artifact Context\nThe artifacts from the previous task are provided above. Use them as context for your work.\n\n';
   }
 
   // Step instructions (the core prompt for this step)
@@ -275,7 +339,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         attempt,
       }).eq('id', jobId);
 
-      const prompt = buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer);
+      const prompt = await buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer);
 
       // Build claude args
       const args = ['-p', '--verbose', '--output-format', 'stream-json'];
@@ -408,6 +472,60 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
   }
 
   // All steps complete -- generate summary and move to review
+
+  // Scan .artifacts/ directory for produced files
+  if (ctx.task.chaining === 'produce' || ctx.task.chaining === 'both') {
+    const artifactsDir = join(localPath, '.artifacts');
+    if (existsSync(artifactsDir)) {
+      const files = readdirSync(artifactsDir);
+      for (const filename of files) {
+        const filePath = join(artifactsDir, filename);
+        try {
+          const stat = statSync(filePath);
+          if (!stat.isFile()) continue;
+          const fileBuffer = readFileSync(filePath);
+          const ext = filename.split('.').pop()?.toLowerCase() || '';
+          const mimeMap: Record<string, string> = {
+            png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+            svg: 'image/svg+xml', webp: 'image/webp', pdf: 'application/pdf',
+            md: 'text/markdown', txt: 'text/plain', json: 'application/json',
+            csv: 'text/csv', html: 'text/html', mp4: 'video/mp4', mp3: 'audio/mpeg',
+          };
+          const mimeType = mimeMap[ext] || 'application/octet-stream';
+
+          // Get project_id from task
+          const { data: taskRow } = await supabase.from('tasks').select('project_id').eq('id', ctx.taskId).single();
+          const storagePath = `${taskRow?.project_id}/${ctx.taskId}/${filename}`;
+
+          await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
+            contentType: mimeType, upsert: true
+          });
+
+          await supabase.from('task_artifacts').insert({
+            task_id: ctx.taskId,
+            job_id: jobId,
+            phase: phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown',
+            filename,
+            mime_type: mimeType,
+            size_bytes: stat.size,
+            storage_path: storagePath,
+          });
+
+          onLog(`[artifact] Captured: ${filename} (${mimeType}, ${stat.size} bytes)\n`);
+        } catch (err: any) {
+          onLog(`[artifact] Failed to capture ${filename}: ${err.message}\n`);
+        }
+      }
+      // Clean up the .artifacts directory
+      try {
+        for (const f of readdirSync(artifactsDir)) {
+          unlinkSync(join(artifactsDir, f));
+        }
+        rmdirSync(artifactsDir);
+      } catch { /* best effort cleanup */ }
+    }
+  }
+
   let filesChanged = 0;
   let linesAdded = 0;
   let linesRemoved = 0;
@@ -549,7 +667,7 @@ function loadTaskTypeConfig(localPath: string, taskType: string): TaskTypeConfig
   return DEFAULT_TASK_TYPES[taskType] || DEFAULT_TASK_TYPES['feature'];
 }
 
-function buildPrompt(phase: string, task: any, previousOutputs: any[], localPath: string, phaseConfig: PhaseConfig, taskType: TaskTypeConfig, answer?: string): string {
+async function buildPrompt(phase: string, task: any, previousOutputs: any[], localPath: string, phaseConfig: PhaseConfig, taskType: TaskTypeConfig, answer?: string): Promise<string> {
   // Inject project context from CLAUDE.md if it exists
   let projectContext = '';
   const claudeMdPath = join(localPath, 'CLAUDE.md');
@@ -630,6 +748,62 @@ Description: ${task.description || 'No description provided.'}
 
   if (answer) {
     prompt += `\n## Human Answer to Your Question\n${answer}\n`;
+  }
+
+  // Inject artifacts from previous task in workstream
+  if (
+    (task.chaining === 'accept' || task.chaining === 'both') &&
+    previousOutputs.length === 0
+  ) {
+    const { data: currentTask } = await supabase
+      .from('tasks')
+      .select('workstream_id, position')
+      .eq('id', task.id)
+      .single();
+
+    if (currentTask?.workstream_id) {
+      const { data: prevTasks } = await supabase
+        .from('tasks')
+        .select('id, title')
+        .eq('workstream_id', currentTask.workstream_id)
+        .eq('status', 'done')
+        .lt('position', currentTask.position)
+        .order('position', { ascending: false })
+        .limit(1);
+
+      if (prevTasks && prevTasks.length > 0) {
+        const prevTask = prevTasks[0];
+        const { data: artifacts } = await supabase
+          .from('task_artifacts')
+          .select('*')
+          .eq('task_id', prevTask.id)
+          .order('created_at');
+
+        if (artifacts && artifacts.length > 0) {
+          prompt += '\n## Artifacts from previous task\n';
+          prompt += `Previous task: "${prevTask.title}"\n\n`;
+          for (const a of artifacts) {
+            const { data: urlData } = supabase.storage.from('task-artifacts').getPublicUrl(a.storage_path);
+            const url = urlData.publicUrl;
+
+            if (a.mime_type.startsWith('text/') || a.mime_type === 'application/json') {
+              try {
+                const { data: fileData } = await supabase.storage.from('task-artifacts').download(a.storage_path);
+                if (fileData) {
+                  const text = await fileData.text();
+                  prompt += `### ${a.filename}\n\`\`\`\n${text.substring(0, 5000)}\n\`\`\`\n\n`;
+                }
+              } catch {
+                prompt += `- ${a.filename} (${a.mime_type}): ${url}\n`;
+              }
+            } else {
+              prompt += `- ${a.filename} (${a.mime_type}): ${url}\n`;
+            }
+          }
+          prompt += '\nThe artifacts from the previous task are provided above. Use them as context for your work.\n';
+        }
+      }
+    }
   }
 
   // Phase-specific instructions
@@ -926,7 +1100,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
         attempt,
       }).eq('id', jobId);
 
-      const prompt = buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
+      const prompt = await buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
 
       // Spawn claude -p (prompt piped via stdin to avoid arg length limits)
       const args = ['-p', '--verbose', '--output-format', 'stream-json'];
@@ -1088,6 +1262,59 @@ export async function runJob(ctx: JobContext): Promise<void> {
   }
 
   // All phases complete -- move to review
+
+  // Scan .artifacts/ directory for produced files
+  if (ctx.task.chaining === 'produce' || ctx.task.chaining === 'both') {
+    const artifactsDir = join(localPath, '.artifacts');
+    if (existsSync(artifactsDir)) {
+      const files = readdirSync(artifactsDir);
+      for (const filename of files) {
+        const filePath = join(artifactsDir, filename);
+        try {
+          const fstat = statSync(filePath);
+          if (!fstat.isFile()) continue;
+          const fileBuffer = readFileSync(filePath);
+          const ext = filename.split('.').pop()?.toLowerCase() || '';
+          const mimeMap: Record<string, string> = {
+            png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+            svg: 'image/svg+xml', webp: 'image/webp', pdf: 'application/pdf',
+            md: 'text/markdown', txt: 'text/plain', json: 'application/json',
+            csv: 'text/csv', html: 'text/html', mp4: 'video/mp4', mp3: 'audio/mpeg',
+          };
+          const mimeType = mimeMap[ext] || 'application/octet-stream';
+
+          const { data: taskRow } = await supabase.from('tasks').select('project_id').eq('id', ctx.taskId).single();
+          const storagePath = `${taskRow?.project_id}/${ctx.taskId}/${filename}`;
+
+          await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
+            contentType: mimeType, upsert: true
+          });
+
+          await supabase.from('task_artifacts').insert({
+            task_id: ctx.taskId,
+            job_id: jobId,
+            phase: phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown',
+            filename,
+            mime_type: mimeType,
+            size_bytes: fstat.size,
+            storage_path: storagePath,
+          });
+
+          onLog(`[artifact] Captured: ${filename} (${mimeType}, ${fstat.size} bytes)\n`);
+        } catch (err: any) {
+          onLog(`[artifact] Failed to capture ${filename}: ${err.message}\n`);
+        }
+      }
+      // Clean up the .artifacts directory
+      try {
+        for (const f of readdirSync(artifactsDir)) {
+          unlinkSync(join(artifactsDir, f));
+        }
+        rmdirSync(artifactsDir);
+      } catch { /* best effort cleanup */ }
+    }
+  }
+
   const reviewOutput = phasesCompleted[phasesCompleted.length - 1];
 
   let filesChanged = 0;

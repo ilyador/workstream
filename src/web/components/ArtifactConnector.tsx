@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import s from './ArtifactConnector.module.css';
-import type { Artifact } from '../lib/api';
+import { useArtifacts } from '../hooks/useArtifacts';
 
 interface Props {
-  artifacts: Artifact[];
+  taskId: string;  // The producing task's ID
 }
 
-export function ArtifactConnector({ artifacts }: Props) {
+export function ArtifactConnector({ taskId }: Props) {
+  const { artifacts, loading } = useArtifacts(taskId);
   const [expanded, setExpanded] = useState(false);
-  if (artifacts.length === 0) return null;
+  if (loading || artifacts.length === 0) return null;
 
   const getIcon = (mime: string) => {
     if (mime.startsWith('image/')) return '🖼';
