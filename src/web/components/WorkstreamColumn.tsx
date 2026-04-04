@@ -167,6 +167,16 @@ export function WorkstreamColumn({
     return chainGroups.find(g => g.taskIds.includes(taskId)) || null;
   }, [chainGroups]);
 
+  // Freeze line: index of last task with a non-default status (touched tasks are locked)
+  const UNTOUCHED_STATUSES = new Set(['backlog', 'todo']);
+  const freezeIndex = useMemo(() => {
+    let lastTouched = -1;
+    for (let i = 0; i < tasks.length; i++) {
+      if (!UNTOUCHED_STATUSES.has(tasks[i].status || 'backlog')) lastTouched = i;
+    }
+    return lastTouched;
+  }, [tasks]);
+
   // Detect broken chaining links (unmet produce/accept with no matching neighbor)
   const brokenLinks = useMemo(() => {
     if (isBacklog) return new Map<string, { up: boolean; down: boolean }>();
@@ -240,7 +250,7 @@ export function WorkstreamColumn({
   }, [tasks, taskJobMap, activeAiJobId]);
 
   // Disable drag only when an AI job is actively running (not for human waiting)
-  const dragDisabled = !isBacklog && activeAiJobId !== null;
+  const dragDisabledGlobal = !isBacklog && activeAiJobId !== null;
 
   const prevActiveRef = useRef<string | null>(null);
   useEffect(() => {
@@ -584,16 +594,13 @@ export function WorkstreamColumn({
             </button>
           )}
 
-          {/* Add button: only before work starts */}
-          {(isBacklog || wsStatus === 'open' || !wsStatus) && (
-              <button
-                className={s.addBtn}
-                onClick={onAddTask}
-                title="Add task"
-              >
-                +
-              </button>
-          )}
+          <button
+            className={s.addBtn}
+            onClick={onAddTask}
+            title="Add task"
+          >
+            +
+          </button>
 
           {/* Task count: pushed right */}
           {totalTasks > 0 && (
@@ -755,7 +762,7 @@ export function WorkstreamColumn({
                             })}
                             onRun={isBacklog || brokenLinks.has(gt.id) ? undefined : onRunTask}
                             onEdit={onEditTask ? () => onEditTask(gt) : undefined}
-                            onDelete={onDeleteTask ? () => onDeleteTask(gt.id) : undefined}
+                            onDelete={onDeleteTask && index > freezeIndex ? () => onDeleteTask(gt.id) : undefined}
                             onUpdateTask={onUpdateTask}
                             onTerminate={onTerminate}
                             onReply={onReply}
@@ -767,7 +774,7 @@ export function WorkstreamColumn({
                             onDragStart={handleGroupDragStart}
                             onDragEnd={handleGroupDragEnd}
                             isDragging={isGroupDragging}
-                            dragDisabled={dragDisabled}
+                            dragDisabled={dragDisabledGlobal || index <= freezeIndex}
                             skipDragGhost
                           />
                         </div>
@@ -808,7 +815,7 @@ export function WorkstreamColumn({
                     })}
                     onRun={isBacklog || brokenLinks.has(task.id) ? undefined : onRunTask}
                     onEdit={onEditTask ? () => onEditTask(task) : undefined}
-                    onDelete={onDeleteTask ? () => onDeleteTask(task.id) : undefined}
+                    onDelete={onDeleteTask && index > freezeIndex ? () => onDeleteTask(task.id) : undefined}
                     onUpdateTask={onUpdateTask}
                     onTerminate={onTerminate}
                     onReply={onReply}
@@ -820,7 +827,7 @@ export function WorkstreamColumn({
                     onDragStart={() => onDragTaskStart(task.id)}
                     onDragEnd={onDragTaskEnd}
                     isDragging={draggedTaskId === task.id}
-                    dragDisabled={dragDisabled}
+                    dragDisabled={dragDisabledGlobal || index <= freezeIndex}
                   />
                 </div>
               </div>

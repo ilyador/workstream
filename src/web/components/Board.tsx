@@ -179,6 +179,18 @@ export function Board({
     const targetKey = targetWsId || '__backlog__';
     const idsSet = new Set(idsToMove);
     const targetTasks = (tasksByWorkstream[targetKey] || []).filter((t: any) => !idsSet.has(t.id));
+
+    // Prevent dropping above the freeze line (last touched task)
+    const untouched = new Set(['backlog', 'todo']);
+    let freezeIdx = -1;
+    for (let i = 0; i < targetTasks.length; i++) {
+      if (!untouched.has(targetTasks[i].status || 'backlog')) freezeIdx = i;
+    }
+    if (dropBeforeTaskId && freezeIdx >= 0) {
+      const dropIdx = targetTasks.findIndex((t: any) => t.id === dropBeforeTaskId);
+      if (dropIdx >= 0 && dropIdx <= freezeIdx) return; // Can't drop into the frozen zone
+    }
+
     let basePosition: number;
 
     if (!dropBeforeTaskId) {
