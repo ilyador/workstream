@@ -102,7 +102,9 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
   const [effort, setEffort] = useState(editTask?.effort || 'max');
   const [workstreamId, setWorkstreamId] = useState(editTask?.workstream_id || defaultWorkstreamId || '');
   const [assignee, setAssignee] = useState(editTask?.assignee || '');
-  const [flowId, setFlowId] = useState(isEdit ? (editTask?.flow_id ?? '') : (flows.length > 0 ? flows[0].id : ''));
+  const [flowId, setFlowId] = useState(isEdit ? (editTask?.flow_id ?? '') : (
+    flows.find(f => (f.default_types || []).includes('feature'))?.id || (flows.length > 0 ? flows[0].id : '')
+  ));
   const [multiagent, setMultiagent] = useState(editTask?.multiagent || 'auto');
   const [autoContinue, setAutoContinue] = useState(editTask?.auto_continue ?? true);
   const [priority, setPriority] = useState(editTask?.priority || 'backlog');
