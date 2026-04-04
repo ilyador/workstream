@@ -483,7 +483,9 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
             if (step.on_fail_jump_to != null) {
               const jumpIndex = steps.findIndex(s => s.position === step.on_fail_jump_to);
               if (jumpIndex >= 0 && jumpIndex < i) {
-                onLog(`\n${step.name} failed: ${reason}. Jumping back to '${steps[jumpIndex].name}'...\n`);
+                const retryMsg = `${step.name} failed (attempt ${attempt}/${maxAttempts}): ${reason}. Retrying from '${steps[jumpIndex].name}'...`;
+                onLog(`\n${retryMsg}\n`);
+                await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
                 // Clear ALL steps from jumpIndex through i (not just the target)
                 for (let ci = jumpIndex; ci <= i; ci++) {
                   completedPhaseNames.delete(steps[ci].name);
@@ -497,7 +499,9 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
                 break;
               }
             }
-            onLog(`\n${step.name} failed: ${reason}. Retrying...\n`);
+            const retryMsg = `${step.name} failed (attempt ${attempt}/${maxAttempts}): ${reason}. Retrying...`;
+            onLog(`\n${retryMsg}\n`);
+            await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
             continue;
           }
           if (failed && attempt >= maxAttempts) {

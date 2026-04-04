@@ -750,20 +750,26 @@ const VERIFY_STEP = {
 - Report what passed and what failed.
 
 CRITICAL — when tests fail, you MUST determine if the failure is caused by THIS task's changes:
-1. Run \`git diff HEAD\` to see what was changed.
+1. Run \`git diff HEAD\` to see what was changed in this task.
 2. Look at the failing test — is it testing code that was modified? Is the error related to the changes?
-3. Based on this analysis:
-   - RELATED failure (test fails because of code this task changed): report passed: false
-   - UNRELATED or UNSURE: ask the user "Test X failed. It appears unrelated to this task's changes because [reason]. Should I treat this as a failure?" — this will pause the job for your input. Do NOT auto-pass or auto-fail.
+3. Based on this analysis, pick ONE of these three responses:
 
-IMPORTANT: You MUST end your response with a JSON verdict block:
+ALL TESTS PASS or only unrelated tests fail:
+End with:
 \`\`\`json
 {"passed": true}
 \`\`\`
-or ONLY if tests fail DUE TO THIS TASK'S CHANGES:
+
+RELATED failure (test fails because of code this task changed):
+End with:
 \`\`\`json
 {"passed": false, "reason": "Brief description of what failed"}
-\`\`\``,
+\`\`\`
+
+UNRELATED or UNSURE failure:
+Do NOT include any JSON verdict block. Instead, end your response with a question like:
+"Should I treat this as a failure? The failing test [name] appears unrelated because [reason]."
+This will pause the job so the user can decide. Do NOT include a verdict block when asking.`,
 };
 
 const REVIEW_STEP = {
