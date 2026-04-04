@@ -402,7 +402,15 @@ export function WorkstreamColumn({
       <select
         className={s.reviewerSelect}
         defaultValue=""
-        onChange={e => { if (e.target.value) onUpdateWorkstream(workstream.id, { reviewer_id: e.target.value }); }}
+        onChange={async e => {
+          if (e.target.value) {
+            try {
+              await onUpdateWorkstream(workstream.id, { reviewer_id: e.target.value });
+            } catch (err) {
+              console.error('Failed to assign reviewer:', err);
+            }
+          }
+        }}
       >
         <option value="">Assign reviewer</option>
         {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}

@@ -23,6 +23,7 @@
     max-height: calc(100dvh - 80px);
     border-radius: 10px;
     scroll-snap-align: start;
+    align-self: stretch;
   }
 }
 .column:hover {
