@@ -274,11 +274,20 @@ function FlowColumn({
   }, [flow.id, flow.name, flow.is_builtin, onDeleteFlow, state.setSaving, state.setError]);
 
   // ---- Rename ----
-  const handleRename = useCallback(() => {
+  const handleRename = useCallback(async () => {
     const trimmed = state.editName.trim();
-    if (!trimmed) state.setEditName(flow.name);
+    if (!trimmed) {
+      state.setEditName(flow.name);
+    } else if (trimmed !== flow.name) {
+      try {
+        await onSave(flow.id, { name: trimmed });
+      } catch (err: any) {
+        state.setError(err.message || 'Failed to rename');
+        state.setEditName(flow.name);
+      }
+    }
     state.setEditing(false);
-  }, [state.editName, flow.name, state.setEditName, state.setEditing]);
+  }, [state.editName, flow.id, flow.name, state.setEditName, state.setEditing, state.setError, onSave]);
 
   // ---- Auto-resize textarea helper ----
   const autoResize = useCallback((el: HTMLTextAreaElement | null) => {

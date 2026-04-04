@@ -37,7 +37,6 @@ const TASK_TYPE_PHASES: Record<string, string[]> = {
   'ui-fix': ['plan', 'implement', 'verify', 'review'],
   'design': ['plan', 'implement', 'verify', 'review'],
   'chore': ['plan', 'implement', 'verify', 'review'],
-  'doc-search': ['answer'],
 };
 
 /** Strip tool-call log lines from review summary for display. */

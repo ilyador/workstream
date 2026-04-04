@@ -687,18 +687,19 @@ const EXECUTE_CONTEXT = ['claude_md', 'agents_md', 'task_description', 'skills',
 
 /** Maps task types to the default flow name that should handle them. */
 export const TYPE_TO_FLOW_NAME: Record<string, string> = {
-  'bug-fix': 'AI Bug Hunter',
-  'feature': 'AI Developer',
-  'ui-fix': 'AI Developer',
-  'design': 'AI Developer',
-  'chore': 'AI Developer',
-  'refactor': 'AI Refactorer',
-  'test': 'AI Tester',
+  'bug-fix': 'Bug Hunter',
+  'feature': 'Developer',
+  'ui-fix': 'Developer',
+  'design': 'Developer',
+  'chore': 'Developer',
+  'refactor': 'Refactorer',
+  'test': 'Tester',
+  'doc-search': 'Doc Search',
 };
 
 const DEFAULT_FLOWS: Array<{ name: string; description: string; steps: any[] }> = [
   {
-    name: 'AI Developer',
+    name: 'Developer',
     description: 'Plan and implement features, verify with tests, review.',
     steps: [
       { name: 'implement', position: 1, model: 'opus', tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
@@ -714,7 +715,7 @@ Read the codebase to understand the relevant files and architecture. Create a pl
     ],
   },
   {
-    name: 'AI Bug Hunter',
+    name: 'Bug Hunter',
     description: 'Analyze bugs, fix them, verify and review.',
     steps: [
       { name: 'fix', position: 1, model: 'opus', tools: ['Read', 'Edit', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
@@ -730,7 +731,7 @@ Analyze the codebase to understand the bug. Identify the root cause and location
     ],
   },
   {
-    name: 'AI Refactorer',
+    name: 'Refactorer',
     description: 'Plan and execute refactors, verify nothing broke, review.',
     steps: [
       { name: 'refactor', position: 1, model: 'opus', tools: ['Read', 'Edit', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
@@ -745,7 +746,7 @@ Read the codebase to understand the current structure. Plan the refactor, then e
     ],
   },
   {
-    name: 'AI Tester',
+    name: 'Tester',
     description: 'Plan and write tests, verify they pass, review.',
     steps: [
       { name: 'write-tests', position: 1, model: 'opus', tools: ['Read', 'Write', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
@@ -757,6 +758,13 @@ Read the codebase to understand the current structure. Plan the refactor, then e
 Read the codebase to understand what needs testing. Follow existing test patterns. Write comprehensive tests for the described functionality.` },
       { ...VERIFY_STEP },
       { ...REVIEW_STEP },
+    ],
+  },
+  {
+    name: 'Doc Search',
+    description: 'Search project documents and answer questions based on the results.',
+    steps: [
+      { name: 'answer', position: 1, model: 'sonnet', tools: ['Read', 'Grep', 'Glob'], context_sources: ['task_description', 'rag'], is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'skip', include_agents_md: false, instructions: `Answer the user's question based on the document search results provided above. Cite which documents you're referencing. If the results don't contain enough information to answer fully, say so clearly.` },
     ],
   },
 ];

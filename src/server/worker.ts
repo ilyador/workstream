@@ -249,10 +249,10 @@ async function startJob(job: any): Promise<void> {
   try {
     const taskWithAnswer = isResume ? { ...task, answer: job.answer } : task;
 
-    // RAG injection for doc-search tasks
-    const isDocSearch = task.type === 'doc-search' ||
-      (taskType && (taskType as any).phases?.[0] === 'answer' && (taskType as any).phase_config?.answer);
-    if (isDocSearch) {
+    // RAG injection: search if any flow step uses 'rag' context source, or legacy doc-search type
+    const needsRag = flowSnapshot?.steps?.some((s: any) => s.context_sources?.includes('rag'))
+      || task.type === 'doc-search';
+    if (needsRag) {
       try {
         const ragResults = await ragSearch(job.project_id, task.description || task.title);
         taskWithAnswer._ragResults = ragResults;

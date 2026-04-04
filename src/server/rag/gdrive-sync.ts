@@ -1,19 +1,23 @@
 import { google } from 'googleapis';
 import { ingestDocument, listDocuments, deleteDocument } from './service.js';
 
-const CREDENTIALS_PATH = process.env.GDRIVE_CREDENTIALS_PATH || './endstream-data-fa9d7e0fa618.json';
+const CREDENTIALS_PATH = process.env.GDRIVE_CREDENTIALS_PATH || '';
 const FOLDER_ID = process.env.GDRIVE_FOLDER_ID || '';
 
+let _auth: InstanceType<typeof google.auth.GoogleAuth> | null = null;
 function getAuth() {
-  const auth = new google.auth.GoogleAuth({
-    keyFile: CREDENTIALS_PATH,
-    scopes: [
-      'https://www.googleapis.com/auth/drive.readonly',
-      'https://www.googleapis.com/auth/documents.readonly',
-      'https://www.googleapis.com/auth/spreadsheets.readonly',
-    ],
-  });
-  return auth;
+  if (!CREDENTIALS_PATH) throw new Error('GDRIVE_CREDENTIALS_PATH not set in .env');
+  if (!_auth) {
+    _auth = new google.auth.GoogleAuth({
+      keyFile: CREDENTIALS_PATH,
+      scopes: [
+        'https://www.googleapis.com/auth/drive.readonly',
+        'https://www.googleapis.com/auth/documents.readonly',
+        'https://www.googleapis.com/auth/spreadsheets.readonly',
+      ],
+    });
+  }
+  return _auth;
 }
 
 interface DriveFile {
@@ -118,11 +122,17 @@ export async function syncDriveFolder(projectId: string, folderId?: string): Pro
       continue;
     }
 
-    if (existingByName.has(file.name)) {
-      console.log(`[gdrive-sync] Skipping "${file.name}" (already ingested)`);
+    const existing = existingByName.get(file.name);
+    if (existing) {
       existingByName.delete(file.name);
-      skipped++;
-      continue;
+      const driveModified = new Date(file.modifiedTime).getTime();
+      const ragCreated = new Date(existing.created_at).getTime();
+      if (driveModified <= ragCreated) {
+        skipped++;
+        continue;
+      }
+      console.log(`[gdrive-sync] Re-ingesting "${file.name}" (modified since last sync)`);
+      await deleteDocument(existing.id);
     }
 
     console.log(`[gdrive-sync] Ingesting "${file.name}" (${file.mimeType})...`);

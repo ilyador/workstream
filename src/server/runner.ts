@@ -104,6 +104,15 @@ export function buildFlowSnapshot(flow: any): FlowConfig {
   };
 }
 
+function formatRagResults(results: any[]): string {
+  let out = '## Document Search Results\nThe following passages were found relevant to your question:\n\n';
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    out += `[${i + 1}] From "${r.file_name}" (${(r.similarity * 100).toFixed(1)}% match):\n${r.content}\n\n`;
+  }
+  return out;
+}
+
 /** Build prompt for a single flow step, including only the requested context sources. */
 function buildStepPrompt(
   step: FlowStepConfig,
@@ -210,6 +219,9 @@ function buildStepPrompt(
           const last = previousOutputs[previousOutputs.length - 1];
           prompt += `## Previous Step: ${last.phase}\n${typeof last.output === 'string' ? last.output : JSON.stringify(last.output, null, 2)}\n\n`;
         }
+        break;
+      case 'rag':
+        if (task._ragResults?.length > 0) prompt += formatRagResults(task._ragResults);
         break;
       case 'all_previous_steps':
         if (previousOutputs.length > 0) {
@@ -531,7 +543,7 @@ const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
     final: 'answer',
     on_review_fail: 'answer',
     review_retries: 0,
-    on_max_retries: 'done',
+    on_max_retries: 'pause',
     phase_config: {
       answer: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'sonnet' },
     },
@@ -567,13 +579,7 @@ Description: ${task.description || 'No description provided.'}
 `;
 
   // RAG context injection for doc-search flow
-  if (task._ragResults && task._ragResults.length > 0) {
-    prompt += '\n## Document Search Results\nThe following passages were found relevant to your question:\n\n';
-    for (let i = 0; i < task._ragResults.length; i++) {
-      const r = task._ragResults[i];
-      prompt += `[${i + 1}] From "${r.file_name}" (${(r.similarity * 100).toFixed(1)}% match):\n${r.content}\n\n`;
-    }
-  }
+  if (task._ragResults?.length > 0) prompt += '\n' + formatRagResults(task._ragResults);
 
   // Skill references: parse /skillname from description, verify they exist, inject content
   if (task.description) {
