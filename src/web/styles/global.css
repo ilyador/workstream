@@ -27,6 +27,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #141413;
   --bg-hover: #1E1E1C;
   --bg-active: #282825;
