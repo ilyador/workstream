@@ -5,79 +5,151 @@
 [![React](https://img.shields.io/badge/React-19-black.svg)](https://react.dev/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Powered-black.svg)](https://claude.ai/)
 
-> A task manager where the tasks do themselves.
+> You describe it. AI builds it. You approve the PR.
 
-## AI Workers
-
-WorkStream lets you build AI workers and assign them tasks like you'd assign a teammate. A worker is a composable flow -- a sequence of steps with instructions, model selection, tool access, and context rules. You build them visually, no config files.
-
-Ships with four:
-
-- **AI Developer** -- plans and implements features
-- **AI Bug Hunter** -- analyzes and fixes bugs
-- **AI Refactorer** -- restructures code without breaking behavior
-- **AI Tester** -- writes test suites following your existing patterns
-
-But those are just defaults. Build your own: an AI designer that generates layouts from Figma screenshots. A copywriter that drafts release notes from your git log. A security auditor that reviews diffs against OWASP. Hook up RAG with local embeddings and your workers can search your docs, specs, and design files before writing a single line of code. The flow editor is visual -- drag steps, toggle models, pick what context each step sees.
+Create AI workers with instructions and strict steps. They write code, design pages, draft docs -- and pass output between each other like a real team. Each worker is a composable flow: a sequence of steps with model selection, tool permissions, and context rules. Build them visually.
 
 <img width="1365" height="1048" alt="Screenshot 2026-04-02 at 14 13 22" src="https://github.com/user-attachments/assets/31876ed3-1adf-48b2-8ad0-09930e60f781" />
 
 ## How It Works
 
-1. Create a **stream** -- a sequence of tasks that lead to a feature
-2. Assign each task to an **AI worker** or a human
-3. Click **Run** -- the worker reads your codebase, does the work, runs tests
-4. Each completed task is auto-committed to the stream's branch
-5. When the stream is done, click **Create PR**
+1. Create a **stream** -- a sequence of tasks that chain output forward
+2. Assign each task to an **AI worker** or a human teammate
+3. Click **Run** -- tasks execute top-to-bottom, output flows between them
+4. Each task auto-commits to the stream's git worktree branch
+5. When done, click **Create PR**
 
-Workers only get the context they need. The execute step gets your CLAUDE.md, skills, and project files. The verify step gets "run tests" and nothing else (~200 tokens). The review step gets the git diff and architecture docs -- fresh eyes that never saw the implementation. Roughly half the tokens of sending everything everywhere.
+Example: designer generates a layout from a screenshot, passes it to copywriter for text, passes it to developer to build it. You add review pauses wherever you want.
 
-## What Else
+## Default Workers
 
-- **Pause & resume** -- workers pause when stuck, you answer inline, they continue
-- **Auto-revert** -- git checkpoint before each task, rolls back on failure
-- **Git worktrees** -- each stream gets its own branch, main stays clean
-- **Human tasks** -- assign to people for design reviews, QA, manual work
-- **Skills** -- type `/skillname` in descriptions to inject methodologies
-- **Realtime** -- watch workers execute live, push notifications when done
-- **Telegram bot** -- create tasks from your phone, check status from bed
-- **MCP server** -- 9 tools for interacting from Claude Code CLI
-- **RAG** -- local embeddings via LM Studio for doc search in worker context
+| Worker | Steps | What it does |
+|--------|-------|-------------|
+| AI Developer | implement -> verify -> review | Plans, codes, tests, reviews |
+| AI Bug Hunter | fix -> verify -> review | Root-causes, fixes, proves nothing broke |
+| AI Refactorer | refactor -> verify -> review | Restructures, tests, reviews |
+| AI Tester | write-tests -> verify -> review | Writes tests, runs them, reviews |
 
-## Two Ways to Run
+Build your own: designer, copywriter, security auditor, doc writer -- anything you can describe as a sequence of steps.
 
-**Locally** -- on your machine, sync through Supabase. Solo dev with an AI partner.
+## Architecture
 
-**On a VPS** -- AI workers grind 24/7 while you sleep. Teams and background automation.
+```
+Browser <-> Express API (port 3001) <-> Supabase (Postgres + Auth + Realtime)
+               |                              ^
+           Vite (port 3000)              Worker process (polls jobs table)
+                                              |
+                                         Claude Code CLI (claude -p)
+                                              |
+                                         LM Studio (optional, embeddings)
+```
+
+- **Express server** -- stateless HTTP + SSE, serves API and flow CRUD
+- **Worker process** -- separate process, polls `jobs` table, spawns `claude -p` per step, writes logs to `job_logs`
+- **SSE streaming** -- polls `job_logs` every 500ms, streams to browser
+- **Supabase** -- Postgres + Auth + RLS + Realtime (local Docker or cloud)
+- **Git worktrees** -- each stream gets `.worktrees/<name>`, isolated from main
+
+## Prerequisites
+
+- **Node.js 18+** and **pnpm**
+- **Docker** (for Supabase)
+- **Claude Code** -- [install](https://claude.ai/download) and authenticate
+- **git** with `user.name` and `user.email` configured
+- **GitHub CLI** (optional, for PR creation)
+- **LM Studio** (optional, for RAG/embeddings)
 
 ## Quick Start
 
 ```bash
 git clone git@github.com:ilyador/workstream.git
-cd workstream && pnpm install && cp .env.example .env
-npx supabase start && npx supabase db reset
+cd workstream && pnpm install
+cp .env.example .env
+
+# Start Supabase and apply migrations
+npx supabase start
+npx supabase db reset
+
+# Fill .env with keys from:
+npx supabase status
+
+# Start all services (web + API + worker)
 pnpm dev
 ```
 
-Opens at `http://localhost:3000`.
+Opens at `http://localhost:3000`. Creates 4 default AI workers on first project setup.
 
-## Architecture
+## Telegram Bot
 
+```bash
+# Get a token from @BotFather in Telegram
+# Add to .env:
+TELEGRAM_BOT_TOKEN=your-token-here
+
+# Start the bot
+pnpm dev:bot
 ```
-Browser <-> Express API <-> Supabase (Postgres)
-                              ^
-                          Worker polls for jobs
-                              |
-                          Claude Code CLI
+
+Link a chat to a project with `/start`. Send messages to create tasks, check status, get summaries. Tag the bot in group chats.
+
+## RAG / Document Search
+
+Workers can search your docs, specs, and design files before writing code. Uses local embeddings via LM Studio -- nothing leaves your machine.
+
+```bash
+# 1. Start LM Studio and load an embedding model
+lms server start
+lms load text-embedding-nomic-embed-text-v1.5
+
+# 2. Sync docs from Google Drive (or add files manually)
+GDRIVE_CREDENTIALS_PATH=/path/to/credentials.json
+GDRIVE_FOLDER_ID=your-folder-id
+pnpm gdrive-sync
+
+# 3. Workers now search docs automatically via RAG context
 ```
+
+Embeddings are stored locally in Supabase with pgvector. Workers get relevant doc chunks injected into their prompts when RAG is enabled.
+
+## MCP Server
+
+```bash
+pnpm mcp
+```
+
+9 tools: `project_focus`, `project_summary`, `task_create`, `task_update`, `task_log`, `workstream_status`, `job_reply`, `job_approve`, `job_reject`
+
+## Self-Deployed
+
+Everything runs on your infrastructure. Two modes:
+
+- **Local:** run on your machine, sync team through online Supabase
+- **VPS:** run on a server, team accesses directly, workers grind 24/7
+
+Your code never touches a third-party server. The only external dependency is the Claude Code CLI.
 
 ## Tech Stack
 
-**Frontend:** React 19, Vite 8, TypeScript, CSS Modules
-**Backend:** Express 5, tsx
-**Database:** Supabase (Postgres, Auth, RLS, Realtime)
-**AI:** Claude Code CLI, MCP SDK
-**Embeddings:** LM Studio (local, optional)
+| Layer | Tech |
+|-------|------|
+| Frontend | React 19, Vite 8, TypeScript, CSS Modules |
+| Backend | Express 5, tsx |
+| Database | Supabase (Postgres, Auth, RLS, Realtime) |
+| AI | Claude Code CLI (`claude -p`), MCP SDK |
+| Embeddings | LM Studio (local, pgvector) |
+| Bot | grammy (Telegram) |
+
+## Database
+
+22 migrations in `supabase/migrations/`. Key tables:
+
+- `flows` + `flow_steps` -- AI worker definitions
+- `tasks` -- work items with `flow_id` assignment
+- `jobs` + `job_logs` -- execution state, frozen `flow_snapshot`, streaming logs
+- `workstreams` -- task groups with git worktree branches
+- `documents` + `document_chunks` -- RAG corpus with embeddings
+
+All tables use RLS scoped to project membership.
 
 ## License
 

@@ -232,43 +232,44 @@ footer a:hover { color: var(--text-2); }
 
 <section class="hero">
   <div class="w">
-    <h1>Your tasks<br>do themselves<br><span>now.</span></h1>
-    <p class="hero-sub">You describe the work. AI workers read your codebase, implement it, run tests, and ask you to review. Like hiring developers who never context-switch, never bikeshed, and never push to main without testing.</p>
+    <h1>You describe it.<br>AI builds it.<br><span>You approve the PR.</span></h1>
+    <p class="hero-sub">Create AI workers with instructions and strict steps. They write code, design pages, draft docs -- and pass output between each other like a real team. Except nobody's in a meeting right now.</p>
     <div class="hero-btns">
-      <a href="#how" class="btn-main">See how it works</a>
+      <a href="#workers" class="btn-main">See how it works</a>
       <a href="https://github.com/ilyador/workstream" class="btn-ghost">GitHub</a>
     </div>
-    <p class="hero-note">Open source &middot; MIT &middot; Runs locally &middot; Your code never leaves your machine</p>
+    <p class="hero-note">Open source &middot; MIT &middot; Self-deployed &middot; Only dependency: Claude Code</p>
   </div>
 </section>
 
-<section class="features" id="team">
+<section class="features" id="workers">
   <div class="w">
-    <h2><span style="color: var(--text-3)">You don't manage tasks.</span> You manage workers.</h2>
+    <h2><span style="color: var(--text-3)">A designer designs it.</span> A copywriter writes it. A developer builds it.</h2>
+    <p style="font-size: 17px; color: var(--text-2); line-height: 1.65; max-width: 640px; margin-bottom: 48px;">Each worker is a flow: a sequence of steps with instructions, model selection, and rules about what it can and can't do. Output passes from one task to the next. You pause where you want to review. The rest runs on autopilot.</p>
 
     <div class="anti-grid" style="margin-bottom: 24px;">
       <div class="anti-item">
         <div class="anti-label" style="text-decoration: none;">AI Developer</div>
-        <div class="anti-title">Builds features while you sleep</div>
-        <div class="anti-desc">Reads your codebase, plans the approach, writes the code, runs tests. Never argues about architecture in Slack.<br><span class="feat-tag">implement &rarr; verify &rarr; review</span></div>
+        <div class="anti-title">Ships features while you sleep</div>
+        <div class="anti-desc">Reads your codebase, plans the approach, writes the code, runs tests. Has never once mass-renamed a variable to camelCase across the whole project because "it felt right."<br><span class="feat-tag">implement &rarr; verify &rarr; review</span></div>
       </div>
       <div class="anti-item">
         <div class="anti-label" style="text-decoration: none;">AI Bug Hunter</div>
-        <div class="anti-title">Finds bugs you forgot about</div>
-        <div class="anti-desc">Root-causes it, minimal fix, proves nothing else broke. Does in minutes what takes a human half a day of context-switching.<br><span class="feat-tag">fix &rarr; verify &rarr; review</span></div>
+        <div class="anti-title">Fixes bugs without the backstory</div>
+        <div class="anti-desc">Doesn't need a 20-minute standup to understand the issue. Root-causes it, minimal fix, proves nothing else broke. You review the diff.<br><span class="feat-tag">fix &rarr; verify &rarr; review</span></div>
       </div>
       <div class="anti-item">
         <div class="anti-label" style="text-decoration: none;">AI Tester</div>
-        <div class="anti-title">Writes the tests you skipped</div>
-        <div class="anti-desc">Follows your existing patterns. Doesn't skip edge cases because it's 5pm on a Friday.<br><span class="feat-tag">write-tests &rarr; verify &rarr; review</span></div>
+        <div class="anti-title">Writes the tests you were "going to get to"</div>
+        <div class="anti-desc">Follows your existing patterns. Doesn't skip edge cases because it's 5pm on a Friday. Doesn't write tests that test the mock instead of the code.<br><span class="feat-tag">write-tests &rarr; verify &rarr; review</span></div>
       </div>
       <div class="anti-item">
-        <div class="anti-label" style="text-decoration: none;">You decide</div>
-        <div class="anti-title">Build any worker you want</div>
-        <div class="anti-desc">Designer from Figma screenshots. Copywriter for docs. Security auditor. Hook up RAG and they search your specs before writing code. If you can describe it, you can build it.</div>
+        <div class="anti-label" style="text-decoration: none;">+ whatever you need</div>
+        <div class="anti-title">If you can describe it, it can do it</div>
+        <div class="anti-desc">Build a designer that turns Figma exports into components. A copywriter for docs. A security reviewer. Plug in local LLMs via LM Studio. Add RAG so workers search your specs and design docs before touching code.</div>
       </div>
     </div>
-    <p style="font-size: 14px; color: var(--text-3); line-height: 1.65; max-width: 580px;">Every worker is a composable flow you build visually. Drag steps, switch models, control context. No YAML. No config files.</p>
+    <p style="font-size: 14px; color: var(--text-3); line-height: 1.65; max-width: 580px;">Build workers visually. Drag steps, switch models, control what context each step sees. No YAML. No config files. If you can configure a Notion template, you can build an AI worker.</p>
   </div>
 </section>
 
@@ -287,9 +288,9 @@ footer a:hover { color: var(--text-2); }
         <div class="anti-desc">Nothing magical happens every two weeks except a meeting where everyone lies about what they'll finish next.</div>
       </div>
       <div class="anti-item">
-        <div class="anti-label">Configuration</div>
-        <div class="anti-title">YAML, JSON, env files</div>
-        <div class="anti-desc">Workers are built visually. Steps are cards you drag. Models are toggles. No one should need a tutorial to assign a task.</div>
+        <div class="anti-label">Cloud Lock-in</div>
+        <div class="anti-title">Your code on someone else's server</div>
+        <div class="anti-desc">Self-deployed. Run on your machine and sync through Supabase. Or run on a VPS your team controls. Your code, your infrastructure, your rules.</div>
       </div>
       <div class="anti-item">
         <div class="anti-label">Velocity Charts</div>
@@ -302,49 +303,50 @@ footer a:hover { color: var(--text-2); }
 
 <section class="features" id="features">
   <div class="w">
-    <h2><span style="color: var(--text-3)">How it</span> actually works</h2>
+    <h2><span style="color: var(--text-3)">Made for teams that</span> move faster than their tools</h2>
 
     <div class="feat">
       <span class="feat-n">01</span>
-      <div class="feat-t">One dropdown</div>
-      <div class="feat-d">Pick an AI worker or a human. That's the whole task assignment. No mode toggles. No configuration screens. "Who does this?" Done.</div>
+      <div class="feat-t">Streams, not boards</div>
+      <div class="feat-d">A stream is a chain of tasks. One finishes, next starts. Output passes forward. Like a CI pipeline for your entire product backlog -- except it actually does the work.</div>
     </div>
     <div class="feat">
       <span class="feat-n">02</span>
-      <div class="feat-t">Streams, not boards</div>
-      <div class="feat-d">Tasks run top-to-bottom. One finishes, next starts automatically. No dragging cards across five columns so a PM can feel informed.</div>
+      <div class="feat-t">AI and humans on the same board</div>
+      <div class="feat-d">One dropdown: pick a worker or a person. Same comments, same @mentions, same notifications. Your team is a mix of humans and AI now. The UI shouldn't pretend otherwise.</div>
     </div>
     <div class="feat">
       <span class="feat-n">03</span>
-      <div class="feat-t">Workers ask when stuck</div>
-      <div class="feat-d">Job pauses. You answer inline. It picks up exactly where it left off. Unlike your last team lead, it doesn't pretend to understand and break everything.</div>
+      <div class="feat-t">You stay in control</div>
+      <div class="feat-d">Add review pauses anywhere in the flow. Workers stop and wait for your approval before continuing. When they're stuck, they ask -- inline, not in a separate tool.</div>
     </div>
     <div class="feat">
       <span class="feat-n">04</span>
-      <div class="feat-t">Git happens automatically</div>
-      <div class="feat-d">Each stream gets its own branch. Each task auto-commits. Auto-revert on failure. Click "Create PR" when the stream is done. You make zero git decisions.</div>
+      <div class="feat-t">Git you don't have to think about</div>
+      <div class="feat-d">Each stream gets its own branch. Each task auto-commits. Breaks something? Auto-reverts. Done? Click "Create PR." You never touch git directly.</div>
     </div>
     <div class="feat">
       <span class="feat-n">05</span>
-      <div class="feat-t">Watch them think</div>
-      <div class="feat-d">Live streaming as Claude reads files, writes code, runs tests. Push notifications when it's done or needs you. Not 2004-style dashboard refreshing.</div>
+      <div class="feat-t">Run it from anywhere</div>
+      <div class="feat-d">Browser, terminal, phone. Watch workers live as they code. Get push notifications when they finish. Check in from Telegram while walking the dog. MCP server if you live in the terminal.</div>
     </div>
   </div>
 </section>
 
 <section class="modes" id="modes">
   <div class="w">
-    <h2><span style="color: var(--text-3)">Two ways to</span> run it</h2>
+    <h2><span style="color: var(--text-3)">Your machine.</span> Your code. Your rules.</h2>
     <div class="anti-grid">
       <div class="anti-item">
-        <div class="anti-title">On your machine</div>
-        <div class="anti-desc">Run locally with Docker. Your code never leaves your machine. Good for solo developers who want an AI partner while they work.</div>
+        <div class="anti-title">Run it locally</div>
+        <div class="anti-desc">Everything offline. Sync with teammates through Supabase (cloud or self-hosted). Your code never touches someone else's server. Good for solo devs and the reasonably paranoid.</div>
       </div>
       <div class="anti-item">
-        <div class="anti-title">On a VPS</div>
-        <div class="anti-desc">AI workers grind tasks 24/7 while you sleep. Wake up to PRs. Good for teams who like mornings more than late nights.</div>
+        <div class="anti-title">Run it on a VPS</div>
+        <div class="anti-desc">Workers grind 24/7 while you sleep. Your team connects directly. Wake up to PRs. Good for teams who'd rather ship in the morning than debug at midnight.</div>
       </div>
     </div>
+    <p style="font-size: 14px; color: var(--text-3); margin-top: 20px; line-height: 1.6;">Only dependency: Claude Code. Plug in local LLMs via LM Studio for embedding, RAG, or anything Claude shouldn't handle.</p>
   </div>
 </section>
 
