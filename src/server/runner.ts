@@ -133,7 +133,11 @@ async function buildStepPrompt(
     switch (source) {
       case 'opencode_md': {
         const opencodeMdPath = join(localPath, 'OPENCODE.md');
+        const claudeMdPath = join(localPath, 'CLAUDE.md');
         if (existsSync(opencodeMdPath)) {
+          const content = readFileSync(opencodeMdPath, 'utf-8');
+          prompt += `## Project Context (from OPENCODE.md)\n${content.substring(0, 8000)}\n\n`;
+        } else if (existsSync(claudeMdPath)) {
           const content = readFileSync(opencodeMdPath, 'utf-8');
           prompt += `## Project Context (from OPENCODE.md)\n${content.substring(0, 8000)}\n\n`;
         }
@@ -373,7 +377,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
       onLog(`\n--- Step: ${step.name} (attempt ${attempt}/${maxAttempts}) ---\n`);
 
       try {
-        const output = await spawnOpencode(jobId, args, localPath, onLog, prompt);
+        const output = await spawnAgent(jobId, args, localPath, onLog, prompt, ctx.aiCli);
 
         const phaseOutput = {
           phase: step.name,
@@ -693,7 +697,11 @@ async function buildPrompt(phase: string, task: any, previousOutputs: any[], loc
   // Inject project context from OPENCODE.md if it exists
   let projectContext = '';
   const opencodeMdPath = join(localPath, 'OPENCODE.md');
+        const claudeMdPath = join(localPath, 'CLAUDE.md');
   if (existsSync(opencodeMdPath)) {
+          const content = readFileSync(opencodeMdPath, 'utf-8');
+          prompt += `## Project Context (from OPENCODE.md)\n${content.substring(0, 8000)}\n\n`;
+        } else if (existsSync(claudeMdPath)) {
     const content = readFileSync(opencodeMdPath, 'utf-8');
     projectContext = `## Project Context (from OPENCODE.md)\n${content.substring(0, 8000)}\n\n`;
   }
@@ -874,6 +882,8 @@ or if issues found:
   // Feature 4: Skill field injection — read actual skill file if available
   if (phaseConfig.skill) {
     const skillPaths = [
+      join(localPath, '.claude', 'skills', phaseConfig.skill, 'SKILL.md'),
+      join(localPath, '.claude', 'commands', phaseConfig.skill + '.md'),
       join(localPath, '.opencode', 'skills', phaseConfig.skill, 'SKILL.md'),
       join(localPath, '.opencode', 'commands', phaseConfig.skill + '.md'),
     ];
@@ -990,7 +1000,7 @@ function legacyReviewCheck(output: string): boolean {
 }
 
 /** Shared env for spawned opencode processes. Ensures PATH includes ~/.local/bin for systemd. */
-export const opencodeEnv = {
+export const claudeEnv = {
   ...process.env,
   TERM: 'dumb',
   PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}`,
@@ -1148,7 +1158,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
       onLog(`\n--- Phase: ${phase} (attempt ${attempt}/${maxAttempts}) ---\n`);
 
       try {
-        const output = await spawnOpencode(jobId, args, localPath, onLog, prompt);
+        const output = await spawnAgent(jobId, args, localPath, onLog, prompt, ctx.aiCli);
 
         const phaseOutput = {
           phase,
@@ -1468,7 +1478,7 @@ function generateSummary(prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn('opencode', ['-p', '--output-format', 'text', '--max-turns', '1', '--model', 'sonnet'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: opencodeEnv,
+      env: claudeEnv,
       timeout: 30000,
     });
 
@@ -1484,12 +1494,12 @@ function generateSummary(prompt: string): Promise<string> {
   });
 }
 
-function spawnOpencode(jobId: string, args: string[], cwd: string, onLog: (text: string) => void, prompt?: string): Promise<string> {
+function spawnAgent(jobId: string, args: string[], cwd: string, onLog: (text: string) => void, prompt?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn('opencode', args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: opencodeEnv,
+      env: claudeEnv,
     });
 
     activeProcesses.set(jobId, proc);

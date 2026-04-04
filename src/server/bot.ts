@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Bot, InlineKeyboard } from 'grammy';
 import { execFile } from 'child_process';
 import { supabase } from './supabase.js';
-import { opencodeEnv } from './runner.js';
+import { claudeEnv } from './runner.js';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -90,7 +90,7 @@ function askOpencode(systemPrompt: string, userMessage: string): Promise<string>
     const proc = execFile('opencode', ['-p', '--output-format', 'text', '--max-turns', '3'], {
       timeout: 120000,
       maxBuffer: 1024 * 1024,
-      env: opencodeEnv,
+      env: claudeEnv,
     }, (err, stdout) => {
       if (err) reject(err);
       else resolve(stdout.trim());

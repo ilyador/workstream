@@ -6,7 +6,7 @@ import { requireAuth } from '../auth-middleware.js';
 import { cleanupWorktree } from '../worktree.js';
 import { git, slugify, commitMessage } from '../git-utils.js';
 import { broadcast } from './data.js';
-import { opencodeEnv } from '../runner.js';
+import { claudeEnv } from '../runner.js';
 
 export const gitRouter = Router();
 
@@ -126,7 +126,7 @@ At the end, output a brief summary of what was reviewed and what was fixed (if a
       const proc = spawn('opencode', ['-p', '--output-format', 'text', '--max-turns', '30', '--model', 'opus'], {
         cwd: localPath,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: opencodeEnv,
+        env: claudeEnv,
       });
       let stdout = '';
       let stderrTail = '';
