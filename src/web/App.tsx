@@ -214,6 +214,57 @@ export default function App() {
     }));
   }, [jobs.jobs, taskTitleMap, taskTypeMap]);
 
+  // Workstream name lookup for sublabels
+  const wsNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const w of workstreams.workstreams) map[w.id] = w.name;
+    return map;
+  }, [workstreams.workstreams]);
+
+  // Action items for header
+  const todoItems = useMemo(() => {
+    const uid = auth.profile?.id;
+    if (!uid) return [];
+    return tasks.tasks
+      .filter(t => t.assignee === uid && t.status !== 'done' && t.workstream_id)
+      .map(t => ({
+        id: t.id,
+        label: t.title,
+        sublabel: t.workstream_id ? wsNameMap[t.workstream_id] : undefined,
+        tag: t.type,
+        taskId: t.id,
+      }));
+  }, [tasks.tasks, wsNameMap, auth.profile?.id]);
+
+  const reviewItems = useMemo(() => {
+    const items: Array<{ id: string; label: string; sublabel?: string; taskId?: string; workstreamId?: string }> = [];
+    for (const job of jobViews) {
+      if (job.status === 'review') {
+        const task = tasks.tasks.find(t => t.id === job.taskId);
+        items.push({
+          id: job.id,
+          label: job.title,
+          sublabel: task?.workstream_id ? wsNameMap[task.workstream_id] : undefined,
+          tag: task?.type,
+          taskId: job.taskId,
+        });
+      }
+    }
+    for (const job of jobViews) {
+      if (job.status === 'paused' && job.question) {
+        const task = tasks.tasks.find(t => t.id === job.taskId);
+        items.push({
+          id: job.id,
+          label: job.title,
+          sublabel: 'Question asked',
+          tag: task?.type,
+          taskId: job.taskId,
+        });
+      }
+    }
+    return items;
+  }, [jobViews, tasks.tasks, wsNameMap]);
+
   // Step 1: Environment check
   if (!envReady) {
     return <OnboardingCheck onReady={() => setEnvReady(true)} />;
@@ -290,6 +341,8 @@ export default function App() {
         notificationList={notifs.notifications}
         onMarkRead={notifs.markRead}
         onMarkAllRead={notifs.markAllRead}
+        todoItems={todoItems}
+        reviewItems={reviewItems}
         userInitials={auth.profile.initials}
         projects={projects.projects.map(p => ({ id: p.id, name: p.name }))}
         currentProjectId={projects.current?.id || null}

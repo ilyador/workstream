@@ -171,6 +171,155 @@
   color: var(--text);
 }
 
+/* ─── Action center (To Do / To Review) ─── */
+.center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  background: var(--white);
+  border: 1px solid var(--divider);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: color 0.15s, background 0.15s;
+}
+.actionBtn:hover {
+  color: var(--text);
+  border-color: var(--text-4);
+  background: var(--bg-hover);
+}
+.actionBtnActive {
+  color: var(--text);
+}
+.actionLabel {
+  letter-spacing: -0.01em;
+}
+/* Count badge -- warm amber when items exist */
+.actionCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--text);
+  color: var(--bg);
+  animation: badgePop 0.25s ease-out;
+}
+/* Warm accent for To Do count */
+.actionCountTodo {
+  background: #C2410C;
+  color: #fff;
+}
+:global([data-theme="dark"]) .actionCountTodo {
+  background: #EA580C;
+}
+/* Blue accent for To Review count */
+.actionCountReview {
+  background: var(--blue);
+  color: #fff;
+}
+@keyframes badgePop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+.actionModal {
+  max-width: 480px;
+  padding: 0;
+  overflow: hidden;
+}
+.actionModalHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--divider);
+}
+.actionModalTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.actionList {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+.actionItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--divider);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.actionItem:last-child { border-bottom: none; }
+.actionItem:hover { background: var(--bg-hover); }
+.actionItemLabel {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.4;
+}
+.actionItemTags {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.actionItemPill {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+  background: var(--blue-bg);
+  padding: 2px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.actionItemSub {
+  font-size: 11px;
+  color: var(--text-4);
+}
+.actionEmpty {
+  padding: 24px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-4);
+}
+
+/* Mobile: nav links move into dropdown, action center stays visible */
+.mobileNav { display: none; }
+.dropdownNavActive {
+  color: var(--text) !important;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .headerNav { display: none; }
+  .mobileNav { display: block; }
+  .center { gap: 8px; }
+  .actionBtn { padding: 4px 10px; font-size: 12px; gap: 5px; }
+  .actionCount { min-width: 17px; height: 17px; font-size: 10px; padding: 0 4px; }
+}
+
 .milestone { font-size: 13px; color: var(--text-3); }
 .localPath {
   font-size: 12px;

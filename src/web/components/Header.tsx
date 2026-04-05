@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { timeAgo } from '../lib/time';
 import { useTheme } from '../hooks/useTheme';
 import s from './Header.module.css';
+import taskStyles from './TaskCard.module.css';
+import formStyles from './TaskForm.module.css';
 
 interface Project {
   id: string;
@@ -23,6 +25,7 @@ export interface ActionItem {
   id: string;
   label: string;
   sublabel?: string;
+  tag?: string;
   taskId?: string;
   workstreamId?: string;
 }
@@ -74,22 +77,18 @@ export function Header({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLDivElement>(null);
-  const todoRef = useRef<HTMLDivElement>(null);
-  const reviewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open && !notifOpen && !avatarOpen && !todoOpen && !reviewOpen) return;
+    if (!open && !notifOpen && !avatarOpen) return;
     function handleClickOutside(e: MouseEvent) {
       const t = e.target as Node;
       if (open && dropdownRef.current && !dropdownRef.current.contains(t)) setOpen(false);
       if (notifOpen && notifRef.current && !notifRef.current.contains(t)) setNotifOpen(false);
       if (avatarOpen && avatarRef.current && !avatarRef.current.contains(t)) setAvatarOpen(false);
-      if (todoOpen && todoRef.current && !todoRef.current.contains(t)) setTodoOpen(false);
-      if (reviewOpen && reviewRef.current && !reviewRef.current.contains(t)) setReviewOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open, notifOpen, avatarOpen, todoOpen, reviewOpen]);
+  }, [open, notifOpen, avatarOpen]);
 
   return (
     <header className={s.bar}>
@@ -143,43 +142,24 @@ export function Header({
                   </button>
                 </>
               )}
-              {/* Mobile: action items inline */}
-              {(todoItems.length > 0 || reviewItems.length > 0) && (
-                <div className={s.mobileActions}>
-                  <div className={s.dropdownDivider} />
-                  {todoItems.length > 0 && (
-                    <>
-                      <div className={s.mobileActionHeader}>
-                        To Do <span className={s.actionCount}>{todoItems.length}</span>
-                      </div>
-                      {todoItems.map(item => (
-                        <button key={item.id} className={s.dropdownItem} onClick={() => {
-                          if (item.taskId) navigate(`/?task=${item.taskId}`);
-                          setOpen(false);
-                        }}>
-                          <span className={s.dropdownName}>{item.label}</span>
-                        </button>
-                      ))}
-                    </>
-                  )}
-                  {reviewItems.length > 0 && (
-                    <>
-                      <div className={s.mobileActionHeader}>
-                        To Review <span className={s.actionCount}>{reviewItems.length}</span>
-                      </div>
-                      {reviewItems.map(item => (
-                        <button key={item.id} className={s.dropdownItem} onClick={() => {
-                          if (item.taskId) navigate(`/?task=${item.taskId}`);
-                          else if (item.workstreamId) navigate(`/?ws=${item.workstreamId}`);
-                          setOpen(false);
-                        }}>
-                          <span className={s.dropdownName}>{item.label}</span>
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
-              )}
+              {/* Mobile: nav links */}
+              <div className={s.mobileNav}>
+                <div className={s.dropdownDivider} />
+                {[
+                  { to: '/', label: 'Streams', exact: true },
+                  { to: '/flows', label: 'AI Flows' },
+                  { to: '/archive', label: 'Archive' },
+                ].map(link => {
+                  const path = window.location.pathname;
+                  const active = link.exact ? path === link.to : path.startsWith(link.to);
+                  return (
+                    <button key={link.to}
+                      className={`${s.dropdownNew} ${active ? s.dropdownNavActive : ''}`}
+                      onClick={() => { setOpen(false); navigate(link.to); }}
+                    >{link.label}</button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -190,69 +170,85 @@ export function Header({
         </nav>
       </div>
 
-      {/* Action center -- desktop only (mobile items go in project dropdown) */}
+      {/* Action center */}
       <div className={s.center}>
-        <div className={s.actionWrap} ref={todoRef}>
-          <button
-            className={`${s.actionBtn} ${todoItems.length > 0 ? s.actionBtnActive : ''}`}
-            onClick={() => { setTodoOpen(v => !v); setReviewOpen(false); }}
-          >
-            <span className={s.actionLabel}>To Do</span>
-            {todoItems.length > 0 && <span className={s.actionCount}>{todoItems.length}</span>}
-          </button>
-          {todoOpen && (
-            <div className={s.actionDropdown}>
-              {todoItems.length === 0 ? (
-                <div className={s.actionEmpty}>Nothing to do</div>
-              ) : (
-                <div className={s.actionList}>
-                  {todoItems.map(item => (
-                    <button key={item.id} className={s.actionItem} onClick={() => {
-                      if (item.taskId) navigate(`/?task=${item.taskId}`);
-                      setTodoOpen(false);
-                    }}>
-                      <span className={s.actionItemLabel}>{item.label}</span>
-                      {item.sublabel && <span className={s.actionItemSub}>{item.sublabel}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <button
+          className={`${s.actionBtn} ${todoItems.length > 0 ? s.actionBtnActive : ''}`}
+          onClick={() => { setTodoOpen(true); setReviewOpen(false); }}
+        >
+          <span className={s.actionLabel}>To Do</span>
+          {todoItems.length > 0 && <span className={`${s.actionCount} ${s.actionCountTodo}`}>{todoItems.length}</span>}
+        </button>
 
-        <div className={s.actionDivider} />
-
-        <div className={s.actionWrap} ref={reviewRef}>
-          <button
-            className={`${s.actionBtn} ${reviewItems.length > 0 ? s.actionBtnActive : ''}`}
-            onClick={() => { setReviewOpen(v => !v); setTodoOpen(false); }}
-          >
-            <span className={s.actionLabel}>To Review</span>
-            {reviewItems.length > 0 && <span className={s.actionCount}>{reviewItems.length}</span>}
-          </button>
-          {reviewOpen && (
-            <div className={s.actionDropdown}>
-              {reviewItems.length === 0 ? (
-                <div className={s.actionEmpty}>Nothing to review</div>
-              ) : (
-                <div className={s.actionList}>
-                  {reviewItems.map(item => (
-                    <button key={item.id} className={s.actionItem} onClick={() => {
-                      if (item.taskId) navigate(`/?task=${item.taskId}`);
-                      else if (item.workstreamId) navigate(`/?ws=${item.workstreamId}`);
-                      setReviewOpen(false);
-                    }}>
-                      <span className={s.actionItemLabel}>{item.label}</span>
-                      {item.sublabel && <span className={s.actionItemSub}>{item.sublabel}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <button
+          className={`${s.actionBtn} ${reviewItems.length > 0 ? s.actionBtnActive : ''}`}
+          onClick={() => { setReviewOpen(true); setTodoOpen(false); }}
+        >
+          <span className={s.actionLabel}>To Review</span>
+          {reviewItems.length > 0 && <span className={`${s.actionCount} ${s.actionCountReview}`}>{reviewItems.length}</span>}
+        </button>
       </div>
+
+      {/* To Do modal */}
+      {todoOpen && (
+        <div className={formStyles.overlay} onClick={() => setTodoOpen(false)}>
+          <div className={`${formStyles.modal} ${s.actionModal}`} onClick={e => e.stopPropagation()}>
+            <div className={s.actionModalHeader}>
+              <span className={s.actionModalTitle}>To Do</span>
+              {todoItems.length > 0 && <span className={`${s.actionCount} ${s.actionCountTodo}`}>{todoItems.length}</span>}
+            </div>
+            {todoItems.length === 0 ? (
+              <div className={s.actionEmpty}>Nothing to do</div>
+            ) : (
+              <div className={s.actionList}>
+                {todoItems.map(item => (
+                  <button key={item.id} className={s.actionItem} onClick={() => {
+                    if (item.taskId) navigate(`/?task=${item.taskId}`);
+                    setTodoOpen(false);
+                  }}>
+                    <span className={s.actionItemLabel}>{item.label}</span>
+                    <span className={s.actionItemTags}>
+                      {item.tag && <span className={`${taskStyles.tag} ${taskStyles.tagType}`}>{item.tag}</span>}
+                      {item.sublabel && <span className={s.actionItemPill}>{item.sublabel}</span>}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* To Review modal */}
+      {reviewOpen && (
+        <div className={formStyles.overlay} onClick={() => setReviewOpen(false)}>
+          <div className={`${formStyles.modal} ${s.actionModal}`} onClick={e => e.stopPropagation()}>
+            <div className={s.actionModalHeader}>
+              <span className={s.actionModalTitle}>To Review</span>
+              {reviewItems.length > 0 && <span className={`${s.actionCount} ${s.actionCountReview}`}>{reviewItems.length}</span>}
+            </div>
+            {reviewItems.length === 0 ? (
+              <div className={s.actionEmpty}>Nothing to review</div>
+            ) : (
+              <div className={s.actionList}>
+                {reviewItems.map(item => (
+                  <button key={item.id} className={s.actionItem} onClick={() => {
+                    if (item.taskId) navigate(`/?task=${item.taskId}`);
+                    else if (item.workstreamId) navigate(`/?ws=${item.workstreamId}`);
+                    setReviewOpen(false);
+                  }}>
+                    <span className={s.actionItemLabel}>{item.label}</span>
+                    <span className={s.actionItemTags}>
+                      {item.tag && <span className={`${taskStyles.tag} ${taskStyles.tagType}`}>{item.tag}</span>}
+                      {item.sublabel && <span className={s.actionItemPill}>{item.sublabel}</span>}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className={s.right}>
         {localPath && <span className={s.localPath} title={localPath}>{localPath}</span>}

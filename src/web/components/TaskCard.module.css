@@ -4,7 +4,6 @@
   border-left: 3px solid var(--divider);
   border-radius: 10px;
   background: var(--white);
-  cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s, opacity 0.2s, transform 0.2s cubic-bezier(0.2, 0, 0, 1);
   overflow: hidden;
   position: relative;
@@ -66,6 +65,7 @@
   display: flex;
   align-items: flex-start;
   gap: 6px;
+  cursor: pointer;
   padding: 10px 12px;
 }
 

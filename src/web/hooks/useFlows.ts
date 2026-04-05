@@ -26,6 +26,8 @@ export function useFlows(projectId: string | null) {
   }, [load]);
 
   const updateFlow = useCallback(async (id: string, data: Record<string, unknown>) => {
+    // Optimistic update so subsequent reads (e.g. rapid tag toggles) see fresh state
+    setFlows(prev => prev.map(f => f.id === id ? { ...f, ...data } as Flow : f));
     await apiUpdate(id, data);
   }, []);
 
