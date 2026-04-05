@@ -236,6 +236,10 @@ export async function deleteJob(jobId: string) {
   return apiFetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
 }
 
+export async function moveToBacklog(jobId: string) {
+  return apiFetch(`/api/jobs/${jobId}/backlog`, { method: 'POST' });
+}
+
 export async function revertJob(jobId: string, localPath: string) {
   return apiFetch(`/api/jobs/${jobId}/revert`, {
     method: 'POST',

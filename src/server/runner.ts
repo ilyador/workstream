@@ -454,6 +454,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
           phase: step.name,
           attempt,
           output: output.substring(0, 10000),
+          summary: extractPhaseSummary(output),
         };
         phasesCompleted.push(phaseOutput);
         await supabase.from('jobs').update({ phases_completed: phasesCompleted }).eq('id', jobId);
@@ -994,6 +995,20 @@ interface PhaseVerdict {
   reason: string;
 }
 
+/** Extract a one-sentence summary from a phase's raw output. */
+function extractPhaseSummary(rawOutput: string): string {
+  const lines = rawOutput.split('\n').filter(l => {
+    const t = l.trim();
+    if (!t) return false;
+    if (/^\[/.test(t)) return false;
+    if (t.startsWith('---')) return false;
+    if (t.startsWith('RULES:') || t.startsWith('IMPORTANT:')) return false;
+    return true;
+  });
+  const last = lines[lines.length - 1]?.trim() || '';
+  return last.length > 120 ? last.substring(0, 117) + '...' : last;
+}
+
 /** Extract the last JSON verdict block from Claude's output. */
 function extractVerdict(output: string): PhaseVerdict | null {
   const fenced = /```(?:json)?\s*(\{[\s\S]*?\})\s*```/g;
@@ -1207,6 +1222,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
           phase,
           attempt,
           output: output.substring(0, 10000), // Cap output size
+          summary: extractPhaseSummary(output),
         };
         phasesCompleted.push(phaseOutput);
         await supabase.from('jobs').update({ phases_completed: phasesCompleted }).eq('id', jobId);

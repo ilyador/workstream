@@ -4,7 +4,7 @@ import { useSlashCommands } from '../hooks/useSlashCommands';
 import { computeSkillInsert } from '../lib/skill-insert';
 import s from './ReplyInput.module.css';
 
-export function ReplyInput({ onReply, localPath }: { onReply: (answer: string) => void; localPath?: string }) {
+export function ReplyInput({ onReply, localPath, placeholder }: { onReply: (answer: string) => void; localPath?: string; placeholder?: string }) {
   const [val, setVal] = useState('');
   const [sending, setSending] = useState(false);
   const [skills, setSkills] = useState<SkillInfo[]>([]);
@@ -61,7 +61,7 @@ export function ReplyInput({ onReply, localPath }: { onReply: (answer: string) =
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           onBlur={() => { setTimeout(() => slash.dismiss(), 150); }}
-          placeholder="Your answer... (type / for skills)"
+          placeholder={placeholder || "Your answer... (type / for skills)"}
           disabled={sending}
         />
         <button className={s.replySend} onClick={handleReply} disabled={sending}>

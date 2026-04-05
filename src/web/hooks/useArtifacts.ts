@@ -4,6 +4,7 @@ import { getArtifacts, uploadArtifact as apiUpload, deleteArtifact as apiDelete,
 export function useArtifacts(taskId: string | null) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     if (!taskId) return;
@@ -11,6 +12,7 @@ export function useArtifacts(taskId: string | null) {
     try {
       const data = await getArtifacts(taskId);
       setArtifacts(data);
+      setLoaded(true);
     } catch { /* ignore */ }
     setLoading(false);
   }, [taskId]);
@@ -28,5 +30,5 @@ export function useArtifacts(taskId: string | null) {
     await load();
   }
 
-  return { artifacts, loading, upload, remove, reload: load };
+  return { artifacts, loading, loaded, upload, remove, reload: load };
 }

@@ -12,11 +12,13 @@ interface Comment {
 
 export function useComments(taskId: string | null) {
   const [comments, setComments] = useState<Comment[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     if (!taskId) return;
     const data = await getComments(taskId);
     setComments(data);
+    setLoaded(true);
   }, [taskId]);
 
   useEffect(() => { load(); }, [load]);
@@ -32,5 +34,5 @@ export function useComments(taskId: string | null) {
     await load();
   }
 
-  return { comments, addComment, removeComment };
+  return { comments, loaded, addComment, removeComment };
 }

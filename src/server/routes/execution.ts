@@ -320,7 +320,7 @@ executionRouter.post('/api/jobs/:id/rework', requireAuth, async (req, res) => {
 
   const { data: job } = await supabase.from('jobs').select('*').eq('id', jobId).single();
   if (!job) return res.status(404).json({ error: 'Job not found' });
-  if (job.status !== 'review') return res.status(400).json({ error: 'Job is not in review' });
+  if (!['review', 'done'].includes(job.status)) return res.status(400).json({ error: 'Job is not in review or done' });
 
   // Complete current job
   if (job.local_path) { try { deleteCheckpoint(job.local_path, jobId); } catch {} }
@@ -360,6 +360,20 @@ executionRouter.post('/api/jobs/:id/rework', requireAuth, async (req, res) => {
   if (jobErr || !newJob) return res.status(500).json({ error: 'Failed to create rework job' });
 
   res.json({ jobId: newJob.id });
+});
+
+// Move done job's task to backlog -> delete job, reset task
+executionRouter.post('/api/jobs/:id/backlog', requireAuth, async (req, res) => {
+  const jobId = req.params.id;
+
+  const { data: job } = await supabase.from('jobs').select('task_id, status').eq('id', jobId).single();
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  if (job.status !== 'done') return res.status(400).json({ error: 'Job is not done' });
+
+  await supabase.from('jobs').delete().eq('id', jobId);
+  await supabase.from('tasks').update({ status: 'backlog' }).eq('id', job.task_id);
+
+  res.json({ ok: true });
 });
 
 // Revert job -> restore files to pre-job state

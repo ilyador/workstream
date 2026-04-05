@@ -10,7 +10,7 @@ import { useCommentCounts } from './hooks/useCommentCounts';
 import { useWebNotifications } from './hooks/useWebNotifications';
 import { useFlows } from './hooks/useFlows';
 import { useCustomTypes } from './hooks/useCustomTypes';
-import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, reworkJob, revertJob, terminateJob, deleteJob, continueJob, updateTask, reviewAndCreatePr } from './lib/api';
+import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, reworkJob, revertJob, terminateJob, deleteJob, moveToBacklog, continueJob, updateTask, reviewAndCreatePr } from './lib/api';
 import { Routes, Route, useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
@@ -54,17 +54,20 @@ function cleanSummary(raw: string): string {
     .trim();
 }
 
-function buildPhases(phasesCompleted: any[], currentPhase: string | null, taskType: string, flowSnapshot?: any): { name: string; status: string }[] {
-  const completed = new Set(
-    (phasesCompleted || []).map((p: any) => typeof p === 'string' ? p : p.name || p.phase)
-  );
+function buildPhases(phasesCompleted: any[], currentPhase: string | null, taskType: string, flowSnapshot?: any): { name: string; status: string; summary?: string }[] {
+  const completedMap = new Map<string, string>();
+  for (const p of (phasesCompleted || [])) {
+    const name = typeof p === 'string' ? p : p.name || p.phase;
+    const summary = typeof p === 'string' ? '' : p.summary || '';
+    completedMap.set(name, summary);
+  }
   // Use flow_snapshot steps if available, otherwise fall back to legacy type mapping
   const allPhases = flowSnapshot?.steps
     ? flowSnapshot.steps.map((s: any) => s.name)
     : (TASK_TYPE_PHASES[taskType] || TASK_TYPE_PHASES['feature']);
 
   return allPhases.map((name: string) => {
-    if (completed.has(name)) return { name, status: 'completed' };
+    if (completedMap.has(name)) return { name, status: 'completed', summary: completedMap.get(name) || undefined };
     if (name === currentPhase) return { name, status: 'current' };
     return { name, status: 'pending' };
   });
@@ -437,6 +440,15 @@ export default function App() {
                 jobs.reload();
               } catch (err: any) {
                 await modal.alert('Error', err.message || 'Failed to dismiss job');
+              }
+            }}
+            onMoveToBacklog={async (jobId) => {
+              try {
+                await moveToBacklog(jobId);
+                jobs.reload();
+                tasks.reload();
+              } catch (err: any) {
+                await modal.alert('Error', err.message || 'Failed to move to backlog');
               }
             }}
             onContinue={async (jobId) => {
