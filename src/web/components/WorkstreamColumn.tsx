@@ -527,123 +527,116 @@ export function WorkstreamColumn({
       {/* Header */}
       <div className={s.headerWrap}>
         <div className={s.header}>
-          {editing && !isBacklog ? (
-            <input
-              ref={nameInputRef}
-              className={s.nameInput}
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={handleRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRename();
-                if (e.key === 'Escape') setEditing(false);
-              }}
-            />
-          ) : (
-            <span
-              className={s.name}
-              draggable={!isBacklog && !!onColumnDragStart && !!workstream}
-              onDragStart={(e) => {
-                if (isBacklog || !workstream || !onColumnDragStart) return;
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', workstream.id);
-                // Custom drag preview -- styled pill with stream name
-                const ghost = document.createElement('div');
-                ghost.textContent = workstream.name;
-                ghost.style.cssText = `
-                  padding: 8px 16px;
-                  background: var(--white, #fff);
-                  color: var(--text, #1a1a1a);
-                  font-family: 'Instrument Sans', system-ui, sans-serif;
-                  font-size: 13px;
-                  font-weight: 600;
-                  border-radius: 8px;
-                  border: 1.5px solid rgba(37, 99, 235, 0.3);
-                  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-                  position: fixed; top: -999px; left: -999px;
-                  pointer-events: none;
-                  white-space: nowrap;
-                `;
-                ghost.id = '__column-drag-preview__';
-                document.body.appendChild(ghost);
-                e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 20);
-                onColumnDragStart(workstream.id);
-                e.stopPropagation();
-              }}
-              onDragEnd={() => {
-                document.getElementById('__column-drag-preview__')?.remove();
-              }}
-              onDoubleClick={() => {
-                if (!isBacklog && workstream) {
-                  setEditName(workstream.name);
-                  setEditing(true);
-                }
-              }}
-              title={isBacklog ? undefined : 'Drag to reorder, double-click to rename'}
-              style={!isBacklog && onColumnDragStart ? { cursor: 'grab' } : undefined}
-            >
-              {isBacklog ? 'Backlog' : workstream?.name}
-            </span>
-          )}
+          <div className={s.headerLeft}>
+            {editing && !isBacklog ? (
+              <input
+                ref={nameInputRef}
+                className={s.nameInput}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={handleRename}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRename();
+                  if (e.key === 'Escape') setEditing(false);
+                }}
+              />
+            ) : (
+              <span
+                className={s.name}
+                draggable={!isBacklog && !!onColumnDragStart && !!workstream}
+                onDragStart={(e) => {
+                  if (isBacklog || !workstream || !onColumnDragStart) return;
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', workstream.id);
+                  const ghost = document.createElement('div');
+                  ghost.textContent = workstream.name;
+                  ghost.style.cssText = `
+                    padding: 8px 16px;
+                    background: var(--white, #fff);
+                    color: var(--text, #1a1a1a);
+                    font-family: 'Instrument Sans', system-ui, sans-serif;
+                    font-size: 13px;
+                    font-weight: 600;
+                    border-radius: 8px;
+                    border: 1.5px solid rgba(37, 99, 235, 0.3);
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+                    position: fixed; top: -999px; left: -999px;
+                    pointer-events: none;
+                    white-space: nowrap;
+                  `;
+                  ghost.id = '__column-drag-preview__';
+                  document.body.appendChild(ghost);
+                  e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 20);
+                  onColumnDragStart(workstream.id);
+                  e.stopPropagation();
+                }}
+                onDragEnd={() => {
+                  document.getElementById('__column-drag-preview__')?.remove();
+                }}
+                onDoubleClick={() => {
+                  if (!isBacklog && workstream) {
+                    setEditName(workstream.name);
+                    setEditing(true);
+                  }
+                }}
+                title={isBacklog ? undefined : 'Drag to reorder, double-click to rename'}
+                style={!isBacklog && onColumnDragStart ? { cursor: 'grab' } : undefined}
+              >
+                {isBacklog ? 'Backlog' : workstream?.name}
+              </span>
+            )}
 
-          {/* Status pill next to name (no count -- progress line shows progress) */}
-          {!isBacklog && totalTasks > 0 && wsStatus && wsStatus !== 'open' && (
-            <span className={`${s.statusPill} ${s[`statusPill--${wsStatus.replace(' ', '-')}`] || ''}`}>
-              {wsStatus}
-            </span>
-          )}
+            {!isBacklog && totalTasks > 0 && wsStatus && wsStatus !== 'open' && (
+              <span className={`${s.statusPill} ${s[`statusPill--${wsStatus.replace(' ', '-')}`] || ''}`}>
+                {wsStatus}
+              </span>
+            )}
 
-          {headerExtra}
+            {headerExtra}
+          </div>
 
-          <span className={s.headerSpacer} />
+          <div className={s.headerRight}>
+            {!isBacklog && canRunAi && onRunWorkstream && wsStatus === 'open' && totalTasks > 0 && !hasBrokenLinks && (
+              <button
+                className={s.runBtn}
+                onClick={onRunWorkstream}
+                title="Run workstream"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                Run
+              </button>
+            )}
 
-          {/* Run button: only when idle (open status) with tasks */}
-          {!isBacklog && canRunAi && onRunWorkstream && wsStatus === 'open' && totalTasks > 0 && !hasBrokenLinks && (
             <button
-              className={s.runBtn}
-              onClick={onRunWorkstream}
-              title="Run workstream"
+              className={s.addBtn}
+              onClick={onAddTask}
+              title="Add task"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-              Run
+              +
             </button>
-          )}
 
-          <button
-            className={s.addBtn}
-            onClick={onAddTask}
-            title="Add task"
-          >
-            +
-          </button>
+            {!headerExtra && totalTasks > 0 && (
+              <span className={s.taskCount}>
+                {isBacklog ? totalTasks : `${doneTasks}/${totalTasks}`}
+              </span>
+            )}
 
-          {/* Task count: pushed right (hidden when headerExtra provides its own) */}
-          {!headerExtra && totalTasks > 0 && (
-            <span className={s.taskCount}>
-              {isBacklog ? totalTasks : `${doneTasks}/${totalTasks}`}
-            </span>
-          )}
-
-          {/* Delete button: rightmost */}
-          {(isBacklog || wsStatus === 'open' || !wsStatus) && (
-            <>
-              {!isBacklog && workstream && onDeleteWorkstream && (
-                <button
-                  className={`${s.actionBtn} ${s.actionBtnDanger}`}
-                  onClick={async () => {
-                    if (await modal.confirm('Delete workstream', `Delete workstream "${workstream.name}"? Tasks will move to backlog.`, { label: 'Delete', danger: true })) {
-                      onDeleteWorkstream(workstream.id);
-                    }
-                  }}
-                  title="Delete workstream"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </>
-          )}
+            {(isBacklog || wsStatus === 'open' || !wsStatus) && !isBacklog && workstream && onDeleteWorkstream && (
+              <button
+                className={`${s.actionBtn} ${s.actionBtnDanger}`}
+                onClick={async () => {
+                  if (await modal.confirm('Delete workstream', `Delete workstream "${workstream.name}"? Tasks will move to backlog.`, { label: 'Delete', danger: true })) {
+                    onDeleteWorkstream(workstream.id);
+                  }
+                }}
+                title="Delete workstream"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Progress line on the separator -- full width, colored by state (hidden when headerExtra) */}

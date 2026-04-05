@@ -64,9 +64,22 @@
 .header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   padding: 12px 14px;
   min-height: 44px;
+}
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 .name {
   font-size: 14px;
@@ -102,8 +115,6 @@
   background: var(--bg-hover);
   border-radius: 10px;
 }
-
-.headerSpacer { flex: 1; }
 
 /* ─── Status pill: compact badge next to stream name ─── */
 .statusPill {
