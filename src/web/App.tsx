@@ -22,7 +22,6 @@ import type { JobView } from './components/job-types';
 import { TaskForm, type EditTaskData } from './components/TaskForm';
 import { AddProjectModal } from './components/AddProjectModal';
 import { MembersModal } from './components/MembersModal';
-import { FlowEditor } from './components/FlowEditor';
 import { FlowEditor2 } from './components/FlowEditor2';
 import { useModal } from './hooks/useModal';
 import './styles/global.css';
@@ -482,18 +481,6 @@ export default function App() {
         } />
         <Route path="/flows" element={
           projects.current ? (
-            <FlowEditor
-              flows={aiFlows.flows}
-              projectId={projects.current.id}
-              onSave={async (flowId, updates) => { await aiFlows.updateFlow(flowId, updates); await aiFlows.reload(); }}
-              onSaveSteps={async (flowId, steps) => { await aiFlows.updateFlowSteps(flowId, steps); await aiFlows.reload(); }}
-              onCreateFlow={async (data) => { return await aiFlows.createFlow(data); }}
-              onDeleteFlow={async (flowId) => { await aiFlows.deleteFlow(flowId); }}
-            />
-          ) : <div />
-        } />
-        <Route path="/flows2" element={
-          projects.current ? (
             <FlowEditor2
               flows={aiFlows.flows}
               projectId={projects.current.id}
@@ -501,6 +488,20 @@ export default function App() {
               onSaveSteps={async (flowId, steps) => { await aiFlows.updateFlowSteps(flowId, steps); await aiFlows.reload(); }}
               onCreateFlow={async (data) => { return await aiFlows.createFlow(data); }}
               onDeleteFlow={async (flowId) => { await aiFlows.deleteFlow(flowId); }}
+              onSwapColumns={(draggedId, targetId) => {
+                const dragged = aiFlows.flows.find(f => f.id === draggedId);
+                const target = aiFlows.flows.find(f => f.id === targetId);
+                if (!dragged || !target) return;
+                // Optimistic: swap positions locally
+                aiFlows.setFlows(prev => prev.map(f => {
+                  if (f.id === draggedId) return { ...f, position: target.position };
+                  if (f.id === targetId) return { ...f, position: dragged.position };
+                  return f;
+                }).sort((a, b) => a.position - b.position));
+                // Persist in background
+                aiFlows.updateFlow(draggedId, { position: target.position });
+                aiFlows.updateFlow(targetId, { position: dragged.position });
+              }}
             />
           ) : <div />
         } />

@@ -136,7 +136,6 @@ export function Header({
         <nav className={s.headerNav}>
           <NavLink to="/" end className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>Streams</NavLink>
           <NavLink to="/flows" className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>AI Flows</NavLink>
-          <NavLink to="/flows2" className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>Flows v2</NavLink>
           <NavLink to="/archive" className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>Archive</NavLink>
         </nav>
       </div>

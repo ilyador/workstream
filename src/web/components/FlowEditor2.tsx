@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { Flow, FlowStep } from '../lib/api';
 import { MdField } from './MdField';
-import { TaskCard } from './TaskCard';
+import { WorkstreamColumn } from './WorkstreamColumn';
+import { useBoardDrag } from '../hooks/useBoardDrag';
 import { BUILT_IN_TYPES, ALL_TOOLS, ALL_CONTEXT_SOURCES, MODEL_OPTIONS, ON_MAX_RETRIES_OPTIONS } from '../lib/constants';
 import boardStyles from './Board.module.css';
 import colStyles from './WorkstreamColumn.module.css';
@@ -10,13 +11,17 @@ import s from './FlowEditor2.module.css';
 
 interface FlowEditor2Props {
   flows: Flow[];
-  onSave: (flowId: string, updates: { name?: string; description?: string; agents_md?: string; default_types?: string[] }) => Promise<void>;
+  onSave: (flowId: string, updates: { name?: string; description?: string; agents_md?: string; default_types?: string[]; position?: number }) => Promise<void>;
   onSaveSteps: (flowId: string, steps: any[]) => Promise<void>;
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: any[] }) => Promise<Flow>;
   onDeleteFlow: (flowId: string) => Promise<void>;
+  onSwapColumns: (draggedId: string, targetId: string) => void;
   projectId: string;
   taskTypes?: string[];
 }
+
+const EMPTY_JOB_MAP = {};
+const EMPTY_SET = new Set<string>();
 
 function makeBlankStep(position: number): FlowStep {
   return {
@@ -46,7 +51,33 @@ function cloneSteps(steps: FlowStep[]): FlowStep[] {
 }
 
 function sortedSteps(flow: Flow): FlowStep[] {
-  return cloneSteps(flow.flow_steps.sort((a, b) => a.position - b.position));
+  return cloneSteps(flow.flow_steps.slice().sort((a, b) => a.position - b.position));
+}
+
+/** Map a flow step to a task-shaped object for TaskCard */
+function stepToTask(step: FlowStep, idx: number) {
+  return {
+    id: step.id,
+    title: step.name || `Step ${idx + 1}`,
+    description: step.instructions || undefined,
+    type: step.model,
+    mode: 'ai' as const,
+    effort: '',
+    auto_continue: true,
+    status: 'backlog' as const,
+  };
+}
+
+/** Map a flow to a workstream-shaped object for WorkstreamColumn */
+function flowToWorkstream(flow: Flow) {
+  return {
+    id: flow.id,
+    name: flow.name,
+    description: flow.description || '',
+    has_code: false,
+    status: 'open',
+    position: flow.position ?? 0,
+  };
 }
 
 /* ─────────────────────────────────────────────────
@@ -194,13 +225,13 @@ function StepModalWrapper({
       { ...s, context_sources: s.context_sources.includes(src) ? s.context_sources.filter(c => c !== src) : [...s.context_sources, src] }));
 
   const handleSave = async () => {
-    try { await onSaveSteps(flow.id, stepsPayload(steps)); } catch (err: any) { console.error(err); }
-    onClose();
+    try { await onSaveSteps(flow.id, stepsPayload(steps)); onClose(); }
+    catch (err: any) { console.error(err); }
   };
   const handleDelete = async () => {
     const next = steps.filter((_, i) => i !== activeIdx).map((s, i) => ({ ...s, position: i + 1 }));
-    try { await onSaveSteps(flow.id, stepsPayload(next)); } catch (err: any) { console.error(err); }
-    onClose();
+    try { await onSaveSteps(flow.id, stepsPayload(next)); onClose(); }
+    catch (err: any) { console.error(err); }
   };
 
   return (
@@ -211,300 +242,128 @@ function StepModalWrapper({
 }
 
 /* ─────────────────────────────────────────────────
-   FlowColumn — uses WorkstreamColumn + TaskCard CSS
+   Flow header extra — type selector + step count (passed via headerExtra)
    ───────────────────────────────────────────────── */
-function FlowColumn({
-  flow, onSave, onSaveSteps, onDeleteFlow, allFlows,
-  taskTypes = BUILT_IN_TYPES,
-  onOpenStepModal,
-  draggedColId, onColumnDragStart, onColumnDrop,
-}: {
-  flow: Flow;
-  onSave: FlowEditor2Props['onSave'];
-  onSaveSteps: FlowEditor2Props['onSaveSteps'];
-  onDeleteFlow: FlowEditor2Props['onDeleteFlow'];
-  allFlows: Flow[];
-  taskTypes?: string[];
-  onOpenStepModal: (flowId: string, stepIdx: number) => void;
-  draggedColId: string | null;
-  onColumnDragStart: (flowId: string) => void;
-  onColumnDrop: (targetId: string) => void;
+function FlowHeaderExtra({ flow, allFlows, onSave, taskTypes }: {
+  flow: Flow; allFlows: Flow[];
+  onSave: FlowEditor2Props['onSave']; taskTypes: string[];
 }) {
-  const steps = useMemo(() => sortedSteps(flow), [flow.flow_steps]);
-  const [expandedStep, setExpandedStep] = useState<number | null>(null);
-  const [editName, setEditName] = useState(flow.name);
-  const [editing, setEditing] = useState(false);
-  const [agentsMdOpen, setAgentsMdOpen] = useState(false);
-  const [editAgentsMd, setEditAgentsMd] = useState(flow.agents_md ?? '');
+  const steps = flow.flow_steps;
+  return <>
+    <select className={s.typeSelect} value=""
+      onChange={e => {
+        const type = e.target.value; if (!type) return;
+        const cur = flow.default_types || [];
+        onSave(flow.id, { default_types: cur.includes(type) ? cur.filter(t => t !== type) : [...cur, type] });
+      }}
+      title="Default task types for this flow">
+      <option value="">{(flow.default_types || []).length > 0 ? (flow.default_types || []).join(', ') : 'types'}</option>
+      {taskTypes.map(t => {
+        const other = allFlows.some(f => f.id !== flow.id && (f.default_types || []).includes(t));
+        const owned = (flow.default_types || []).includes(t);
+        return <option key={t} value={t} disabled={other}>{owned ? '\u2713 ' : ''}{t}{other ? ' (other flow)' : ''}</option>;
+      })}
+    </select>
+    <span className={colStyles.taskCount}>
+      {steps.length} {steps.length === 1 ? 'step' : 'steps'}
+    </span>
+  </>;
+}
+
+/* ─────────────────────────────────────────────────
+   Agents.md collapsible section (flow-specific, passed via listHeader)
+   ───────────────────────────────────────────────── */
+function AgentsMdSection({ flow, onSave }: { flow: Flow; onSave: FlowEditor2Props['onSave'] }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(flow.agents_md ?? '');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  const [columnDropSide, setColumnDropSide] = useState<'left' | 'right' | null>(null);
-  const nameInputRef = useRef<HTMLInputElement>(null);
-  const columnRef = useRef<HTMLDivElement>(null);
-  const colDragCountRef = useRef(0);
 
   // Sync on external changes
-  useEffect(() => {
-    setEditName(flow.name);
-    setEditAgentsMd(flow.agents_md ?? '');
-    setAgentsMdOpen(false);
-    setError('');
-  }, [flow.id, flow.name, flow.agents_md]);
-
-  useEffect(() => {
-    if (editing && nameInputRef.current) { nameInputRef.current.focus(); nameInputRef.current.select(); }
-  }, [editing]);
-
-  // Agents.md dirty
-  const agentsMdDirty = editAgentsMd !== (flow.agents_md ?? '');
-
-  // Save agents.md
-  const handleSaveAgentsMd = useCallback(async () => {
-    setSaving(true); setError('');
-    try { await onSave(flow.id, { agents_md: editAgentsMd }); }
-    catch (err: any) { setError(err.message || 'Failed to save'); }
-    finally { setSaving(false); }
-  }, [flow.id, editAgentsMd, onSave]);
-
-  // Step drag reorder
-  const handleDragEnd = useCallback(async () => {
-    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
-      const next = [...steps];
-      const [moved] = next.splice(dragIdx, 1);
-      next.splice(dragOverIdx, 0, moved);
-      const reordered = next.map((s, i) => ({ ...s, position: i + 1 }));
-      try { await onSaveSteps(flow.id, stepsPayload(reordered)); }
-      catch (err: any) { setError(err.message || 'Failed to reorder'); }
-    }
-    setDragIdx(null); setDragOverIdx(null);
-  }, [dragIdx, dragOverIdx, steps, flow.id, onSaveSteps]);
-
-  // Delete flow
-  const handleDeleteFlow = useCallback(async () => {
-    if (!confirm(`Delete flow "${flow.name}" and all its steps?`)) return;
-    setSaving(true); setError('');
-    try { await onDeleteFlow(flow.id); }
-    catch (err: any) { setError(err.message || 'Failed to delete'); setSaving(false); }
-  }, [flow.id, flow.name, onDeleteFlow]);
-
-  // Column drag-over: detect which side cursor is on (same as WorkstreamColumn)
-  const handleColumnDragOver = useCallback((e: React.DragEvent) => {
-    if (!draggedColId || draggedColId === flow.id) return;
-    const col = columnRef.current;
-    if (!col) return;
-    const rect = col.getBoundingClientRect();
-    const midX = rect.left + rect.width / 2;
-    setColumnDropSide(e.clientX < midX ? 'left' : 'right');
-  }, [draggedColId, flow.id]);
-
-  const showDropLeft = draggedColId && draggedColId !== flow.id && columnDropSide === 'left';
-  const showDropRight = draggedColId && draggedColId !== flow.id && columnDropSide === 'right';
-
-  // Rename
-  const handleRename = useCallback(async () => {
-    const trimmed = editName.trim();
-    if (!trimmed) { setEditName(flow.name); }
-    else if (trimmed !== flow.name) {
-      try { await onSave(flow.id, { name: trimmed }); }
-      catch (err: any) { setError(err.message || 'Failed to rename'); setEditName(flow.name); }
-    }
-    setEditing(false);
-  }, [editName, flow.id, flow.name, onSave]);
+  const flowAgentsMd = flow.agents_md ?? '';
+  const dirty = value !== flowAgentsMd;
 
   return (
-    <div className={colStyles.columnOuter}>
-      {showDropLeft && <div className={colStyles.columnDropLine} />}
-    <div
-      ref={columnRef}
-      className={colStyles.column}
-      onDragEnter={e => {
-        e.preventDefault();
-        if (draggedColId && draggedColId !== flow.id) colDragCountRef.current++;
-      }}
-      onDragOver={e => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        if (draggedColId) handleColumnDragOver(e);
-      }}
-      onDragLeave={() => {
-        if (draggedColId && draggedColId !== flow.id) {
-          colDragCountRef.current--;
-          if (colDragCountRef.current <= 0) { colDragCountRef.current = 0; setColumnDropSide(null); }
-        }
-      }}
-      onDrop={e => {
-        e.preventDefault();
-        if (draggedColId && draggedColId !== flow.id) {
-          colDragCountRef.current = 0;
-          setColumnDropSide(null);
-          onColumnDrop(flow.id);
-        }
-      }}
-    >
-      {/* Header */}
-      <div className={colStyles.headerWrap}>
-        <div className={colStyles.header}>
-          {editing ? (
-            <input ref={nameInputRef} className={colStyles.nameInput}
-              value={editName} onChange={e => setEditName(e.target.value)}
-              onBlur={handleRename}
-              onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') { setEditName(flow.name); setEditing(false); } }} />
-          ) : (
-            <span className={colStyles.name} draggable
-              onDragStart={e => {
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', flow.id);
-                const ghost = document.createElement('div');
-                ghost.textContent = flow.name;
-                ghost.style.cssText = `
-                  padding: 8px 16px; background: var(--white, #fff); color: var(--text, #1a1a1a);
-                  font-family: 'Instrument Sans', system-ui, sans-serif; font-size: 13px; font-weight: 600;
-                  border-radius: 8px; border: 1.5px solid rgba(37, 99, 235, 0.3);
-                  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-                  position: fixed; top: -999px; left: -999px; pointer-events: none; white-space: nowrap;
-                `;
-                ghost.id = '__column-drag-preview__';
-                document.body.appendChild(ghost);
-                e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 20);
-                onColumnDragStart(flow.id);
-                e.stopPropagation();
-              }}
-              onDragEnd={() => { document.getElementById('__column-drag-preview__')?.remove(); }}
-              onDoubleClick={() => { setEditName(flow.name); setEditing(true); }}
-              title="Drag to reorder, double-click to rename"
-              style={{ cursor: 'grab' }}
-            >{editName || flow.name}</span>
-          )}
-
-          <select className={s.typeSelect} value=""
-            onChange={e => {
-              const type = e.target.value; if (!type) return;
-              const cur = flow.default_types || [];
-              onSave(flow.id, { default_types: cur.includes(type) ? cur.filter(t => t !== type) : [...cur, type] });
+    <div className={s.agentsMdSection}>
+      <button className={s.sectionToggle} onClick={() => setOpen(v => !v)} type="button">
+        <span className={`${s.sectionArrow} ${open ? s.sectionArrowOpen : ''}`}>&#9654;</span>
+        agents.md
+        {flowAgentsMd && !open && <span className={s.sectionHint}>(has content)</span>}
+        {dirty && (
+          <button className="btn btnPrimary btnSm" style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: 11 }}
+            onClick={async (e) => {
+              e.stopPropagation();
+              setSaving(true);
+              try { await onSave(flow.id, { agents_md: value }); }
+              catch {} finally { setSaving(false); }
             }}
-            title="Default task types for this flow">
-            <option value="">{(flow.default_types || []).length > 0 ? (flow.default_types || []).join(', ') : 'types'}</option>
-            {taskTypes.map(t => {
-              const other = allFlows.some(f => f.id !== flow.id && (f.default_types || []).includes(t));
-              const owned = (flow.default_types || []).includes(t);
-              return <option key={t} value={t} disabled={other}>{owned ? '\u2713 ' : ''}{t}{other ? ' (other flow)' : ''}</option>;
-            })}
-          </select>
-
-          <span className={colStyles.taskCount}>
-            {steps.length} {steps.length === 1 ? 'step' : 'steps'}
-          </span>
-
-          {saving && <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 500 }}>Saving...</span>}
-
-          {agentsMdDirty && (
-            <button className={colStyles.runBtn} onClick={handleSaveAgentsMd} disabled={saving}>Save</button>
-          )}
-
-          {/* + opens modal in "new step" mode, like tasks */}
-          <button className={colStyles.addBtn}
-            onClick={() => onOpenStepModal(flow.id, -1)}
-            title="Add step">+</button>
-
-          <button className={`${colStyles.actionBtn} ${colStyles.actionBtnDanger}`}
-            onClick={handleDeleteFlow} disabled={saving} title="Delete flow">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+            disabled={saving}
+          >{saving ? 'Saving...' : 'Save'}</button>
+        )}
+      </button>
+      {open && (
+        <div className={s.agentsMdBody}>
+          <MdField value={value} onChange={setValue}
+            placeholder="Shared instructions for all steps in this flow (markdown)..." />
         </div>
-      </div>
-
-      {/* Scrollable area — agents.md + step cards together, like tasks */}
-      <div className={colStyles.tasks}>
-        {/* Agents.md collapsible — inside scroll area */}
-        <div className={s.agentsMdSection}>
-          <button className={s.sectionToggle} onClick={() => setAgentsMdOpen(v => !v)} type="button">
-            <span className={`${s.sectionArrow} ${agentsMdOpen ? s.sectionArrowOpen : ''}`}>&#9654;</span>
-            agents.md
-            {editAgentsMd && !agentsMdOpen && <span className={s.sectionHint}>(has content)</span>}
-          </button>
-          {agentsMdOpen && (
-            <div className={s.agentsMdBody}>
-              <MdField value={editAgentsMd} onChange={setEditAgentsMd}
-                placeholder="Shared instructions for all steps in this flow (markdown)..." />
-            </div>
-          )}
-        </div>
-
-        {steps.length === 0 && <div className={colStyles.empty}>No steps yet</div>}
-        {steps.map((step, idx) => {
-          const dropClass = dragIdx !== null && dragOverIdx === idx && dragIdx !== idx
-            ? (dragIdx > idx ? colStyles.dropBefore : colStyles.dropAfter)
-            : '';
-          return (
-          <div key={step.id} className={`${colStyles.cardWrap} ${dropClass}`}
-            onDragOver={e => { e.preventDefault(); setDragOverIdx(idx); }}
-          >
-            <TaskCard
-              task={{
-                id: step.id,
-                title: step.name || `Step ${idx + 1}`,
-                description: step.instructions || undefined,
-                type: step.model,
-                mode: 'ai',
-                effort: '',
-                auto_continue: true,
-              }}
-              job={null}
-              canRunAi={false}
-              metaItems={[
-                { label: 'model', value: step.model },
-                { label: 'tools', value: step.tools.join(', ') },
-                ...(step.is_gate ? [{ label: 'gate', value: `max ${step.max_retries} retries, then ${step.on_max_retries}` }] : []),
-              ]}
-              isExpanded={expandedStep === idx}
-              onToggleExpand={() => setExpandedStep(expandedStep === idx ? null : idx)}
-              onEdit={() => onOpenStepModal(flow.id, idx)}
-              onDelete={async () => {
-                const next = steps.filter((_, i) => i !== idx).map((s, i) => ({ ...s, position: i + 1 }));
-                await onSaveSteps(flow.id, stepsPayload(next));
-                setExpandedStep(null);
-              }}
-              onDragStart={() => setDragIdx(idx)}
-              onDragEnd={handleDragEnd}
-              isDragging={dragIdx === idx}
-            />
-          </div>
-          );
-        })}
-      </div>
-
-      {error && <div className={s.error}>{error}</div>}
-    </div>
-      {showDropRight && <div className={colStyles.columnDropLine} />}
+      )}
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────────
-   FlowEditor2 — Board container
+   FlowEditor2 — Board using WorkstreamColumn directly
    ───────────────────────────────────────────────── */
-export function FlowEditor2({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, projectId, taskTypes }: FlowEditor2Props) {
+export function FlowEditor2({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, onSwapColumns, projectId, taskTypes }: FlowEditor2Props) {
   const [creating, setCreating] = useState(false);
-  const [draggedColId, setDraggedColId] = useState<string | null>(null);
 
-  // Same pattern as Board.tsx handleColumnDrop -- swap positions via onSave
-  const handleColumnDrop = useCallback(async (targetId: string) => {
-    if (!draggedColId || draggedColId === targetId) return;
-    const dragged = flows.find(f => f.id === draggedColId);
-    const target = flows.find(f => f.id === targetId);
-    if (!dragged || !target) return;
-    await onSave(draggedColId, { position: target.position } as any);
-    await onSave(targetId, { position: dragged.position } as any);
-    setDraggedColId(null);
-  }, [draggedColId, flows, onSave]);
+  const drag = useBoardDrag({ onSwapColumns });
 
   // Modal state at board level (not clipped by column overflow: hidden)
   const [modalTarget, setModalTarget] = useState<{ flowId: string; stepIdx: number } | null>(null);
   const modalFlow = modalTarget ? flows.find(f => f.id === modalTarget.flowId) : null;
+
+  // Map each flow's steps to task-shaped objects
+  const flowTasksMap = useMemo(() => {
+    const map: Record<string, ReturnType<typeof stepToTask>[]> = {};
+    for (const flow of flows) {
+      map[flow.id] = sortedSteps(flow).map((step, idx) => stepToTask(step, idx));
+    }
+    return map;
+  }, [flows]);
+
+  // Step index lookup: task.id -> { flowId, stepIdx }
+  const stepLookup = useMemo(() => {
+    const map = new Map<string, { flowId: string; stepIdx: number }>();
+    for (const flow of flows) {
+      const sorted = flow.flow_steps.slice().sort((a, b) => a.position - b.position);
+      sorted.forEach((step, idx) => map.set(step.id, { flowId: flow.id, stepIdx: idx }));
+    }
+    return map;
+  }, [flows]);
+
+  // Task (step) drop: reorder within flow
+  const handleDropTask = useCallback(async (workstreamId: string | null, dropBeforeTaskId: string | null) => {
+    if (!drag.draggedTaskId || !workstreamId) return;
+    const info = stepLookup.get(drag.draggedTaskId);
+    if (!info || info.flowId !== workstreamId) return;
+    const flow = flows.find(f => f.id === workstreamId);
+    if (!flow) return;
+    const sorted = flow.flow_steps.slice().sort((a, b) => a.position - b.position);
+    const fromIdx = sorted.findIndex(s => s.id === drag.draggedTaskId);
+    if (fromIdx < 0) return;
+    const next = [...sorted];
+    const [moved] = next.splice(fromIdx, 1);
+    if (dropBeforeTaskId) {
+      const toIdx = next.findIndex(s => s.id === dropBeforeTaskId);
+      if (toIdx >= 0) next.splice(toIdx, 0, moved);
+      else next.push(moved);
+    } else {
+      next.push(moved);
+    }
+    const reordered = next.map((s, i) => ({ ...s, position: i + 1 }));
+    try { await onSaveSteps(workstreamId, stepsPayload(reordered)); } catch (err: any) { console.error(err); }
+    drag.setDraggedTaskId(null);
+  }, [drag.draggedTaskId, stepLookup, flows, onSaveSteps]);
 
   const handleNewFlow = useCallback(async () => {
     setCreating(true);
@@ -514,15 +373,64 @@ export function FlowEditor2({ flows, onSave, onSaveSteps, onCreateFlow, onDelete
   }, [projectId, onCreateFlow]);
 
   return (
-    <div className={`${boardStyles.board} ${draggedColId ? boardStyles.boardDragging : ''}`}>
+    <div
+      className={`${boardStyles.board} ${drag.isDragging ? boardStyles.boardDragging : ''}`}
+      ref={drag.boardRef}
+      onDragOver={drag.handleBoardDragOver}
+    >
       {flows.map(flow => (
-        <FlowColumn key={flow.id} flow={flow} onSave={onSave} onSaveSteps={onSaveSteps}
-          onDeleteFlow={onDeleteFlow} allFlows={flows}
-          taskTypes={taskTypes?.length ? taskTypes : BUILT_IN_TYPES}
-          onOpenStepModal={(flowId, stepIdx) => setModalTarget({ flowId, stepIdx })}
-          draggedColId={draggedColId}
-          onColumnDragStart={setDraggedColId}
-          onColumnDrop={handleColumnDrop}
+        <WorkstreamColumn
+          key={flow.id}
+          workstream={flowToWorkstream(flow)}
+          tasks={flowTasksMap[flow.id] || []}
+          taskJobMap={EMPTY_JOB_MAP}
+          isBacklog={false}
+          canRunAi={false}
+          projectId={projectId}
+          mentionedTaskIds={EMPTY_SET}
+          focusTaskId={null}
+          draggedTaskId={drag.draggedTaskId}
+          onDragTaskStart={drag.setDraggedTaskId}
+          onDragTaskEnd={drag.handleDragEnd}
+          onDropTask={handleDropTask}
+          draggedWsId={drag.draggedWsId}
+          onColumnDragStart={drag.setDraggedWsId}
+          onColumnDrop={drag.handleColumnDrop}
+          onRenameWorkstream={async (id, name) => { await onSave(id, { name }); }}
+          onDeleteWorkstream={async (id) => { await onDeleteFlow(id); }}
+          onAddTask={() => setModalTarget({ flowId: flow.id, stepIdx: -1 })}
+          onEditTask={(task) => {
+            const info = stepLookup.get(task.id);
+            if (info) setModalTarget({ flowId: info.flowId, stepIdx: info.stepIdx });
+          }}
+          onDeleteTask={async (taskId) => {
+            const info = stepLookup.get(taskId);
+            if (!info) return;
+            const flow = flows.find(f => f.id === info.flowId);
+            if (!flow) return;
+            const next = flow.flow_steps
+              .filter(s => s.id !== taskId)
+              .sort((a, b) => a.position - b.position)
+              .map((s, i) => ({ ...s, position: i + 1 }));
+            await onSaveSteps(info.flowId, stepsPayload(next));
+          }}
+          hideComments
+          headerExtra={<FlowHeaderExtra flow={flow} allFlows={flows} onSave={onSave}
+            taskTypes={taskTypes?.length ? taskTypes : BUILT_IN_TYPES} />}
+          listHeader={<AgentsMdSection flow={flow} onSave={onSave} />}
+          metaItems={(taskId: string) => {
+            const info = stepLookup.get(taskId);
+            if (!info) return undefined;
+            const flow = flows.find(f => f.id === info.flowId);
+            if (!flow) return undefined;
+            const step = flow.flow_steps.slice().sort((a, b) => a.position - b.position)[info.stepIdx];
+            if (!step) return undefined;
+            return [
+              { label: 'model', value: step.model },
+              { label: 'tools', value: step.tools.join(', ') },
+              ...(step.is_gate ? [{ label: 'gate', value: `max ${step.max_retries} retries, then ${step.on_max_retries}` }] : []),
+            ];
+          }}
         />
       ))}
 
