@@ -91,13 +91,15 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
 
   // Determine if the editTask type is a custom (non-built-in) type
   const editTypeIsCustom = isEdit && !BUILT_IN_TYPES.includes(editTask!.type);
+  // Check if the custom type is already saved (known custom type vs truly new)
+  const editTypeIsSavedCustom = editTypeIsCustom && customTypes.some(ct => ct.name === editTask!.type);
 
   const [title, setTitle] = useState(editTask?.title || '');
   const [description, setDescription] = useState(editTask?.description || '');
-  const [type, setType] = useState(editTypeIsCustom ? 'feature' : (editTask?.type || 'feature'));
-  const [customType, setCustomType] = useState(editTypeIsCustom ? editTask!.type : '');
+  const [type, setType] = useState(editTypeIsSavedCustom ? editTask!.type : (editTypeIsCustom ? 'feature' : (editTask?.type || 'feature')));
+  const [customType, setCustomType] = useState(editTypeIsCustom && !editTypeIsSavedCustom ? editTask!.type : '');
   const [customPipeline, setCustomPipeline] = useState('feature');
-  const [isCustomType, setIsCustomType] = useState(editTypeIsCustom);
+  const [isCustomType, setIsCustomType] = useState(editTypeIsCustom && !editTypeIsSavedCustom);
   const [mode, setMode] = useState(editTask?.mode || 'ai');
   const [effort, setEffort] = useState(editTask?.effort || 'max');
   const [workstreamId, setWorkstreamId] = useState(editTask?.workstream_id || defaultWorkstreamId || '');
@@ -375,6 +377,9 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
                   }
                 }}>
                   {BUILT_IN_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  {customTypes.filter(ct => !BUILT_IN_TYPES.includes(ct.name)).map(ct => (
+                    <option key={ct.id} value={ct.name}>{ct.name}</option>
+                  ))}
                   <option value="__custom__">custom...</option>
                 </select>
               )}
