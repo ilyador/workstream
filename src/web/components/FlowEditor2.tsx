@@ -1,12 +1,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import type { Flow, FlowStep } from '../lib/api';
 import { MdField } from './MdField';
+import { TaskCard } from './TaskCard';
 import { BUILT_IN_TYPES, ALL_TOOLS, ALL_CONTEXT_SOURCES, MODEL_OPTIONS, ON_MAX_RETRIES_OPTIONS } from '../lib/constants';
 import boardStyles from './Board.module.css';
 import colStyles from './WorkstreamColumn.module.css';
-import taskStyles from './TaskCard.module.css';
 import formStyles from './TaskForm.module.css';
 import s from './FlowEditor2.module.css';
 
@@ -149,7 +147,6 @@ function StepModal({
               </div>
             </div>
           )}
-
 
           <div className={formStyles.actions}>
             <button className="btn btnPrimary" type="button" onClick={onSave}>
@@ -357,89 +354,59 @@ function FlowColumn({
         </div>
       </div>
 
-      {/* Agents.md collapsible */}
-      <div className={s.agentsMdSection}>
-        <button className={s.sectionToggle} onClick={() => setAgentsMdOpen(v => !v)} type="button">
-          <span className={`${s.sectionArrow} ${agentsMdOpen ? s.sectionArrowOpen : ''}`}>&#9654;</span>
-          agents.md
-          {editAgentsMd && !agentsMdOpen && <span className={s.sectionHint}>(has content)</span>}
-        </button>
-        {agentsMdOpen && (
-          <div className={s.agentsMdBody}>
-            <MdField value={editAgentsMd} onChange={setEditAgentsMd}
-              placeholder="Shared instructions for all steps in this flow (markdown)..." />
-          </div>
-        )}
-      </div>
-
-      {/* Step cards */}
+      {/* Scrollable area — agents.md + step cards together, like tasks */}
       <div className={colStyles.tasks}>
-        {steps.length === 0 && <div className={colStyles.empty}>No steps yet</div>}
-        {steps.map((step, idx) => {
-          const isExpanded = expandedStep === idx;
-          return (
-            <div key={step.id}
-              className={`${taskStyles.card} ${dragIdx === idx ? taskStyles.dragging : ''}`}
-              onClick={() => setExpandedStep(isExpanded ? null : idx)}
-              onDragOver={e => { e.preventDefault(); setDragOverIdx(idx); }}
-            >
-              {/* Compact row — always visible, same as TaskCard */}
-              <div className={taskStyles.compact}>
-                <span className={taskStyles.handle} draggable
-                  onDragStart={e => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; setDragIdx(idx); }}
-                  onDragEnd={handleDragEnd}
-                  onClick={e => e.stopPropagation()}
-                  title="Drag to reorder"
-                >&#8942;&#8942;</span>
-                <span className={taskStyles.title}>{step.name || `Step ${idx + 1}`}</span>
-                <div className={taskStyles.tags}>
-                  <span className={`${taskStyles.tag} ${step.model === 'opus' ? s.modelOpus : s.modelSonnet}`}>
-                    {step.model}
-                  </span>
-                  {step.is_gate && <span className={`${taskStyles.tag} ${taskStyles.tagType}`}>gate</span>}
-                </div>
-              </div>
-
-              {/* Preview — collapsed, same as TaskCard */}
-              {!isExpanded && step.instructions && (
-                <div className={taskStyles.preview}>
-                  <div className={taskStyles.previewDesc}>
-                    <Markdown remarkPlugins={[remarkGfm]}>{step.instructions}</Markdown>
-                  </div>
-                </div>
-              )}
-
-              {/* Expanded detail — same as TaskCard IdleDetail */}
-              {isExpanded && (
-                <div className={taskStyles.detail} onClick={e => e.stopPropagation()}>
-                  {step.instructions && (
-                    <div className={taskStyles.desc}>
-                      <Markdown remarkPlugins={[remarkGfm]}>{step.instructions}</Markdown>
-                    </div>
-                  )}
-                  <div className={taskStyles.meta}>
-                    <span>model: {step.model}</span>
-                    <span>tools: {step.tools.join(', ')}</span>
-                    {step.is_gate && <span>gate step</span>}
-                  </div>
-                  <div className={taskStyles.actions}>
-                    <div className={taskStyles.actionsLeft} />
-                    <div className={taskStyles.actionsRight}>
-                      <button className="btn btnGhost btnSm"
-                        onClick={() => onOpenStepModal(flow.id, idx)}>Edit</button>
-                      <button className="btn btnGhost btnSm" style={{ color: 'var(--red)' }}
-                        onClick={async () => {
-                          const next = steps.filter((_, i) => i !== idx).map((s, i) => ({ ...s, position: i + 1 }));
-                          await onSaveSteps(flow.id, stepsPayload(next));
-                          setExpandedStep(null);
-                        }}>Delete</button>
-                    </div>
-                  </div>
-                </div>
-              )}
+        {/* Agents.md collapsible — inside scroll area */}
+        <div className={s.agentsMdSection}>
+          <button className={s.sectionToggle} onClick={() => setAgentsMdOpen(v => !v)} type="button">
+            <span className={`${s.sectionArrow} ${agentsMdOpen ? s.sectionArrowOpen : ''}`}>&#9654;</span>
+            agents.md
+            {editAgentsMd && !agentsMdOpen && <span className={s.sectionHint}>(has content)</span>}
+          </button>
+          {agentsMdOpen && (
+            <div className={s.agentsMdBody}>
+              <MdField value={editAgentsMd} onChange={setEditAgentsMd}
+                placeholder="Shared instructions for all steps in this flow (markdown)..." />
             </div>
-          );
-        })}
+          )}
+        </div>
+
+        {steps.length === 0 && <div className={colStyles.empty}>No steps yet</div>}
+        {steps.map((step, idx) => (
+          <div key={step.id} className={colStyles.cardWrap}
+            onDragOver={e => { e.preventDefault(); setDragOverIdx(idx); }}
+          >
+            <TaskCard
+              task={{
+                id: step.id,
+                title: step.name || `Step ${idx + 1}`,
+                description: step.instructions || undefined,
+                type: step.model,
+                mode: 'ai',
+                effort: '',
+                auto_continue: true,
+              }}
+              job={null}
+              canRunAi={false}
+              metaItems={[
+                { label: 'model', value: step.model },
+                { label: 'tools', value: step.tools.join(', ') },
+                ...(step.is_gate ? [{ label: 'gate', value: `max ${step.max_retries} retries, then ${step.on_max_retries}` }] : []),
+              ]}
+              isExpanded={expandedStep === idx}
+              onToggleExpand={() => setExpandedStep(expandedStep === idx ? null : idx)}
+              onEdit={() => onOpenStepModal(flow.id, idx)}
+              onDelete={async () => {
+                const next = steps.filter((_, i) => i !== idx).map((s, i) => ({ ...s, position: i + 1 }));
+                await onSaveSteps(flow.id, stepsPayload(next));
+                setExpandedStep(null);
+              }}
+              onDragStart={() => setDragIdx(idx)}
+              onDragEnd={handleDragEnd}
+              isDragging={dragIdx === idx}
+            />
+          </div>
+        ))}
       </div>
 
       {error && <div className={s.error}>{error}</div>}

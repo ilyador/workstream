@@ -15,23 +15,25 @@
 .typeSelect:hover { border-color: var(--text-2); }
 
 /* Flow-specific: agents.md collapsible (no task equivalent) */
-.agentsMdSection { border-bottom: 1px solid var(--divider); }
+.agentsMdSection {
+  margin: 0 0 4px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
 .sectionToggle {
   display: flex; align-items: center; gap: 6px; width: 100%;
   background: none; border: none; font-family: var(--font);
   font-size: 12px; font-weight: 600; color: var(--text-3);
-  cursor: pointer; padding: 8px 14px;
+  cursor: pointer; padding: 8px 12px;
   transition: color 0.1s, background 0.1s; text-align: left;
 }
 .sectionToggle:hover { color: var(--text-2); background: var(--bg-hover); }
 .sectionArrow { font-size: 9px; transition: transform 0.15s; display: inline-block; }
 .sectionArrowOpen { transform: rotate(90deg); }
 .sectionHint { font-weight: 400; color: var(--text-4); margin-left: 4px; }
-.agentsMdBody { padding: 6px 10px 10px; max-height: 300px; overflow-y: auto; }
-
-/* Flow-specific: model tag colors (no task equivalent) */
-.modelOpus { background: rgba(139, 92, 246, 0.1); color: #7C3AED; }
-.modelSonnet { background: rgba(37, 99, 235, 0.08); color: var(--blue); }
+.agentsMdBody { padding: 6px 10px 10px; }
 
 /* Flow-specific: tool checkbox grid (no task equivalent) */
 .checkboxGrid { display: flex; flex-wrap: wrap; gap: 4px 14px; }
@@ -65,10 +67,6 @@
   padding: 8px 12px; margin: 0 10px 10px;
   font-size: 12px; color: var(--red); background: var(--red-bg); border-radius: 8px;
 }
-
-/* Dark mode */
-:global([data-theme="dark"]) .modelOpus { background: rgba(139, 92, 246, 0.15); color: #A78BFA; }
-:global([data-theme="dark"]) .modelSonnet { background: rgba(37, 99, 235, 0.15); color: #60A5FA; }
 
 /* Mobile */
 @media (max-width: 768px) {
