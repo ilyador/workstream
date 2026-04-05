@@ -487,13 +487,13 @@ function IdleDetail({
           metaItems.map(item => <span key={item.label}>{item.label}: {item.value}</span>)
         ) : (
           <>
-            {task.mode === 'ai' && <span>effort: {task.effort}</span>}
-            {task.multiagent === 'yes' && <span>subagents: on</span>}
             <span>
               assignee: {task.assignee && task.assignee.type !== 'ai'
                 ? (task.assignee.name || task.assignee.initials)
                 : task.assignee?.name || 'AI'}
             </span>
+            {task.mode === 'ai' && <span>effort: {task.effort}</span>}
+            {task.multiagent === 'yes' && <span>subagents: on</span>}
           </>
         )}
       </div>

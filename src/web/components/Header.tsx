@@ -19,6 +19,14 @@ interface Notification {
   created_at: string;
 }
 
+export interface ActionItem {
+  id: string;
+  label: string;
+  sublabel?: string;
+  taskId?: string;
+  workstreamId?: string;
+}
+
 interface Props {
   projectName: string;
   localPath?: string;
@@ -27,6 +35,8 @@ interface Props {
   notificationList?: Notification[];
   onMarkRead?: (id: string) => void;
   onMarkAllRead?: () => void;
+  todoItems?: ActionItem[];
+  reviewItems?: ActionItem[];
   userInitials: string;
   projects: Project[];
   currentProjectId: string | null;
@@ -44,6 +54,8 @@ export function Header({
   notificationList = [],
   onMarkRead,
   onMarkAllRead,
+  todoItems = [],
+  reviewItems = [],
   userInitials,
   projects,
   currentProjectId,
@@ -53,30 +65,31 @@ export function Header({
   onManageMembers,
 }: Props) {
   const navigate = useNavigate();
-  useTheme(); // applies system theme
+  useTheme();
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [todoOpen, setTodoOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLDivElement>(null);
+  const todoRef = useRef<HTMLDivElement>(null);
+  const reviewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open && !notifOpen && !avatarOpen) return;
+    if (!open && !notifOpen && !avatarOpen && !todoOpen && !reviewOpen) return;
     function handleClickOutside(e: MouseEvent) {
-      if (open && dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-      if (notifOpen && notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setNotifOpen(false);
-      }
-      if (avatarOpen && avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
-        setAvatarOpen(false);
-      }
+      const t = e.target as Node;
+      if (open && dropdownRef.current && !dropdownRef.current.contains(t)) setOpen(false);
+      if (notifOpen && notifRef.current && !notifRef.current.contains(t)) setNotifOpen(false);
+      if (avatarOpen && avatarRef.current && !avatarRef.current.contains(t)) setAvatarOpen(false);
+      if (todoOpen && todoRef.current && !todoRef.current.contains(t)) setTodoOpen(false);
+      if (reviewOpen && reviewRef.current && !reviewRef.current.contains(t)) setReviewOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open, notifOpen, avatarOpen]);
+  }, [open, notifOpen, avatarOpen, todoOpen, reviewOpen]);
 
   return (
     <header className={s.bar}>
@@ -130,6 +143,43 @@ export function Header({
                   </button>
                 </>
               )}
+              {/* Mobile: action items inline */}
+              {(todoItems.length > 0 || reviewItems.length > 0) && (
+                <div className={s.mobileActions}>
+                  <div className={s.dropdownDivider} />
+                  {todoItems.length > 0 && (
+                    <>
+                      <div className={s.mobileActionHeader}>
+                        To Do <span className={s.actionCount}>{todoItems.length}</span>
+                      </div>
+                      {todoItems.map(item => (
+                        <button key={item.id} className={s.dropdownItem} onClick={() => {
+                          if (item.taskId) navigate(`/?task=${item.taskId}`);
+                          setOpen(false);
+                        }}>
+                          <span className={s.dropdownName}>{item.label}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {reviewItems.length > 0 && (
+                    <>
+                      <div className={s.mobileActionHeader}>
+                        To Review <span className={s.actionCount}>{reviewItems.length}</span>
+                      </div>
+                      {reviewItems.map(item => (
+                        <button key={item.id} className={s.dropdownItem} onClick={() => {
+                          if (item.taskId) navigate(`/?task=${item.taskId}`);
+                          else if (item.workstreamId) navigate(`/?ws=${item.workstreamId}`);
+                          setOpen(false);
+                        }}>
+                          <span className={s.dropdownName}>{item.label}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -139,6 +189,71 @@ export function Header({
           <NavLink to="/archive" className={({isActive}) => isActive ? s.navLinkActive : s.navLink}>Archive</NavLink>
         </nav>
       </div>
+
+      {/* Action center -- desktop only (mobile items go in project dropdown) */}
+      <div className={s.center}>
+        <div className={s.actionWrap} ref={todoRef}>
+          <button
+            className={`${s.actionBtn} ${todoItems.length > 0 ? s.actionBtnActive : ''}`}
+            onClick={() => { setTodoOpen(v => !v); setReviewOpen(false); }}
+          >
+            <span className={s.actionLabel}>To Do</span>
+            {todoItems.length > 0 && <span className={s.actionCount}>{todoItems.length}</span>}
+          </button>
+          {todoOpen && (
+            <div className={s.actionDropdown}>
+              {todoItems.length === 0 ? (
+                <div className={s.actionEmpty}>Nothing to do</div>
+              ) : (
+                <div className={s.actionList}>
+                  {todoItems.map(item => (
+                    <button key={item.id} className={s.actionItem} onClick={() => {
+                      if (item.taskId) navigate(`/?task=${item.taskId}`);
+                      setTodoOpen(false);
+                    }}>
+                      <span className={s.actionItemLabel}>{item.label}</span>
+                      {item.sublabel && <span className={s.actionItemSub}>{item.sublabel}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className={s.actionDivider} />
+
+        <div className={s.actionWrap} ref={reviewRef}>
+          <button
+            className={`${s.actionBtn} ${reviewItems.length > 0 ? s.actionBtnActive : ''}`}
+            onClick={() => { setReviewOpen(v => !v); setTodoOpen(false); }}
+          >
+            <span className={s.actionLabel}>To Review</span>
+            {reviewItems.length > 0 && <span className={s.actionCount}>{reviewItems.length}</span>}
+          </button>
+          {reviewOpen && (
+            <div className={s.actionDropdown}>
+              {reviewItems.length === 0 ? (
+                <div className={s.actionEmpty}>Nothing to review</div>
+              ) : (
+                <div className={s.actionList}>
+                  {reviewItems.map(item => (
+                    <button key={item.id} className={s.actionItem} onClick={() => {
+                      if (item.taskId) navigate(`/?task=${item.taskId}`);
+                      else if (item.workstreamId) navigate(`/?ws=${item.workstreamId}`);
+                      setReviewOpen(false);
+                    }}>
+                      <span className={s.actionItemLabel}>{item.label}</span>
+                      {item.sublabel && <span className={s.actionItemSub}>{item.sublabel}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className={s.right}>
         {localPath && <span className={s.localPath} title={localPath}>{localPath}</span>}
         <div className={s.notifWrap} ref={notifRef}>
