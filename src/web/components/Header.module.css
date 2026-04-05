@@ -238,8 +238,10 @@
   100% { transform: scale(1); }
 }
 .actionModal {
-  max-width: 480px;
   overflow: hidden;
+}
+@media (min-width: 769px) {
+  .actionModal { max-width: 480px; }
 }
 .actionModalHeader {
   display: flex;
@@ -338,12 +340,6 @@
   .center { gap: 8px; }
   .actionBtn { padding: 4px 10px; font-size: 12px; gap: 5px; }
   .actionCount { min-width: 17px; height: 17px; font-size: 10px; padding: 0 4px; }
-  .actionModal {
-    max-width: 100%;
-    max-height: 100dvh;
-    border-radius: 0;
-  }
-  .actionList { max-height: calc(100dvh - 60px); }
 }
 
 .milestone { font-size: 13px; color: var(--text-3); }
