@@ -72,7 +72,6 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -93,7 +92,7 @@
   outline: none;
 }
 
-/* Task count badge -- pushed to the right, before the delete button */
+/* Task count badge */
 .taskCount {
   font-size: 12px;
   font-weight: 500;
@@ -102,8 +101,9 @@
   padding: 2px 8px;
   background: var(--bg-hover);
   border-radius: 10px;
-  margin-left: auto;
 }
+
+.headerSpacer { flex: 1; }
 
 /* ─── Status pill: compact badge next to stream name ─── */
 .statusPill {

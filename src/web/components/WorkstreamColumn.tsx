@@ -80,6 +80,10 @@ interface WorkstreamColumnProps {
   onCreatePr?: () => void;
   onArchive?: () => void;
   currentUserId?: string;
+  metaItems?: (taskId: string) => { label: string; value: string }[] | undefined;
+  hideComments?: boolean;
+  listHeader?: React.ReactNode;
+  headerExtra?: React.ReactNode;
 }
 
 export function WorkstreamColumn({
@@ -123,6 +127,10 @@ export function WorkstreamColumn({
   onCreatePr,
   onArchive,
   currentUserId,
+  metaItems,
+  hideComments,
+  listHeader,
+  headerExtra,
 }: WorkstreamColumnProps) {
   const modal = useModal();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -585,6 +593,10 @@ export function WorkstreamColumn({
             </span>
           )}
 
+          {headerExtra}
+
+          <span className={s.headerSpacer} />
+
           {/* Run button: only when idle (open status) with tasks */}
           {!isBacklog && canRunAi && onRunWorkstream && wsStatus === 'open' && totalTasks > 0 && !hasBrokenLinks && (
             <button
@@ -605,8 +617,8 @@ export function WorkstreamColumn({
             +
           </button>
 
-          {/* Task count: pushed right */}
-          {totalTasks > 0 && (
+          {/* Task count: pushed right (hidden when headerExtra provides its own) */}
+          {!headerExtra && totalTasks > 0 && (
             <span className={s.taskCount}>
               {isBacklog ? totalTasks : `${doneTasks}/${totalTasks}`}
             </span>
@@ -634,8 +646,8 @@ export function WorkstreamColumn({
           )}
         </div>
 
-        {/* Progress line on the separator -- full width, colored by state */}
-        {!isBacklog && totalTasks > 0 && (
+        {/* Progress line on the separator -- full width, colored by state (hidden when headerExtra) */}
+        {!headerExtra && !isBacklog && totalTasks > 0 && (
           <div className={s.progressLine}>
             <div
               className={`${s.progressLineFill} ${wsStatus ? s[`progressLine--${wsStatus.replace(' ', '-')}`] : ''}`}
@@ -682,6 +694,7 @@ export function WorkstreamColumn({
           clearColumnScroll();
         }}
       >
+        {listHeader}
         {tasks.length === 0 && draggedTaskId && (
           <div className={s.emptyDropZone}>Drop here</div>
         )}
@@ -780,6 +793,8 @@ export function WorkstreamColumn({
                             isDragging={isGroupDragging}
                             dragDisabled={dragDisabledGlobal || index <= freezeIndex}
                             skipDragGhost
+                            metaItems={metaItems?.(gt.id)}
+                            hideComments={hideComments}
                           />
                         </div>
                       </React.Fragment>
@@ -833,6 +848,8 @@ export function WorkstreamColumn({
                     onDragEnd={onDragTaskEnd}
                     isDragging={draggedTaskId === task.id}
                     dragDisabled={dragDisabledGlobal || index <= freezeIndex}
+                    metaItems={metaItems?.(task.id)}
+                    hideComments={hideComments}
                   />
                 </div>
               </div>
