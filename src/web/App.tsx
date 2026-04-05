@@ -237,7 +237,22 @@ export default function App() {
   }, [tasks.tasks, wsNameMap, auth.profile?.id]);
 
   const reviewItems = useMemo(() => {
-    const items: Array<{ id: string; label: string; sublabel?: string; taskId?: string; workstreamId?: string }> = [];
+    const uid = auth.profile?.id;
+    const items: Array<{ id: string; label: string; sublabel?: string; tag?: string; taskId?: string; workstreamId?: string }> = [];
+    // Workstreams assigned to current user for review (not yet merged/archived)
+    if (uid) {
+      for (const ws of workstreams.workstreams) {
+        if (ws.reviewer_id === uid && ws.status !== 'merged' && ws.status !== 'archived') {
+          items.push({
+            id: `ws-${ws.id}`,
+            label: ws.name,
+            sublabel: 'Workstream review',
+            workstreamId: ws.id,
+          });
+        }
+      }
+    }
+    // Jobs awaiting review
     for (const job of jobViews) {
       if (job.status === 'review') {
         const task = tasks.tasks.find(t => t.id === job.taskId);
@@ -250,6 +265,7 @@ export default function App() {
         });
       }
     }
+    // Jobs with questions
     for (const job of jobViews) {
       if (job.status === 'paused' && job.question) {
         const task = tasks.tasks.find(t => t.id === job.taskId);
@@ -263,7 +279,7 @@ export default function App() {
       }
     }
     return items;
-  }, [jobViews, tasks.tasks, wsNameMap]);
+  }, [jobViews, tasks.tasks, wsNameMap, workstreams.workstreams, auth.profile?.id]);
 
   // Step 1: Environment check
   if (!envReady) {
