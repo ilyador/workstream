@@ -57,6 +57,7 @@ interface TaskCardProps {
   hasUnreadMention?: boolean;
   commentCount?: number;
   brokenLink?: { up: boolean; down: boolean } | null;
+  metaItems?: { label: string; value: string }[];
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -95,6 +96,7 @@ export function TaskCard({
   hasUnreadMention,
   commentCount = 0,
   brokenLink,
+  metaItems,
 }: TaskCardProps) {
   const jobStatus = job?.status;
   const isActive = jobStatus === 'queued' || jobStatus === 'running' || jobStatus === 'paused' || jobStatus === 'review';
@@ -393,6 +395,7 @@ export function TaskCard({
               onEdit={onEdit}
               onDelete={onDelete}
               onUpdateTask={onUpdateTask}
+              metaItems={metaItems}
             />
           )}
         </div>
@@ -410,6 +413,7 @@ function IdleDetail({
   onEdit,
   onDelete,
   onUpdateTask,
+  metaItems,
 }: {
   task: TaskCardProps['task'];
   canRunAi: boolean;
@@ -418,6 +422,7 @@ function IdleDetail({
   onEdit?: () => void;
   onDelete?: () => void;
   onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
+  metaItems?: { label: string; value: string }[];
 }) {
   const modal = useModal();
 
@@ -425,13 +430,19 @@ function IdleDetail({
     <>
       {task.description && <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>}
       <div className={s.meta}>
-        {task.mode === 'ai' && <span>effort: {task.effort}</span>}
-        {task.multiagent === 'yes' && <span>subagents: on</span>}
-        <span>
-          assignee: {task.assignee && task.assignee.type !== 'ai'
-            ? (task.assignee.name || task.assignee.initials)
-            : task.assignee?.name || 'AI'}
-        </span>
+        {metaItems ? (
+          metaItems.map(item => <span key={item.label}>{item.label}: {item.value}</span>)
+        ) : (
+          <>
+            {task.mode === 'ai' && <span>effort: {task.effort}</span>}
+            {task.multiagent === 'yes' && <span>subagents: on</span>}
+            <span>
+              assignee: {task.assignee && task.assignee.type !== 'ai'
+                ? (task.assignee.name || task.assignee.initials)
+                : task.assignee?.name || 'AI'}
+            </span>
+          </>
+        )}
       </div>
 
       <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
