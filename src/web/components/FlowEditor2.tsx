@@ -96,7 +96,7 @@ function StepModal({
 }) {
   return (
     <div className={formStyles.overlay} onClick={onClose}>
-      <div className={formStyles.modal} onClick={e => e.stopPropagation()}>
+      <div className={`${formStyles.modal} ${formStyles.modalBody}`} onClick={e => e.stopPropagation()}>
         <h2 className={formStyles.heading}>{isNew ? 'New step' : (step.name ? `Edit: ${step.name}` : `Edit step ${idx + 1}`)}</h2>
         <form onSubmit={e => e.preventDefault()} className={formStyles.form}>
           <input className={formStyles.input} value={step.name}

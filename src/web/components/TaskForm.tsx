@@ -263,7 +263,7 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
   return (
     <div className={s.overlay} onClick={onClose}>
       <div
-        className={`${s.modal} ${dragOver ? s.modalDragOver : ''}`}
+        className={`${s.modal} ${s.modalBody} ${dragOver ? s.modalDragOver : ''}`}
         onClick={e => e.stopPropagation()}
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={e => { if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
