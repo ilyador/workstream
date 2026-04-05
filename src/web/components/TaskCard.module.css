@@ -362,6 +362,26 @@
   font-weight: 600;
 }
 
+/* ─── Step summaries (below phase pills, visible only while running) ─── */
+.stepSummaries {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stepSummary {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stepName {
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: capitalize;
+}
+
 /* ─── Paused: question callout ─── */
 .question {
   padding: 12px 14px;
@@ -458,6 +478,16 @@
   display: flex;
   align-items: center;
   gap: 5px;
+}
+.doneRejectPanel {
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: var(--amber-bg);
+  border-left: 3px solid var(--amber);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .doneSummary {
   font-size: 12px;

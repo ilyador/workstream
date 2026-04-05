@@ -46,6 +46,7 @@ interface TaskCardProps {
   onReject?: (jobId: string) => void;
   onRework?: (jobId: string, note: string) => void;
   onDeleteJob?: (jobId: string) => void;
+  onMoveToBacklog?: (jobId: string) => void;
   onContinue?: (jobId: string) => void;
   onDragStart?: (e?: React.DragEvent) => void;
   onDragEnd?: () => void;
@@ -85,6 +86,7 @@ export function TaskCard({
   onReject,
   onRework,
   onDeleteJob,
+  onMoveToBacklog,
   onContinue,
   onDragStart,
   onDragEnd,
@@ -140,6 +142,10 @@ export function TaskCard({
   }, [jobStatus, job?.startedAt]);
 
   const [showRework, setShowRework] = useState(false);
+  const [showDoneReject, setShowDoneReject] = useState(false);
+
+  // Eagerly fetch comments so data is ready before expansion
+  const commentsData = useComments(task.id);
 
   return (
     <div
@@ -256,6 +262,15 @@ export function TaskCard({
                   </span>
                 </div>
               )}
+              {job.phases.some(p => p.status === 'completed' && p.summary) && (
+                <div className={s.stepSummaries}>
+                  {job.phases.filter(p => p.status === 'completed' && p.summary).map(p => (
+                    <div key={p.name} className={s.stepSummary}>
+                      <span className={s.stepName}>{p.name}</span> {p.summary}
+                    </div>
+                  ))}
+                </div>
+              )}
               {job.question && (
                 <div className={s.retryBanner}>{job.question}</div>
               )}
@@ -289,7 +304,7 @@ export function TaskCard({
                   ))}
                 </div>
               )}
-              {job.review && (
+              {job.review && (job.review.filesChanged ?? 0) > 0 && (
                 <div className={s.checks}>
                   <span className={s.checkOk}>&#10003; Tests pass</span>
                   <span className={s.checkOk}>&#10003; Architecture rules pass</span>
@@ -329,15 +344,28 @@ export function TaskCard({
           <div className={s.doneSection}>
             <div className={s.doneHeader}>
               <span className={s.doneLabel}>&#10003; Completed {job.completedAgo}</span>
-              {onDeleteJob && (
-                <button className="btn btnGhost btnSm" onClick={() => onDeleteJob(job.id)}>Dismiss</button>
-              )}
+              <button className="btn btnWarning btnSm" onClick={() => setShowDoneReject(v => !v)}>Reject</button>
             </div>
+            {showDoneReject && (
+              <div className={s.doneRejectPanel}>
+                {onRework && (
+                  <ReplyInput
+                    onReply={(answer) => { onRework(job.id, answer); setShowDoneReject(false); }}
+                    placeholder="What needs to change?"
+                  />
+                )}
+                {onMoveToBacklog && (
+                  <button className="btn btnGhost btnSm" onClick={() => onMoveToBacklog(job.id)}>
+                    Move to backlog
+                  </button>
+                )}
+              </div>
+            )}
             {job.review?.summary && (
               <div className={s.doneSummary}>{job.review.summary}</div>
             )}
             <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
-            <CardComments taskId={task.id} projectId={projectId} />
+            <CardComments data={commentsData} projectId={projectId} />
           </div>
         </div>
       )}
@@ -396,6 +424,7 @@ export function TaskCard({
               onDelete={onDelete}
               onUpdateTask={onUpdateTask}
               metaItems={metaItems}
+              commentsData={commentsData}
             />
           )}
         </div>
@@ -414,6 +443,7 @@ function IdleDetail({
   onDelete,
   onUpdateTask,
   metaItems,
+  commentsData,
 }: {
   task: TaskCardProps['task'];
   canRunAi: boolean;
@@ -423,6 +453,7 @@ function IdleDetail({
   onDelete?: () => void;
   onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
   metaItems?: { label: string; value: string }[];
+  commentsData: ReturnType<typeof useComments>;
 }) {
   const modal = useModal();
 
@@ -476,14 +507,14 @@ function IdleDetail({
         </div>
       </div>
 
-      <CardComments taskId={task.id} projectId={projectId} />
+      <CardComments data={commentsData} projectId={projectId} />
     </>
   );
 }
 
 /** Attachments section using artifacts API */
 function TaskAttachments({ taskId, legacyImages, readOnly }: { taskId: string; legacyImages?: string[]; readOnly?: boolean }) {
-  const { artifacts, upload, remove } = useArtifacts(taskId);
+  const { artifacts, loaded, upload, remove } = useArtifacts(taskId);
   const { preview } = useFilePreview();
   // Include legacy task.images as read-only artifacts for backward compat
   const legacyArtifacts = (legacyImages || []).map((url, i) => ({
@@ -497,7 +528,7 @@ function TaskAttachments({ taskId, legacyImages, readOnly }: { taskId: string; l
   const allFiles = [...artifacts.map(a => ({ ...a, isLegacy: false })), ...legacyArtifacts];
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // In readOnly mode, only render if there are files
+  if (!loaded) return null;
   if (readOnly && allFiles.length === 0) return null;
 
   const handleDrop = (e: React.DragEvent) => {
@@ -549,8 +580,8 @@ function TaskAttachments({ taskId, legacyImages, readOnly }: { taskId: string; l
 }
 
 /** Inline comments for a task card */
-function CardComments({ taskId, projectId }: { taskId: string; projectId?: string }) {
-  const { comments, addComment, removeComment } = useComments(taskId);
+function CardComments({ data, projectId }: { data: ReturnType<typeof useComments>; projectId?: string }) {
+  const { comments, addComment, removeComment } = data;
   const { members } = useMembers(projectId || null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);

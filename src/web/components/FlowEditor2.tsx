@@ -216,7 +216,8 @@ function StepModalWrapper({
 function FlowColumn({
   flow, onSave, onSaveSteps, onDeleteFlow, allFlows,
   taskTypes = BUILT_IN_TYPES,
-  onOpenStepModal, onColumnDragStart, onColumnDragEnd, onColumnDragOver,
+  onOpenStepModal,
+  draggedColId, onColumnDragStart, onColumnDrop,
 }: {
   flow: Flow;
   onSave: FlowEditor2Props['onSave'];
@@ -225,27 +226,30 @@ function FlowColumn({
   allFlows: Flow[];
   taskTypes?: string[];
   onOpenStepModal: (flowId: string, stepIdx: number) => void;
+  draggedColId: string | null;
   onColumnDragStart: (flowId: string) => void;
-  onColumnDragEnd: () => void;
-  onColumnDragOver: (e: React.DragEvent) => void;
+  onColumnDrop: (targetId: string) => void;
 }) {
   const steps = useMemo(() => sortedSteps(flow), [flow.flow_steps]);
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
   const [editName, setEditName] = useState(flow.name);
   const [editing, setEditing] = useState(false);
-  const [agentsMdOpen, setAgentsMdOpen] = useState(!!flow.agents_md);
+  const [agentsMdOpen, setAgentsMdOpen] = useState(false);
   const [editAgentsMd, setEditAgentsMd] = useState(flow.agents_md ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [columnDropSide, setColumnDropSide] = useState<'left' | 'right' | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  const colDragCountRef = useRef(0);
 
   // Sync on external changes
   useEffect(() => {
     setEditName(flow.name);
     setEditAgentsMd(flow.agents_md ?? '');
-    setAgentsMdOpen(!!flow.agents_md);
+    setAgentsMdOpen(false);
     setError('');
   }, [flow.id, flow.name, flow.agents_md]);
 
@@ -265,13 +269,14 @@ function FlowColumn({
   }, [flow.id, editAgentsMd, onSave]);
 
   // Step drag reorder
-  const handleDragEnd = useCallback(() => {
+  const handleDragEnd = useCallback(async () => {
     if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
       const next = [...steps];
       const [moved] = next.splice(dragIdx, 1);
       next.splice(dragOverIdx, 0, moved);
       const reordered = next.map((s, i) => ({ ...s, position: i + 1 }));
-      onSaveSteps(flow.id, stepsPayload(reordered));
+      try { await onSaveSteps(flow.id, stepsPayload(reordered)); }
+      catch (err: any) { setError(err.message || 'Failed to reorder'); }
     }
     setDragIdx(null); setDragOverIdx(null);
   }, [dragIdx, dragOverIdx, steps, flow.id, onSaveSteps]);
@@ -283,6 +288,19 @@ function FlowColumn({
     try { await onDeleteFlow(flow.id); }
     catch (err: any) { setError(err.message || 'Failed to delete'); setSaving(false); }
   }, [flow.id, flow.name, onDeleteFlow]);
+
+  // Column drag-over: detect which side cursor is on (same as WorkstreamColumn)
+  const handleColumnDragOver = useCallback((e: React.DragEvent) => {
+    if (!draggedColId || draggedColId === flow.id) return;
+    const col = columnRef.current;
+    if (!col) return;
+    const rect = col.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    setColumnDropSide(e.clientX < midX ? 'left' : 'right');
+  }, [draggedColId, flow.id]);
+
+  const showDropLeft = draggedColId && draggedColId !== flow.id && columnDropSide === 'left';
+  const showDropRight = draggedColId && draggedColId !== flow.id && columnDropSide === 'right';
 
   // Rename
   const handleRename = useCallback(async () => {
@@ -296,7 +314,35 @@ function FlowColumn({
   }, [editName, flow.id, flow.name, onSave]);
 
   return (
-    <div className={colStyles.column} onDragOver={onColumnDragOver}>
+    <div className={colStyles.columnOuter}>
+      {showDropLeft && <div className={colStyles.columnDropLine} />}
+    <div
+      ref={columnRef}
+      className={colStyles.column}
+      onDragEnter={e => {
+        e.preventDefault();
+        if (draggedColId && draggedColId !== flow.id) colDragCountRef.current++;
+      }}
+      onDragOver={e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (draggedColId) handleColumnDragOver(e);
+      }}
+      onDragLeave={() => {
+        if (draggedColId && draggedColId !== flow.id) {
+          colDragCountRef.current--;
+          if (colDragCountRef.current <= 0) { colDragCountRef.current = 0; setColumnDropSide(null); }
+        }
+      }}
+      onDrop={e => {
+        e.preventDefault();
+        if (draggedColId && draggedColId !== flow.id) {
+          colDragCountRef.current = 0;
+          setColumnDropSide(null);
+          onColumnDrop(flow.id);
+        }
+      }}
+    >
       {/* Header */}
       <div className={colStyles.headerWrap}>
         <div className={colStyles.header}>
@@ -307,8 +353,25 @@ function FlowColumn({
               onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') { setEditName(flow.name); setEditing(false); } }} />
           ) : (
             <span className={colStyles.name} draggable
-              onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onColumnDragStart(flow.id); }}
-              onDragEnd={onColumnDragEnd}
+              onDragStart={e => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', flow.id);
+                const ghost = document.createElement('div');
+                ghost.textContent = flow.name;
+                ghost.style.cssText = `
+                  padding: 8px 16px; background: var(--white, #fff); color: var(--text, #1a1a1a);
+                  font-family: 'Instrument Sans', system-ui, sans-serif; font-size: 13px; font-weight: 600;
+                  border-radius: 8px; border: 1.5px solid rgba(37, 99, 235, 0.3);
+                  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+                  position: fixed; top: -999px; left: -999px; pointer-events: none; white-space: nowrap;
+                `;
+                ghost.id = '__column-drag-preview__';
+                document.body.appendChild(ghost);
+                e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 20);
+                onColumnDragStart(flow.id);
+                e.stopPropagation();
+              }}
+              onDragEnd={() => { document.getElementById('__column-drag-preview__')?.remove(); }}
               onDoubleClick={() => { setEditName(flow.name); setEditing(true); }}
               title="Drag to reorder, double-click to rename"
               style={{ cursor: 'grab' }}
@@ -372,8 +435,12 @@ function FlowColumn({
         </div>
 
         {steps.length === 0 && <div className={colStyles.empty}>No steps yet</div>}
-        {steps.map((step, idx) => (
-          <div key={step.id} className={colStyles.cardWrap}
+        {steps.map((step, idx) => {
+          const dropClass = dragIdx !== null && dragOverIdx === idx && dragIdx !== idx
+            ? (dragIdx > idx ? colStyles.dropBefore : colStyles.dropAfter)
+            : '';
+          return (
+          <div key={step.id} className={`${colStyles.cardWrap} ${dropClass}`}
             onDragOver={e => { e.preventDefault(); setDragOverIdx(idx); }}
           >
             <TaskCard
@@ -406,10 +473,13 @@ function FlowColumn({
               isDragging={dragIdx === idx}
             />
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {error && <div className={s.error}>{error}</div>}
+    </div>
+      {showDropRight && <div className={colStyles.columnDropLine} />}
     </div>
   );
 }
@@ -419,38 +489,18 @@ function FlowColumn({
    ───────────────────────────────────────────────── */
 export function FlowEditor2({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, projectId, taskTypes }: FlowEditor2Props) {
   const [creating, setCreating] = useState(false);
-
-  // Column reorder (client-side)
-  const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [draggedColId, setDraggedColId] = useState<string | null>(null);
 
-  useEffect(() => {
-    setColumnOrder(prev => {
-      const ids = new Set(flows.map(f => f.id));
-      const kept = prev.filter(id => ids.has(id));
-      const added = flows.map(f => f.id).filter(id => !kept.includes(id));
-      return [...kept, ...added];
-    });
-  }, [flows]);
-
-  const orderedFlows = useMemo(() => {
-    const map = new Map(flows.map(f => [f.id, f]));
-    return columnOrder.map(id => map.get(id)).filter(Boolean) as Flow[];
-  }, [flows, columnOrder]);
-
-  const handleColumnDragOver = useCallback((e: React.DragEvent, targetId: string) => {
+  // Same pattern as Board.tsx handleColumnDrop -- swap positions via onSave
+  const handleColumnDrop = useCallback(async (targetId: string) => {
     if (!draggedColId || draggedColId === targetId) return;
-    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-    setColumnOrder(prev => {
-      const next = [...prev];
-      const from = next.indexOf(draggedColId);
-      const to = next.indexOf(targetId);
-      if (from < 0 || to < 0) return prev;
-      next.splice(from, 1);
-      next.splice(to, 0, draggedColId);
-      return next;
-    });
-  }, [draggedColId]);
+    const dragged = flows.find(f => f.id === draggedColId);
+    const target = flows.find(f => f.id === targetId);
+    if (!dragged || !target) return;
+    await onSave(draggedColId, { position: target.position } as any);
+    await onSave(targetId, { position: dragged.position } as any);
+    setDraggedColId(null);
+  }, [draggedColId, flows, onSave]);
 
   // Modal state at board level (not clipped by column overflow: hidden)
   const [modalTarget, setModalTarget] = useState<{ flowId: string; stepIdx: number } | null>(null);
@@ -464,15 +514,15 @@ export function FlowEditor2({ flows, onSave, onSaveSteps, onCreateFlow, onDelete
   }, [projectId, onCreateFlow]);
 
   return (
-    <div className={boardStyles.board}>
-      {orderedFlows.map(flow => (
+    <div className={`${boardStyles.board} ${draggedColId ? boardStyles.boardDragging : ''}`}>
+      {flows.map(flow => (
         <FlowColumn key={flow.id} flow={flow} onSave={onSave} onSaveSteps={onSaveSteps}
           onDeleteFlow={onDeleteFlow} allFlows={flows}
           taskTypes={taskTypes?.length ? taskTypes : BUILT_IN_TYPES}
           onOpenStepModal={(flowId, stepIdx) => setModalTarget({ flowId, stepIdx })}
+          draggedColId={draggedColId}
           onColumnDragStart={setDraggedColId}
-          onColumnDragEnd={() => setDraggedColId(null)}
-          onColumnDragOver={e => handleColumnDragOver(e, flow.id)}
+          onColumnDrop={handleColumnDrop}
         />
       ))}
 

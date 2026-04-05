@@ -63,6 +63,7 @@ interface BoardProps {
   onReject: (jobId: string) => void;
   onRework: (jobId: string, note: string) => void;
   onDeleteJob: (jobId: string) => void;
+  onMoveToBacklog: (jobId: string) => void;
   onContinue: (jobId: string) => void;
   onCreatePr: (workstreamId: string) => void;
   currentUserId?: string;
@@ -96,6 +97,7 @@ export function Board({
   onReject,
   onRework,
   onDeleteJob,
+  onMoveToBacklog,
   onContinue,
   onCreatePr,
   currentUserId,
@@ -318,6 +320,7 @@ export function Board({
         onReject={onReject}
         onRework={onRework}
         onDeleteJob={onDeleteJob}
+        onMoveToBacklog={onMoveToBacklog}
           onContinue={onContinue}
           currentUserId={currentUserId}
       />
@@ -361,6 +364,7 @@ export function Board({
           onReject={onReject}
           onRework={onRework}
           onDeleteJob={onDeleteJob}
+          onMoveToBacklog={onMoveToBacklog}
           onContinue={onContinue}
           currentUserId={currentUserId}
           onCreatePr={() => onCreatePr(ws.id)}
