@@ -59,6 +59,7 @@ interface TaskCardProps {
   commentCount?: number;
   brokenLink?: { up: boolean; down: boolean } | null;
   metaItems?: { label: string; value: string }[];
+  hideComments?: boolean;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -99,6 +100,7 @@ export function TaskCard({
   commentCount = 0,
   brokenLink,
   metaItems,
+  hideComments,
 }: TaskCardProps) {
   const jobStatus = job?.status;
   const isActive = jobStatus === 'queued' || jobStatus === 'running' || jobStatus === 'paused' || jobStatus === 'review';
@@ -424,6 +426,7 @@ export function TaskCard({
               onDelete={onDelete}
               onUpdateTask={onUpdateTask}
               metaItems={metaItems}
+              hideComments={hideComments}
               commentsData={commentsData}
             />
           )}
@@ -443,6 +446,7 @@ function IdleDetail({
   onDelete,
   onUpdateTask,
   metaItems,
+  hideComments,
   commentsData,
 }: {
   task: TaskCardProps['task'];
@@ -453,6 +457,7 @@ function IdleDetail({
   onDelete?: () => void;
   onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
   metaItems?: { label: string; value: string }[];
+  hideComments?: boolean;
   commentsData: ReturnType<typeof useComments>;
 }) {
   const modal = useModal();
@@ -507,7 +512,7 @@ function IdleDetail({
         </div>
       </div>
 
-      <CardComments data={commentsData} projectId={projectId} />
+      {!hideComments && <CardComments data={commentsData} projectId={projectId} />}
     </>
   );
 }

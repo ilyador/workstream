@@ -907,7 +907,7 @@ dataRouter.get('/api/flows', requireAuth, async (req, res) => {
     .from('flows')
     .select('*, flow_steps(*)')
     .eq('project_id', projectId)
-    .order('name');
+    .order('position', { ascending: true });
 
   if (flowErr) {
     console.error('[flows] Error fetching flows:', flowErr.message);
@@ -926,9 +926,18 @@ dataRouter.post('/api/flows', requireAuth, async (req, res) => {
   const { project_id, name, description, icon, agents_md, steps } = req.body;
   if (!project_id || !name?.trim()) return res.status(400).json({ error: 'project_id and name required' });
 
+  // Auto-assign position: max position + 1 for this project
+  const { data: maxFlow } = await supabase
+    .from('flows')
+    .select('position')
+    .eq('project_id', project_id)
+    .order('position', { ascending: false })
+    .limit(1)
+    .single();
+
   const { data: flow, error } = await supabase
     .from('flows')
-    .insert({ project_id, name: name.trim(), description: description || '', icon: icon || 'bot', agents_md: agents_md || null })
+    .insert({ project_id, name: name.trim(), description: description || '', icon: icon || 'bot', agents_md: agents_md || null, position: (maxFlow?.position ?? -1) + 1 })
     .select()
     .single();
   if (error) return res.status(400).json({ error: error.message });
@@ -955,7 +964,7 @@ dataRouter.patch('/api/flows/:id', requireAuth, async (req, res) => {
   const { data: member } = await supabase.from('project_members').select('role').eq('project_id', flow.project_id).eq('user_id', userId).single();
   if (!member) return res.status(403).json({ error: 'Not a member of this project' });
 
-  const allowed = ['name', 'description', 'icon', 'agents_md', 'default_types'];
+  const allowed = ['name', 'description', 'icon', 'agents_md', 'default_types', 'position'];
   const updates: Record<string, any> = {};
   for (const key of allowed) {
     if (key in req.body) updates[key] = req.body[key];

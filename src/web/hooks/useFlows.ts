@@ -9,7 +9,7 @@ export function useFlows(projectId: string | null) {
     if (!projectId) { setLoading(false); return; }
     try {
       const data = await getFlows(projectId);
-      setFlows(data);
+      setFlows(data.sort((a, b) => a.position - b.position));
     } catch (err: any) {
       console.error('[useFlows] Failed to load flows:', err.message);
     } finally {
@@ -45,5 +45,5 @@ export function useFlows(projectId: string | null) {
     await load();
   }, [load]);
 
-  return { flows, loading, reload: load, createFlow, updateFlow, deleteFlow, updateFlowSteps, saveFlow };
+  return { flows, setFlows, loading, reload: load, createFlow, updateFlow, deleteFlow, updateFlowSteps, saveFlow };
 }

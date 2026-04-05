@@ -1,5 +1,6 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { WorkstreamColumn } from './WorkstreamColumn';
+import { useBoardDrag } from '../hooks/useBoardDrag';
 import type { JobView } from './job-types';
 import s from './Board.module.css';
 
@@ -102,21 +103,20 @@ export function Board({
   onCreatePr,
   currentUserId,
 }: BoardProps) {
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [draggedGroupIds, setDraggedGroupIds] = useState<string[]>([]);
-  const [draggedWsId, setDraggedWsId] = useState<string | null>(null);
+  const handleSwapColumns = (draggedId: string, targetId: string) => {
+    const dragged = workstreams.find(w => w.id === draggedId);
+    const target = workstreams.find(w => w.id === targetId);
+    if (!dragged || !target) return;
+    onUpdateWorkstream(draggedId, { position: target.position });
+    onUpdateWorkstream(targetId, { position: dragged.position });
+  };
+
+  const drag = useBoardDrag({ onSwapColumns: handleSwapColumns });
+
   const [addingWs, setAddingWs] = useState(false);
   const [newWsName, setNewWsName] = useState('');
   const [newWsDesc, setNewWsDesc] = useState('');
   const [newWsHasCode, setNewWsHasCode] = useState(true);
-
-  const boardRef = useRef<HTMLDivElement>(null);
-  const scrollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Clean up scroll interval on unmount
-  useEffect(() => () => {
-    if (scrollInterval.current) clearInterval(scrollInterval.current);
-  }, []);
 
   const taskJobMap = useMemo(() => {
     const priority: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
@@ -167,15 +167,10 @@ export function Board({
     [memberMap]
   );
 
-  const handleDragGroupStart = (taskIds: string[]) => {
-    setDraggedTaskId(taskIds[0]); // Primary for backwards compat
-    setDraggedGroupIds(taskIds);
-  };
-
   const handleDropTask = async (targetWsId: string | null, dropBeforeTaskId: string | null) => {
-    if (!draggedTaskId) return;
+    if (!drag.draggedTaskId) return;
 
-    const idsToMove = draggedGroupIds.length > 0 ? draggedGroupIds : [draggedTaskId];
+    const idsToMove = drag.draggedGroupIds.length > 0 ? drag.draggedGroupIds : [drag.draggedTaskId];
 
     // Get tasks in the target column, excluding all tasks being moved
     const targetKey = targetWsId || '__backlog__';
@@ -224,56 +219,7 @@ export function Board({
       await onMoveTask(idsToMove[i], targetWsId, basePosition + i * step);
     }
 
-    setDraggedTaskId(null);
-    setDraggedGroupIds([]);
-  };
-
-  const handleBoardDragOver = (e: React.DragEvent) => {
-    const board = boardRef.current;
-    if (!board || (!draggedTaskId && !draggedWsId)) return;
-
-    const rect = board.getBoundingClientRect();
-    const edgeZone = 80;
-    const scrollSpeed = 12;
-
-    if (e.clientX < rect.left + edgeZone) {
-      if (!scrollInterval.current) {
-        scrollInterval.current = setInterval(() => {
-          board.scrollLeft -= scrollSpeed;
-        }, 16);
-      }
-    } else if (e.clientX > rect.right - edgeZone) {
-      if (!scrollInterval.current) {
-        scrollInterval.current = setInterval(() => {
-          board.scrollLeft += scrollSpeed;
-        }, 16);
-      }
-    } else {
-      if (scrollInterval.current) {
-        clearInterval(scrollInterval.current);
-        scrollInterval.current = null;
-      }
-    }
-  };
-
-  const handleDragEnd = () => {
-    setDraggedTaskId(null);
-    setDraggedGroupIds([]);
-    setDraggedWsId(null);
-    if (scrollInterval.current) {
-      clearInterval(scrollInterval.current);
-      scrollInterval.current = null;
-    }
-  };
-
-  const handleColumnDrop = async (targetWsId: string) => {
-    if (!draggedWsId || draggedWsId === targetWsId) return;
-    const dragged = workstreams.find(w => w.id === draggedWsId);
-    const target = workstreams.find(w => w.id === targetWsId);
-    if (!dragged || !target) return;
-    await onUpdateWorkstream(draggedWsId, { position: target.position });
-    await onUpdateWorkstream(targetWsId, { position: dragged.position });
-    setDraggedWsId(null);
+    drag.setDraggedTaskId(null);
   };
 
   const handleCreateWorkstream = async () => {
@@ -288,9 +234,9 @@ export function Board({
 
   return (
     <div
-      className={`${s.board} ${(draggedTaskId || draggedWsId) ? s.boardDragging : ''}`}
-      ref={boardRef}
-      onDragOver={handleBoardDragOver}
+      className={`${s.board} ${drag.isDragging ? s.boardDragging : ''}`}
+      ref={drag.boardRef}
+      onDragOver={drag.handleBoardDragOver}
     >
       {/* Backlog column */}
       <WorkstreamColumn
@@ -303,11 +249,11 @@ export function Board({
         mentionedTaskIds={mentionedTaskIds}
         commentCounts={commentCounts}
         focusTaskId={focusTaskId}
-        draggedTaskId={draggedTaskId}
-        draggedGroupIds={draggedGroupIds}
-        onDragTaskStart={setDraggedTaskId}
-        onDragGroupStart={handleDragGroupStart}
-        onDragTaskEnd={handleDragEnd}
+        draggedTaskId={drag.draggedTaskId}
+        draggedGroupIds={drag.draggedGroupIds}
+        onDragTaskStart={drag.setDraggedTaskId}
+        onDragGroupStart={drag.handleDragGroupStart}
+        onDragTaskEnd={drag.handleDragEnd}
         onDropTask={handleDropTask}
         onAddTask={() => onAddTask(null)}
         onRunTask={onRunTask}
@@ -340,15 +286,15 @@ export function Board({
         commentCounts={commentCounts}
           focusTaskId={focusTaskId}
           focusWsId={focusWsId}
-          draggedTaskId={draggedTaskId}
-          draggedGroupIds={draggedGroupIds}
-          draggedWsId={draggedWsId}
-          onDragTaskStart={setDraggedTaskId}
-          onDragGroupStart={handleDragGroupStart}
-          onDragTaskEnd={handleDragEnd}
+          draggedTaskId={drag.draggedTaskId}
+          draggedGroupIds={drag.draggedGroupIds}
+          draggedWsId={drag.draggedWsId}
+          onDragTaskStart={drag.setDraggedTaskId}
+          onDragGroupStart={drag.handleDragGroupStart}
+          onDragTaskEnd={drag.handleDragEnd}
           onDropTask={handleDropTask}
-          onColumnDragStart={setDraggedWsId}
-          onColumnDrop={handleColumnDrop}
+          onColumnDragStart={drag.setDraggedWsId}
+          onColumnDrop={drag.handleColumnDrop}
           onRenameWorkstream={(id, name) => onUpdateWorkstream(id, { name })}
           onDeleteWorkstream={onDeleteWorkstream}
           onUpdateWorkstream={onUpdateWorkstream}
