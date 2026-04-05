@@ -480,17 +480,15 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
             )}
           </div>
 
-          {!assignee && (
-            <div className={s.field}>
-              <label className={s.label}>File chaining</label>
-              <select className={s.select} value={chaining} onChange={e => setChaining(e.target.value)}>
-                <option value="none">None</option>
-                <option value="accept">Accept files from previous task</option>
-                <option value="produce">Produce files for next task</option>
-                <option value="both">Accept and produce files</option>
-              </select>
-            </div>
-          )}
+          <div className={s.field}>
+            <label className={s.label}>File chaining</label>
+            <select className={s.select} value={chaining} onChange={e => setChaining(e.target.value)}>
+              <option value="none">None</option>
+              <option value="accept">Accept files from previous task</option>
+              <option value="produce">Produce files for next task</option>
+              <option value="both">Accept and produce files</option>
+            </select>
+          </div>
 
           <div className={s.imagesSection}>
             <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFileSelect} />
@@ -513,6 +511,11 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
           {isEdit && editTask?.id && (
             <div>
               <label className={s.label}>Attachments</label>
+              {(chaining === 'produce' || chaining === 'both') && (
+                <div style={{ padding: '8px 12px', marginBottom: 8, background: 'var(--amber-bg)', borderLeft: '3px solid var(--amber)', borderRadius: 6, fontSize: 12, color: 'var(--amber)', fontWeight: 500 }}>
+                  This task requires a file attachment before it can be completed
+                </div>
+              )}
               <TaskAttachmentsEdit taskId={editTask.id} />
             </div>
           )}

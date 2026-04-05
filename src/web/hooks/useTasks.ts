@@ -86,5 +86,5 @@ export function useTasks(projectId: string | null) {
   const active = tasks.filter(t => ['in_progress', 'paused', 'review'].includes(t.status));
   const done = tasks.filter(t => t.status === 'done');
 
-  return { tasks, backlog, active, done, loading, error, createTask, updateTask, deleteTask, reload: load };
+  return { tasks, setTasks, backlog, active, done, loading, error, createTask, updateTask, deleteTask, reload: load };
 }

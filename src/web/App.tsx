@@ -10,7 +10,7 @@ import { useCommentCounts } from './hooks/useCommentCounts';
 import { useWebNotifications } from './hooks/useWebNotifications';
 import { useFlows } from './hooks/useFlows';
 import { useCustomTypes } from './hooks/useCustomTypes';
-import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, reworkJob, revertJob, terminateJob, deleteJob, moveToBacklog, continueJob, updateTask, reviewAndCreatePr } from './lib/api';
+import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, reworkJob, revertJob, terminateJob, deleteJob, moveToBacklog, continueJob, updateTask, updateWorkstream as apiUpdateWorkstream, updateFlow as apiUpdateFlow, updateFlowSteps as apiUpdateFlowSteps, reviewAndCreatePr } from './lib/api';
 import { Routes, Route, useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
@@ -324,6 +324,18 @@ export default function App() {
               await workstreams.deleteWorkstream(id);
               tasks.reload();
             }}
+            onSwapColumns={(draggedId, targetId) => {
+              const dragged = workstreams.workstreams.find(w => w.id === draggedId);
+              const target = workstreams.workstreams.find(w => w.id === targetId);
+              if (!dragged || !target) return;
+              workstreams.setWorkstreams(prev => prev.map(w => {
+                if (w.id === draggedId) return { ...w, position: target.position };
+                if (w.id === targetId) return { ...w, position: dragged.position };
+                return w;
+              }));
+              apiUpdateWorkstream(draggedId, { position: target.position });
+              apiUpdateWorkstream(targetId, { position: dragged.position });
+            }}
             onAddTask={(workstreamId) => {
               setTaskFormWorkstream(workstreamId);
               setShowTaskForm(true);
@@ -386,9 +398,11 @@ export default function App() {
             onUpdateTask={async (taskId, data) => {
               await tasks.updateTask(taskId, data);
             }}
-            onMoveTask={async (taskId, workstreamId, newPosition) => {
-              await updateTask(taskId, { workstream_id: workstreamId, position: newPosition });
-              tasks.reload();
+            onMoveTask={(taskId, workstreamId, newPosition) => {
+              tasks.setTasks(prev => prev.map(t =>
+                t.id === taskId ? { ...t, workstream_id: workstreamId, position: newPosition } : t
+              ));
+              updateTask(taskId, { workstream_id: workstreamId, position: newPosition });
             }}
             onTerminate={async (jobId) => {
               if (await modal.confirm('Terminate job', 'Terminate this running job?', { label: 'Terminate', danger: true })) {
@@ -483,6 +497,7 @@ export default function App() {
           projects.current ? (
             <FlowEditor2
               flows={aiFlows.flows}
+              setFlows={aiFlows.setFlows}
               projectId={projects.current.id}
               onSave={async (flowId, updates) => { await aiFlows.updateFlow(flowId, updates); await aiFlows.reload(); }}
               onSaveSteps={async (flowId, steps) => { await aiFlows.updateFlowSteps(flowId, steps); await aiFlows.reload(); }}
@@ -492,15 +507,13 @@ export default function App() {
                 const dragged = aiFlows.flows.find(f => f.id === draggedId);
                 const target = aiFlows.flows.find(f => f.id === targetId);
                 if (!dragged || !target) return;
-                // Optimistic: swap positions locally
                 aiFlows.setFlows(prev => prev.map(f => {
                   if (f.id === draggedId) return { ...f, position: target.position };
                   if (f.id === targetId) return { ...f, position: dragged.position };
                   return f;
                 }).sort((a, b) => a.position - b.position));
-                // Persist in background
-                aiFlows.updateFlow(draggedId, { position: target.position });
-                aiFlows.updateFlow(targetId, { position: dragged.position });
+                apiUpdateFlow(draggedId, { position: target.position });
+                apiUpdateFlow(targetId, { position: dragged.position });
               }}
             />
           ) : <div />

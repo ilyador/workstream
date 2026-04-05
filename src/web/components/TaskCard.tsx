@@ -28,6 +28,7 @@ interface Task {
   images?: string[];
   status?: string;
   priority?: string;
+  chaining?: 'none' | 'produce' | 'accept' | 'both';
 }
 
 interface TaskCardProps {
@@ -60,6 +61,7 @@ interface TaskCardProps {
   brokenLink?: { up: boolean; down: boolean } | null;
   metaItems?: { label: string; value: string }[];
   hideComments?: boolean;
+  prevTaskId?: string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -101,6 +103,7 @@ export function TaskCard({
   brokenLink,
   metaItems,
   hideComments,
+  prevTaskId,
 }: TaskCardProps) {
   const jobStatus = job?.status;
   const isActive = jobStatus === 'queued' || jobStatus === 'running' || jobStatus === 'paused' || jobStatus === 'review';
@@ -428,6 +431,7 @@ export function TaskCard({
               metaItems={metaItems}
               hideComments={hideComments}
               commentsData={commentsData}
+              prevTaskId={prevTaskId}
             />
           )}
         </div>
@@ -448,6 +452,7 @@ function IdleDetail({
   metaItems,
   hideComments,
   commentsData,
+  prevTaskId,
 }: {
   task: TaskCardProps['task'];
   canRunAi: boolean;
@@ -459,8 +464,20 @@ function IdleDetail({
   metaItems?: { label: string; value: string }[];
   hideComments?: boolean;
   commentsData: ReturnType<typeof useComments>;
+  prevTaskId?: string | null;
 }) {
   const modal = useModal();
+  const ownArtifacts = useArtifacts(task.id);
+  const prevArtifacts = useArtifacts(prevTaskId || null);
+
+  // Chaining completion rules
+  const chaining = task.chaining || 'none';
+  const needsAccept = chaining === 'accept' || chaining === 'both';
+  const needsProduce = chaining === 'produce' || chaining === 'both';
+  const acceptBlocked = needsAccept && prevArtifacts.loaded && prevArtifacts.artifacts.length === 0;
+  const produceBlocked = needsProduce && ownArtifacts.loaded && ownArtifacts.artifacts.length === 0;
+  const completionBlocked = acceptBlocked || produceBlocked;
+  const blockReason = acceptBlocked ? 'Awaiting file from previous task' : produceBlocked ? 'Attach a file before completing' : '';
 
   return (
     <>
@@ -483,11 +500,17 @@ function IdleDetail({
 
       <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
 
+      {completionBlocked && (
+        <div style={{ padding: '8px 12px', background: 'var(--amber-bg)', borderLeft: '3px solid var(--amber)', borderRadius: 6, fontSize: 12, color: 'var(--amber)', fontWeight: 500 }}>
+          {blockReason}
+        </div>
+      )}
+
       <div className={s.actions}>
         <div className={s.actionsLeft}>
           {task.assignee && task.assignee.type !== 'ai' && ['in_progress', 'todo', 'backlog'].includes(task.status || '') && onUpdateTask && (
             <>
-              <button className="btn btnSuccess btnSm" onClick={() => onUpdateTask(task.id, { status: 'done' })}>
+              <button className="btn btnSuccess btnSm" onClick={() => onUpdateTask(task.id, { status: 'done' })} disabled={completionBlocked} title={blockReason || undefined}>
                 Done
               </button>
             </>

@@ -65,5 +65,5 @@ export function useWorkstreams(projectId: string | null) {
 
   const active = workstreams.filter(w => w.status !== 'archived');
 
-  return { workstreams, active, loading, createWorkstream: createWs, updateWorkstream: updateWs, deleteWorkstream: deleteWs, reload: load };
+  return { workstreams, setWorkstreams, active, loading, createWorkstream: createWs, updateWorkstream: updateWs, deleteWorkstream: deleteWs, reload: load };
 }

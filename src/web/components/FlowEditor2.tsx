@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { Flow, FlowStep } from '../lib/api';
+import { updateFlowSteps as apiUpdateFlowSteps, type Flow, type FlowStep } from '../lib/api';
 import { MdField } from './MdField';
 import { WorkstreamColumn } from './WorkstreamColumn';
 import { useBoardDrag } from '../hooks/useBoardDrag';
@@ -11,6 +11,7 @@ import s from './FlowEditor2.module.css';
 
 interface FlowEditor2Props {
   flows: Flow[];
+  setFlows: React.Dispatch<React.SetStateAction<Flow[]>>;
   onSave: (flowId: string, updates: { name?: string; description?: string; agents_md?: string; default_types?: string[]; position?: number }) => Promise<void>;
   onSaveSteps: (flowId: string, steps: any[]) => Promise<void>;
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: any[] }) => Promise<Flow>;
@@ -313,7 +314,7 @@ function AgentsMdSection({ flow, onSave }: { flow: Flow; onSave: FlowEditor2Prop
 /* ─────────────────────────────────────────────────
    FlowEditor2 — Board using WorkstreamColumn directly
    ───────────────────────────────────────────────── */
-export function FlowEditor2({ flows, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, onSwapColumns, projectId, taskTypes }: FlowEditor2Props) {
+export function FlowEditor2({ flows, setFlows, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, onSwapColumns, projectId, taskTypes }: FlowEditor2Props) {
   const [creating, setCreating] = useState(false);
 
   const drag = useBoardDrag({ onSwapColumns });
@@ -342,7 +343,7 @@ export function FlowEditor2({ flows, onSave, onSaveSteps, onCreateFlow, onDelete
   }, [flows]);
 
   // Task (step) drop: reorder within flow
-  const handleDropTask = useCallback(async (workstreamId: string | null, dropBeforeTaskId: string | null) => {
+  const handleDropTask = useCallback((workstreamId: string | null, dropBeforeTaskId: string | null) => {
     if (!drag.draggedTaskId || !workstreamId) return;
     const info = stepLookup.get(drag.draggedTaskId);
     if (!info || info.flowId !== workstreamId) return;
@@ -361,9 +362,13 @@ export function FlowEditor2({ flows, onSave, onSaveSteps, onCreateFlow, onDelete
       next.push(moved);
     }
     const reordered = next.map((s, i) => ({ ...s, position: i + 1 }));
-    try { await onSaveSteps(workstreamId, stepsPayload(reordered)); } catch (err: any) { console.error(err); }
+    // Optimistic: update local flow steps
+    setFlows(prev => prev.map(f =>
+      f.id === workstreamId ? { ...f, flow_steps: reordered } : f
+    ));
+    apiUpdateFlowSteps(workstreamId, stepsPayload(reordered));
     drag.setDraggedTaskId(null);
-  }, [drag.draggedTaskId, stepLookup, flows, onSaveSteps]);
+  }, [drag.draggedTaskId, stepLookup, flows, setFlows]);
 
   const handleNewFlow = useCallback(async () => {
     setCreating(true);

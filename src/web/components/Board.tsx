@@ -49,6 +49,7 @@ interface BoardProps {
   onCreateWorkstream: (name: string, description?: string, has_code?: boolean) => Promise<void>;
   onUpdateWorkstream: (id: string, data: Record<string, unknown>) => Promise<void>;
   onDeleteWorkstream: (id: string) => Promise<void>;
+  onSwapColumns: (draggedId: string, targetId: string) => void;
   // Task actions
   onAddTask: (workstreamId: string | null) => void;
   onRunTask: (taskId: string) => void;
@@ -56,7 +57,7 @@ interface BoardProps {
   onEditTask: (task: any) => void;
   onDeleteTask: (taskId: string) => void;
   onUpdateTask: (taskId: string, data: Record<string, unknown>) => Promise<void>;
-  onMoveTask: (taskId: string, workstreamId: string | null, newPosition: number) => Promise<void>;
+  onMoveTask: (taskId: string, workstreamId: string | null, newPosition: number) => void;
   // Job actions
   onTerminate: (jobId: string) => void;
   onReply: (jobId: string, answer: string) => void;
@@ -85,6 +86,7 @@ export function Board({
   onCreateWorkstream,
   onUpdateWorkstream,
   onDeleteWorkstream,
+  onSwapColumns,
   onAddTask,
   onRunTask,
   onRunWorkstream,
@@ -103,15 +105,7 @@ export function Board({
   onCreatePr,
   currentUserId,
 }: BoardProps) {
-  const handleSwapColumns = (draggedId: string, targetId: string) => {
-    const dragged = workstreams.find(w => w.id === draggedId);
-    const target = workstreams.find(w => w.id === targetId);
-    if (!dragged || !target) return;
-    onUpdateWorkstream(draggedId, { position: target.position });
-    onUpdateWorkstream(targetId, { position: dragged.position });
-  };
-
-  const drag = useBoardDrag({ onSwapColumns: handleSwapColumns });
+  const drag = useBoardDrag({ onSwapColumns });
 
   const [addingWs, setAddingWs] = useState(false);
   const [newWsName, setNewWsName] = useState('');
@@ -167,7 +161,7 @@ export function Board({
     [memberMap]
   );
 
-  const handleDropTask = async (targetWsId: string | null, dropBeforeTaskId: string | null) => {
+  const handleDropTask = (targetWsId: string | null, dropBeforeTaskId: string | null) => {
     if (!drag.draggedTaskId) return;
 
     const idsToMove = drag.draggedGroupIds.length > 0 ? drag.draggedGroupIds : [drag.draggedTaskId];
@@ -213,10 +207,10 @@ export function Board({
       }
     }
 
-    // Move all tasks in the group with evenly spaced positions
+    // Move all tasks in the group
     const step = idsToMove.length > 1 ? 0.001 : 0;
     for (let i = 0; i < idsToMove.length; i++) {
-      await onMoveTask(idsToMove[i], targetWsId, basePosition + i * step);
+      onMoveTask(idsToMove[i], targetWsId, basePosition + i * step);
     }
 
     drag.setDraggedTaskId(null);

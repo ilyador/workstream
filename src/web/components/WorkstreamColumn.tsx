@@ -762,6 +762,7 @@ export function WorkstreamColumn({
                             hasUnreadMention={mentionedTaskIds.has(gt.id)}
                             commentCount={commentCounts?.[gt.id] || 0}
                             brokenLink={brokenLinks.get(gt.id) || null}
+                            prevTaskId={gi > 0 ? groupTasks[gi - 1].id : (index > 0 ? tasks[index - 1]?.id : null)}
                             isExpanded={expandedIds.has(gt.id)}
                             onToggleExpand={() => setExpandedIds(prev => {
                               const next = new Set(prev);
@@ -818,6 +819,7 @@ export function WorkstreamColumn({
                     hasUnreadMention={mentionedTaskIds.has(task.id)}
                     commentCount={commentCounts?.[task.id] || 0}
                     brokenLink={brokenLinks.get(task.id) || null}
+                    prevTaskId={prevTask?.id || null}
                     isExpanded={expandedIds.has(task.id)}
                     onToggleExpand={() => setExpandedIds(prev => {
                       const next = new Set(prev);
