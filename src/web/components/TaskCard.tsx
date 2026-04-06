@@ -16,7 +16,7 @@ import s from './TaskCard.module.css';
 
 function cap(str: string) { return str.charAt(0).toUpperCase() + str.slice(1); }
 
-interface TaskCardProps {
+export interface TaskCardProps {
   task: TaskView;
   job: JobView | null;
   canRunAi: boolean;
@@ -50,6 +50,11 @@ interface TaskCardProps {
   prevTaskId?: string | null;
 }
 
+interface TaskCardViewProps extends TaskCardProps {
+  viewMode?: 'task' | 'flow-step';
+  commentsData?: ReturnType<typeof useComments>;
+}
+
 const STATUS_LABELS: Record<string, string> = {
   queued: 'Queued',
   running: 'Running',
@@ -60,6 +65,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function TaskCard({
+  ...props
+}: TaskCardProps) {
+  const commentsData = useComments(props.task.id, props.projectId);
+  return <TaskCardView {...props} commentsData={commentsData} viewMode="task" />;
+}
+
+export function TaskCardView({
   task,
   job,
   canRunAi,
@@ -91,11 +103,14 @@ export function TaskCard({
   metaItems,
   hideComments,
   prevTaskId,
-}: TaskCardProps) {
+  commentsData,
+  viewMode = 'task',
+}: TaskCardViewProps) {
   const jobStatus = job?.status;
   const isActive = jobStatus === 'queued' || jobStatus === 'running' || jobStatus === 'paused' || jobStatus === 'review';
   const taskDone = task.status === 'done' || jobStatus === 'done';
   const isHumanWaiting = task.mode === 'human' && task.status === 'in_progress' && !isActive;
+  const isFlowStep = viewMode === 'flow-step';
 
   const statusClass = jobStatus
     ? s[`status${cap(jobStatus)}`]
@@ -130,9 +145,6 @@ export function TaskCard({
 
   const [showRework, setShowRework] = useState(false);
   const [showDoneReject, setShowDoneReject] = useState(false);
-
-  // Eagerly fetch comments so data is ready before expansion
-  const commentsData = useComments(task.id, projectId);
 
   return (
     <div
@@ -366,7 +378,7 @@ export function TaskCard({
               </div>
             )}
             <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
-            <CardComments data={commentsData} projectId={projectId} />
+            {commentsData && <CardComments data={commentsData} projectId={projectId} />}
           </div>
         </div>
       )}
@@ -374,8 +386,17 @@ export function TaskCard({
       {/* Expanded detail for non-active states (click to toggle) */}
       {!isActive && isExpanded && !taskDone && (
         <div className={s.detail} onClick={(e) => e.stopPropagation()}>
+          {isFlowStep && (
+            <FlowStepDetail
+              task={task}
+              metaItems={metaItems}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+          )}
+
           {/* FAILED */}
-          {jobStatus === 'failed' && job && (
+          {!isFlowStep && jobStatus === 'failed' && job && (
             <div className={s.failedSection}>
               {job.phases && job.phases.length > 0 && (
                 <div className={s.phases}>
@@ -415,7 +436,7 @@ export function TaskCard({
           )}
 
           {/* IDLE — no active job, task in backlog/todo */}
-          {!isActive && !taskDone && jobStatus !== 'failed' && (
+          {!isFlowStep && !isActive && !taskDone && jobStatus !== 'failed' && commentsData && (
             <IdleDetail
               task={task}
               canRunAi={canRunAi}
@@ -434,6 +455,41 @@ export function TaskCard({
         </div>
       )}
     </div>
+  );
+}
+
+function FlowStepDetail({
+  task,
+  metaItems,
+  onEdit,
+  onDelete,
+}: {
+  task: TaskView;
+  metaItems?: { label: string; value: string }[];
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  return (
+    <>
+      {task.description && <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>}
+      {metaItems && metaItems.length > 0 && (
+        <div className={s.meta}>
+          {metaItems.map(item => <span key={item.label}>{item.label}: {item.value}</span>)}
+        </div>
+      )}
+      {(onEdit || onDelete) && (
+        <div className={s.actions}>
+          <div className={s.actionsLeft}>
+            {onEdit && (
+              <button className="btn btnGhost btnSm" onClick={onEdit}>Edit</button>
+            )}
+            {onDelete && (
+              <button className="btn btnGhost btnSm" onClick={onDelete}>Delete</button>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
