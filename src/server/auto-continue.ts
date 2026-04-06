@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js';
+import { supabase, hasActiveWorkstreamJob } from './supabase.js';
 import { resolveFlowForTask } from './flow-resolution.js';
 
 /**
@@ -61,15 +61,8 @@ export async function queueNextWorkstreamTask(params: {
     return null;
   }
 
-  // Don't queue if another job in this workstream is already running
-  const { data: wsJobs } = await supabase
-    .from('jobs')
-    .select('id, tasks!inner(workstream_id)')
-    .eq('tasks.workstream_id', workstreamId)
-    .in('status', ['queued', 'running'])
-    .limit(1);
-  if (wsJobs && wsJobs.length > 0) {
-    console.log(`[auto-continue] Workstream ${workstreamId} already has a running job, skipping`);
+  if (await hasActiveWorkstreamJob(workstreamId)) {
+    console.log(`[auto-continue] Workstream ${workstreamId} already has an active job, skipping`);
     return null;
   }
 

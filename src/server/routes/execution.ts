@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabase } from '../supabase.js';
+import { supabase, hasActiveWorkstreamJob } from '../supabase.js';
 import { requireAuth } from '../auth-middleware.js';
 import { revertToCheckpoint, deleteCheckpoint } from '../checkpoint.js';
 import { queueNextWorkstreamTask } from '../auto-continue.js';
@@ -31,32 +31,6 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'localPath does not match your registered project path' });
   }
 
-  // Prevent concurrent jobs for the same task
-  const { data: existingJobs } = await supabase
-    .from('jobs')
-    .select('id')
-    .eq('task_id', taskId)
-    .in('status', ['queued', 'running', 'paused', 'review'])
-    .limit(1);
-
-  if (existingJobs && existingJobs.length > 0) {
-    return res.status(409).json({ error: 'A job is already queued, running, or paused for this task', jobId: existingJobs[0].id });
-  }
-
-  // Prevent concurrent jobs in the same workstream (shared worktree)
-  const { data: taskRow } = await supabase.from('tasks').select('workstream_id').eq('id', taskId).single();
-  if (taskRow?.workstream_id) {
-    const { data: wsJobs } = await supabase
-      .from('jobs')
-      .select('id, tasks!inner(workstream_id)')
-      .eq('tasks.workstream_id', taskRow.workstream_id)
-      .in('status', ['queued', 'running'])
-      .limit(1);
-    if (wsJobs && wsJobs.length > 0) {
-      return res.status(409).json({ error: 'Another task in this workstream is already running', jobId: wsJobs[0].id });
-    }
-  }
-
   // Fetch task
   const { data: task, error: taskErr } = await supabase
     .from('tasks')
@@ -70,6 +44,26 @@ executionRouter.post('/api/run', requireAuth, async (req, res) => {
 
   if (task.mode !== 'ai') {
     return res.status(400).json({ error: 'Only AI tasks can be run' });
+  }
+
+  // Prevent concurrent jobs for the same task
+  const { data: existingJobs } = await supabase
+    .from('jobs')
+    .select('id')
+    .eq('task_id', taskId)
+    .in('status', ['queued', 'running', 'paused', 'review'])
+    .limit(1);
+
+  if (existingJobs && existingJobs.length > 0) {
+    return res.status(409).json({ error: 'A job is already queued, running, or paused for this task', jobId: existingJobs[0].id });
+  }
+
+  // Prevent concurrent jobs in the same workstream (shared worktree)
+  if (task.workstream_id) {
+    const activeJobId = await hasActiveWorkstreamJob(task.workstream_id);
+    if (activeJobId) {
+      return res.status(409).json({ error: 'Another task in this workstream is already running', jobId: activeJobId });
+    }
   }
 
   const { flowSnapshot, firstPhase, maxAttempts, flowId } = await resolveFlowForTask(task, projectId, localPath);

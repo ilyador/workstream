@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import { homedir } from 'os';
 import { runJob, runFlowJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
 import type { FlowConfig } from './runner.js';
-import { supabase } from './supabase.js';
+import { supabase, hasActiveWorkstreamJob } from './supabase.js';
 import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
 import { queueNextWorkstreamTask } from './auto-continue.js';
 import { ensureWorktree } from './worktree.js';
@@ -328,15 +328,7 @@ setInterval(async () => {
     let job = null;
     for (const candidate of jobs) {
       const wsId = (candidate as any).tasks?.workstream_id;
-      if (wsId) {
-        const { data: running } = await supabase
-          .from('jobs')
-          .select('id, tasks!inner(workstream_id)')
-          .eq('tasks.workstream_id', wsId)
-          .eq('status', 'running')
-          .limit(1);
-        if (running && running.length > 0) continue;
-      }
+      if (wsId && await hasActiveWorkstreamJob(wsId, ['running'])) continue;
       job = candidate;
       break;
     }

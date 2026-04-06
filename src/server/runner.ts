@@ -1,7 +1,8 @@
 import { spawn, ChildProcess, execFileSync } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
 import { join } from 'path';
-import { supabase } from './supabase.js';
+import { supabase, savePhases } from './supabase.js';
+import { stagedDiff, stagedDiffStat } from './git-utils.js';
 import { discoverSkills } from './routes/data.js';
 
 const MIME_MAP: Record<string, string> = {
@@ -276,11 +277,8 @@ async function buildStepPrompt(
       }
       case 'git_diff': {
         try {
-          // Stage everything (including new files) so they appear in the diff
-          execFileSync('git', ['add', '-A'], { cwd: localPath, timeout: 5000 });
-          const diff = execFileSync('git', ['diff', '--staged', 'HEAD'], { cwd: localPath, encoding: 'utf-8', timeout: 10000 }).trim();
-          // Unstage so we don't interfere with the working tree
-          execFileSync('git', ['reset'], { cwd: localPath, timeout: 5000 });
+          // Stage temporarily so untracked (new) files appear in the diff
+          const diff = stagedDiff(localPath);
           if (diff) {
             prompt += `## Git Diff (changes made)\n\`\`\`diff\n${diff.substring(0, 12000)}\n\`\`\`\n\n`;
           }
@@ -461,12 +459,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
           summary: extractPhaseSummary(output),
         };
         phasesCompleted.push(phaseOutput);
-        let { error: pcErr } = await supabase.from('jobs').update({ phases_completed: phasesCompleted }).eq('id', jobId);
-        if (pcErr) {
-          console.error(`[runner] Failed to save phases_completed for job ${jobId}, retrying:`, pcErr.message);
-          ({ error: pcErr } = await supabase.from('jobs').update({ phases_completed: phasesCompleted }).eq('id', jobId));
-          if (pcErr) console.error(`[runner] Retry also failed for job ${jobId}:`, pcErr.message);
-        }
+        await savePhases(jobId, phasesCompleted);
         onPhaseComplete(step.name, phaseOutput);
 
         // Check if claude asked a question
@@ -593,20 +586,9 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
     await scanAndUploadArtifacts(localPath, ctx.taskId, jobId, phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown', onLog);
   }
 
-  let filesChanged = 0;
-  let linesAdded = 0;
-  let linesRemoved = 0;
-  const changedFiles: string[] = [];
+  let { filesChanged, linesAdded, linesRemoved, changedFiles } = { filesChanged: 0, linesAdded: 0, linesRemoved: 0, changedFiles: [] as string[] };
   try {
-    // Stage everything so new files appear in the stat
-    execFileSync('git', ['add', '-A'], { cwd: localPath, timeout: 5000 });
-    const diffStat = execFileSync('git', ['diff', '--stat', '--staged', 'HEAD'], { cwd: localPath, encoding: 'utf-8', timeout: 5000 }).trim();
-    execFileSync('git', ['reset'], { cwd: localPath, timeout: 5000 });
-    const stat = diffStat;
-    const match = stat.match(/(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/);
-    if (match) { filesChanged = parseInt(match[1]) || 0; linesAdded = parseInt(match[2]) || 0; linesRemoved = parseInt(match[3]) || 0; }
-    const lines = stat.split('\n').slice(0, -1);
-    for (const line of lines) { const fm = line.match(/^\s*(.+?)\s+\|/); if (fm) changedFiles.push(fm[1].trim()); }
+    ({ filesChanged, linesAdded, linesRemoved, changedFiles } = stagedDiffStat(localPath));
   } catch { /* ignore */ }
 
   let finalSummary = 'Completed';
@@ -1238,12 +1220,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
           summary: extractPhaseSummary(output),
         };
         phasesCompleted.push(phaseOutput);
-        let { error: pcErr } = await supabase.from('jobs').update({ phases_completed: phasesCompleted }).eq('id', jobId);
-        if (pcErr) {
-          console.error(`[runner] Failed to save phases_completed for job ${jobId}, retrying:`, pcErr.message);
-          ({ error: pcErr } = await supabase.from('jobs').update({ phases_completed: phasesCompleted }).eq('id', jobId));
-          if (pcErr) console.error(`[runner] Retry also failed for job ${jobId}:`, pcErr.message);
-        }
+        await savePhases(jobId, phasesCompleted);
         onPhaseComplete(phase, phaseOutput);
 
         // Check if claude asked a question (simple heuristic: ends with ?)
@@ -1379,34 +1356,10 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
   const reviewOutput = phasesCompleted[phasesCompleted.length - 1];
 
-  let filesChanged = 0;
-  let linesAdded = 0;
-  let linesRemoved = 0;
-  const changedFiles: string[] = [];
+  let { filesChanged, linesAdded, linesRemoved, changedFiles } = { filesChanged: 0, linesAdded: 0, linesRemoved: 0, changedFiles: [] as string[] };
   try {
-    // Stage everything so new files appear in the stat
-    execFileSync('git', ['add', '-A'], { cwd: localPath, timeout: 5000 });
-    const diffStat = execFileSync('git', ['diff', '--stat', '--staged', 'HEAD'], {
-      cwd: localPath, encoding: 'utf-8', timeout: 5000
-    }).trim();
-    execFileSync('git', ['reset'], { cwd: localPath, timeout: 5000 });
-    const stat = diffStat;
-
-    // Parse "3 files changed, 28 insertions(+), 12 deletions(-)"
-    const match = stat.match(/(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/);
-    if (match) {
-      filesChanged = parseInt(match[1]) || 0;
-      linesAdded = parseInt(match[2]) || 0;
-      linesRemoved = parseInt(match[3]) || 0;
-    }
-
-    // Extract list of changed file paths
-    const lines = stat.split('\n').slice(0, -1); // drop summary line
-    for (const line of lines) {
-      const fileMatch = line.match(/^\s*(.+?)\s+\|/);
-      if (fileMatch) changedFiles.push(fileMatch[1].trim());
-    }
-  } catch { /* ignore git errors */ }
+    ({ filesChanged, linesAdded, linesRemoved, changedFiles } = stagedDiffStat(localPath));
+  } catch { /* ignore */ }
 
   // Generate a clean summary by asking Claude to summarize the phase outputs
   let finalSummary = 'Completed';

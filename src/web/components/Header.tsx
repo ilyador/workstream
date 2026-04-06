@@ -47,6 +47,7 @@ interface Props {
   onNewProject: () => void;
   onSignOut?: () => void;
   onManageMembers?: () => void;
+  onUpdateLocalPath?: (path: string) => void;
 }
 
 export function Header({
@@ -66,6 +67,7 @@ export function Header({
   onNewProject,
   onSignOut,
   onManageMembers,
+  onUpdateLocalPath,
 }: Props) {
   const navigate = useNavigate();
   useTheme();
@@ -74,6 +76,8 @@ export function Header({
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [todoOpen, setTodoOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [editingPath, setEditingPath] = useState(false);
+  const [pathDraft, setPathDraft] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLDivElement>(null);
@@ -257,7 +261,37 @@ export function Header({
       )}
 
       <div className={s.right}>
-        {localPath && <span className={s.localPath} title={localPath}>{localPath}</span>}
+        {onUpdateLocalPath && (editingPath ? (
+          <input
+            className={s.localPathInput}
+            value={pathDraft}
+            onChange={e => setPathDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === 'Escape') {
+                if (e.key === 'Enter') {
+                  const val = pathDraft.trim();
+                  if (val && val !== (localPath || '')) onUpdateLocalPath(val);
+                }
+                setEditingPath(false);
+              }
+            }}
+            onBlur={() => {
+              const val = pathDraft.trim();
+              if (val && val !== (localPath || '')) onUpdateLocalPath(val);
+              setEditingPath(false);
+            }}
+            placeholder="/path/to/project"
+            autoFocus
+          />
+        ) : (
+          <button
+            className={s.localPathBtn}
+            onClick={() => { setPathDraft(localPath || ''); setEditingPath(true); }}
+            title={localPath ? `Click to edit: ${localPath}` : 'Set project local path'}
+          >
+            {localPath || 'Set path...'}
+          </button>
+        ))}
         <div className={s.notifWrap} ref={notifRef}>
           <button className={s.icon} onClick={() => setNotifOpen(prev => !prev)}>
             {notifications > 0 && <span className={s.dot} />}
