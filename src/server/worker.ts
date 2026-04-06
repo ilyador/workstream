@@ -376,7 +376,7 @@ setInterval(async () => {
           completed_at: new Date().toISOString(),
           question: 'Job failed: canceled by user.',
         }).eq('id', job.id);
-        await supabase.from('tasks').update({ status: 'paused' }).eq('id', job.task_id);
+        await supabase.from('tasks').update({ status: 'canceled' }).eq('id', job.task_id);
         await writeLog(job.id, 'failed', { error: 'Job canceled by user' });
       } catch (err: any) {
         console.error(`[worker] Cancel error for job ${job.id}:`, err.message);

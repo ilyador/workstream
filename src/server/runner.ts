@@ -553,6 +553,9 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         break;
 
       } catch (err: any) {
+        // If the job was canceled, the cancellation loop handles cleanup — just bail out.
+        if (err.message === 'Job canceled') return;
+
         onLog(`\nError in step ${step.name}: ${err.message}\n`);
         if (attempt >= maxAttempts) {
           let failMessage = `Step '${step.name}' failed: ${err.message}`;
@@ -1317,6 +1320,9 @@ export async function runJob(ctx: JobContext): Promise<void> {
         break;
 
       } catch (err: any) {
+        // If the job was canceled, the cancellation loop handles cleanup — just bail out.
+        if (err.message === 'Job canceled') return;
+
         onLog(`\nError in phase ${phase}: ${err.message}\n`);
         if (attempt >= maxAttempts) {
           let failMessage = `Phase '${phase}' failed: ${err.message}`;
@@ -1539,11 +1545,18 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
           fullOutput += lineBuffer;
         }
       }
+      // If cancelJob() already removed this jobId from activeProcesses, the
+      // process was killed intentionally — reject so the runner stops.
+      const wasCanceled = !activeProcesses.has(jobId);
       activeProcesses.delete(jobId);
+      if (wasCanceled) {
+        reject(new Error('Job canceled'));
+        return;
+      }
       // If claude streamed a result event but exited non-zero, treat as success.
       // The CLI sometimes exits 1 after completing successfully (e.g. max turns reached).
       const hasResult = fullOutput.includes('[done] Phase complete');
-      if (code === 0 || code === null || hasResult) {
+      if (code === 0 || hasResult) {
         resolve(fullOutput);
       } else {
         // Include stderr in error for diagnosability
