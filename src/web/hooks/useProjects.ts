@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getProjects, createProject as apiCreateProject } from '../lib/api';
+import { getProjects, createProject as apiCreateProject, updateProjectLocalPath } from '../lib/api';
 import type { SupabaseConfig } from '../lib/api';
 
 interface Project {
@@ -44,7 +44,12 @@ export function useProjects(userId: string | undefined) {
     return project.id;
   }
 
+  async function updateLocalPath(projectId: string, localPath: string) {
+    await updateProjectLocalPath(projectId, localPath);
+    await loadProjects();
+  }
+
   const current = projects.find(p => p.id === currentId) || null;
 
-  return { projects, current, loading, switchProject, createProject };
+  return { projects, current, loading, switchProject, createProject, updateLocalPath };
 }
