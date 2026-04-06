@@ -473,7 +473,7 @@ function IdleDetail({
 }) {
   const modal = useModal();
   const ownArtifacts = useArtifacts(task.id, projectId);
-  const prevArtifacts = useArtifacts(prevTaskId || null);
+  const prevArtifacts = useArtifacts(prevTaskId || null, projectId);
   const [showComplete, setShowComplete] = useState(false);
   const [completeNote, setCompleteNote] = useState('');
   const completeInputRef = useRef<HTMLInputElement>(null);
