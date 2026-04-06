@@ -52,7 +52,9 @@ export function MdField({ value, onChange, placeholder, className, minHeight, re
       <div
         className={`${s.previewEmpty} ${className || ''}`}
         style={minHeight ? { minHeight } : undefined}
+        tabIndex={0}
         onClick={() => setEditing(true)}
+        onFocus={() => setEditing(true)}
       >
         {placeholder || 'Click to edit...'}
       </div>
@@ -63,7 +65,9 @@ export function MdField({ value, onChange, placeholder, className, minHeight, re
     <div
       className={`${s.preview} ${className || ''}`}
       style={minHeight ? { minHeight } : undefined}
+      tabIndex={0}
       onClick={() => setEditing(true)}
+      onFocus={() => setEditing(true)}
     >
       <Markdown remarkPlugins={[remarkGfm]}>{value}</Markdown>
     </div>
