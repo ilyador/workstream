@@ -23,7 +23,9 @@ export function useNotifications(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId) return;
-    load();
+    queueMicrotask(() => {
+      void load();
+    });
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
   }, [userId, load]);

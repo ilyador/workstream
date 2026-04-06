@@ -1,26 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getJobs } from '../lib/api';
+import type { JobRecord } from '../components/job-types';
 import { subscribeProjectEvents } from './useProjectEvents';
 
-interface Job {
-  id: string;
-  task_id: string;
-  project_id: string;
-  status: string;
-  current_phase: string | null;
-  attempt: number;
-  max_attempts: number;
-  phases_completed: any[];
-  question: string | null;
-  answer: string | null;
-  review_result: any;
-  flow_snapshot: any;
-  started_at: string;
-  completed_at: string | null;
-}
-
 export function useJobs(projectId: string | null) {
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -33,7 +17,9 @@ export function useJobs(projectId: string | null) {
   }, [projectId]);
 
   useEffect(() => {
-    load();
+    queueMicrotask(() => {
+      void load();
+    });
     if (!projectId) return;
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if (event.type === 'job_changed' && event.job) {

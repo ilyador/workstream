@@ -23,8 +23,8 @@ export function AuthGate({ onAuth }: Props) {
       } else {
         await onAuth('signIn', email, password);
       }
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }

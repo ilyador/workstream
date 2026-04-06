@@ -2,7 +2,7 @@ import { useState } from 'react';
 import s from './ArtifactConnector.module.css';
 import { useArtifacts } from '../hooks/useArtifacts';
 import { getFileIcon } from '../lib/file-utils';
-import { useFilePreview } from './FilePreview';
+import { useFilePreview } from './filePreviewContext';
 
 interface Props {
   taskId: string;  // The producing task's ID

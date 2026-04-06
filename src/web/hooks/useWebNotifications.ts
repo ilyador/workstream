@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 const DISMISS_KEY = 'workstream-notif-dismissed';
 const DISMISS_DAYS = 7; // Re-show prompt after this many days
@@ -16,12 +16,6 @@ export function useWebNotifications() {
     typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   );
   const [dismissed, setDismissed] = useState(isDismissed);
-
-  useEffect(() => {
-    if (typeof Notification !== 'undefined') {
-      setPermission(Notification.permission);
-    }
-  }, []);
 
   const requestPermission = useCallback(async () => {
     if (typeof Notification === 'undefined') return;

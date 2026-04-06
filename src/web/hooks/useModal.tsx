@@ -1,17 +1,6 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Modal } from '../components/Modal';
-
-interface ConfirmOpts {
-  label?: string;
-  danger?: boolean;
-}
-
-interface ModalContextValue {
-  alert: (title: string, message: string) => Promise<void>;
-  confirm: (title: string, message: string, opts?: ConfirmOpts) => Promise<boolean>;
-}
-
-const ModalContext = createContext<ModalContextValue | null>(null);
+import { ModalContext, type ConfirmOpts } from './modal-context';
 
 interface ModalState {
   title: string;
@@ -23,9 +12,9 @@ interface ModalState {
 
 export function ModalProvider({ children }: { children: React.ReactNode }) {
   const [modal, setModal] = useState<ModalState | null>(null);
-  const resolveRef = useRef<((value: any) => void) | null>(null);
+  const resolveRef = useRef<((value: boolean | undefined) => void) | null>(null);
 
-  const close = useCallback((result: any) => {
+  const close = useCallback((result: boolean | undefined) => {
     resolveRef.current?.(result);
     resolveRef.current = null;
     setModal(null);
@@ -33,14 +22,14 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
 
   const alert = useCallback((title: string, message: string): Promise<void> => {
     return new Promise((resolve) => {
-      resolveRef.current = resolve;
+      resolveRef.current = () => resolve();
       setModal({ title, message, type: 'alert' });
     });
   }, []);
 
   const confirm = useCallback((title: string, message: string, opts?: ConfirmOpts): Promise<boolean> => {
     return new Promise((resolve) => {
-      resolveRef.current = resolve;
+      resolveRef.current = (value) => resolve(Boolean(value));
       setModal({
         title,
         message,
@@ -65,10 +54,4 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
       />
     </ModalContext.Provider>
   );
-}
-
-export function useModal(): ModalContextValue {
-  const ctx = useContext(ModalContext);
-  if (!ctx) throw new Error('useModal must be used within ModalProvider');
-  return ctx;
 }

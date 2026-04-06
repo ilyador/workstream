@@ -261,6 +261,11 @@ export function Header({
       )}
 
       <div className={s.right}>
+        {milestone.tasksTotal > 0 && (
+          <span className={s.milestone}>
+            {milestone.name}: {milestone.tasksDone}/{milestone.tasksTotal}
+          </span>
+        )}
         {onUpdateLocalPath && (editingPath ? (
           <input
             className={s.localPathInput}

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getTasks, createTask as apiCreateTask, updateTask as apiUpdateTask, deleteTask as apiDeleteTask } from '../lib/api';
 import { subscribeProjectEvents } from './useProjectEvents';
 
-interface Task {
+export interface TaskRecord {
   id: string;
   project_id: string;
   title: string;
@@ -23,10 +23,11 @@ interface Task {
   completed_at: string | null;
   created_by: string | null;
   flow_id: string | null;
+  chaining?: string;
 }
 
 export function useTasks(projectId: string | null) {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,8 +37,8 @@ export function useTasks(projectId: string | null) {
       const data = await getTasks(projectId);
       setTasks(data);
       setError(null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load tasks');
     } finally {
       setLoading(false);
     }
@@ -67,7 +68,7 @@ export function useTasks(projectId: string | null) {
     return unsub;
   }, [projectId, load]);
 
-  async function createTask(data: { title: string; project_id: string; [key: string]: any }) {
+  async function createTask(data: Parameters<typeof apiCreateTask>[0]) {
     await apiCreateTask(data);
     await load();
   }

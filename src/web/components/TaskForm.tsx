@@ -19,11 +19,6 @@ interface Member {
   initials: string;
 }
 
-interface TaskOption {
-  id: string;
-  title: string;
-}
-
 interface CustomType {
   id: string;
   name: string;
@@ -66,7 +61,6 @@ export interface EditTaskData {
 interface Props {
   workstreams: Workstream[];
   members: Member[];
-  existingTasks: TaskOption[];
   flows?: Flow[];
   customTypes?: CustomType[];
   onSaveCustomType?: (name: string, pipeline: string) => Promise<void>;
@@ -86,7 +80,7 @@ const PIPELINE_OPTIONS = [
   { value: 'test', label: 'test (plan → write-tests → verify → review)' },
 ];
 
-export function TaskForm({ workstreams, members, existingTasks, flows = [], customTypes = [], onSaveCustomType, localPath, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
+export function TaskForm({ workstreams, members, flows = [], customTypes = [], onSaveCustomType, localPath, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
   const isEdit = !!editTask;
 
   // Determine if the editTask type is a custom (non-built-in) type
@@ -98,7 +92,12 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
   const [description, setDescription] = useState(editTask?.description || '');
   const [type, setType] = useState(editTypeIsSavedCustom ? editTask!.type : (editTypeIsCustom ? 'feature' : (editTask?.type || 'feature')));
   const [customType, setCustomType] = useState(editTypeIsCustom && !editTypeIsSavedCustom ? editTask!.type : '');
-  const [customPipeline, setCustomPipeline] = useState('feature');
+  const [customPipeline, setCustomPipeline] = useState(() => {
+    if (editTypeIsSavedCustom) {
+      return customTypes.find(ct => ct.name === editTask!.type)?.pipeline || 'feature';
+    }
+    return 'feature';
+  });
   const [isCustomType, setIsCustomType] = useState(editTypeIsCustom && !editTypeIsSavedCustom);
   const [mode, setMode] = useState(editTask?.mode || 'ai');
   const [effort, setEffort] = useState(editTask?.effort || 'max');
@@ -261,8 +260,8 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
         chaining,
       });
       onClose();
-    } catch (err: any) {
-      setError(err.message || (isEdit ? 'Failed to save task' : 'Failed to create task'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : (isEdit ? 'Failed to save task' : 'Failed to create task'));
     } finally {
       setLoading(false);
     }
@@ -296,7 +295,7 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
               renderTextarea={(stopEditing) => (
                 <textarea
                   ref={el => {
-                    (textareaRef as any).current = el;
+                    textareaRef.current = el;
                     if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
                   }}
                   className={mdStyles.textarea}
@@ -362,6 +361,18 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
                     onChange={e => setCustomType(e.target.value)}
                     autoFocus
                   />
+                  <select
+                    className={s.select}
+                    value={customPipeline}
+                    onChange={e => setCustomPipeline(e.target.value)}
+                    aria-label="Custom type pipeline"
+                  >
+                    {PIPELINE_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
                     className={s.customTypeCancel}
@@ -372,6 +383,9 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
               ) : (
                 <select className={s.select} value={type} onChange={e => {
                   if (e.target.value === '__custom__') {
+                    setCustomPipeline(
+                      PIPELINE_OPTIONS.some(option => option.value === type) ? type : 'feature'
+                    );
                     setIsCustomType(true);
                   } else {
                     setType(e.target.value);

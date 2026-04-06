@@ -10,7 +10,7 @@ import { useCommentCounts } from './hooks/useCommentCounts';
 import { useWebNotifications } from './hooks/useWebNotifications';
 import { useFlows } from './hooks/useFlows';
 import { useCustomTypes } from './hooks/useCustomTypes';
-import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, reworkJob, revertJob, terminateJob, deleteJob, moveToBacklog, continueJob, updateTask, updateWorkstream as apiUpdateWorkstream, updateFlow as apiUpdateFlow, updateFlowSteps as apiUpdateFlowSteps, reviewAndCreatePr, createWorkstreamPr } from './lib/api';
+import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, reworkJob, terminateJob, deleteJob, moveToBacklog, continueJob, updateTask, updateWorkstream as apiUpdateWorkstream, updateFlow as apiUpdateFlow, reviewAndCreatePr, createWorkstreamPr } from './lib/api';
 import { Routes, Route, useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
@@ -18,12 +18,12 @@ import { NewProject } from './components/NewProject';
 import { Header } from './components/Header';
 import { Board } from './components/Board';
 import { ArchivePage } from './components/ArchivePage';
-import type { JobView } from './components/job-types';
+import type { CompletedPhaseRecord, FlowSnapshotRecord, JobView } from './components/job-types';
 import { TaskForm, type EditTaskData } from './components/TaskForm';
 import { AddProjectModal } from './components/AddProjectModal';
 import { MembersModal } from './components/MembersModal';
 import { FlowEditor2 } from './components/FlowEditor2';
-import { useModal } from './hooks/useModal';
+import { useModal } from './hooks/modal-context';
 import './styles/global.css';
 
 import { timeAgo } from './lib/time';
@@ -53,17 +53,27 @@ function cleanSummary(raw: string): string {
     .trim();
 }
 
-function buildPhases(phasesCompleted: any[], currentPhase: string | null, taskType: string, flowSnapshot?: any): { name: string; status: string; summary?: string }[] {
+function getErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+function buildPhases(
+  phasesCompleted: Array<string | CompletedPhaseRecord>,
+  currentPhase: string | null,
+  taskType: string,
+  flowSnapshot?: FlowSnapshotRecord | null,
+): { name: string; status: string; summary?: string }[] {
   const completedMap = new Map<string, string>();
-  for (const p of (phasesCompleted || [])) {
-    const name = typeof p === 'string' ? p : p.name || p.phase;
+  for (const p of phasesCompleted) {
+    const name = typeof p === 'string' ? p : p.name || p.phase || '';
+    if (!name) continue;
     const summary = typeof p === 'string' ? '' : p.summary || '';
     completedMap.set(name, summary);
   }
   // Use flow_snapshot steps if available, otherwise fall back to legacy type mapping
-  const allPhases = flowSnapshot?.steps
-    ? flowSnapshot.steps.map((s: any) => s.name)
-    : (TASK_TYPE_PHASES[taskType] || TASK_TYPE_PHASES['feature']);
+  const allPhases = flowSnapshot?.steps?.map(step => step.name)
+    || TASK_TYPE_PHASES[taskType]
+    || TASK_TYPE_PHASES.feature;
 
   return allPhases.map((name: string) => {
     if (completedMap.has(name)) return { name, status: 'completed', summary: completedMap.get(name) || undefined };
@@ -94,6 +104,8 @@ export default function App() {
   const [searchParams, setSearchParams] = useSearchParams();
   const focusTaskId = searchParams.get('task');
   const focusWsId = searchParams.get('ws');
+  const { notify } = webNotifs;
+  const currentProjectName = projects.current?.name || null;
 
   // Compute which tasks have unread @mentions
   const mentionedTaskIds = useMemo(() => {
@@ -138,38 +150,38 @@ export default function App() {
         const title = taskTitleMap[job.task_id] || 'Task';
         // Failed notifications fire even on first sight (no oldStatus guard)
         if (job.status === 'failed') {
-          webNotifs.notify('Task failed', `${title}: ${job.question || 'unknown error'}`);
+          notify('Task failed', `${title}: ${job.question || 'unknown error'}`);
         } else if (oldStatus) {
           // Other notifications only fire on status transitions (not initial load)
           if (job.status === 'paused') {
-            webNotifs.notify('Question asked', `${title} needs your input`);
+            notify('Question asked', `${title} needs your input`);
           } else if (job.status === 'done') {
-            webNotifs.notify('Task completed', `${title} finished successfully`);
+            notify('Task completed', `${title} finished successfully`);
           }
         }
       }
       prev[job.id] = job.status;
     }
-  }, [jobs.jobs, taskTitleMap, webNotifs.notify]);
+  }, [jobs.jobs, notify, taskTitleMap]);
 
   useEffect(() => {
     const prev = prevTaskStatuses.current;
     for (const task of tasks.tasks) {
       const oldStatus = prev[task.id];
       if (oldStatus && oldStatus !== task.status && task.status === 'review') {
-        webNotifs.notify('Ready for review', `${task.title} is ready for review`);
+        notify('Ready for review', `${task.title} is ready for review`);
       }
       prev[task.id] = task.status;
     }
-  }, [tasks.tasks, webNotifs.notify]);
+  }, [notify, tasks.tasks]);
 
   // Tick removed — elapsed is now computed locally inside TaskCard
 
   useEffect(() => {
-    document.title = projects.current?.name
-      ? `${projects.current.name} - WorkStream`
+    document.title = currentProjectName
+      ? `${currentProjectName} - WorkStream`
       : 'WorkStream';
-  }, [projects.current?.name]);
+  }, [currentProjectName]);
 
   // Build a member lookup from project members
   const memberMap = useMemo(() => {
@@ -215,7 +227,7 @@ export default function App() {
       question: j.question || undefined,
       review: j.review_result ? {
         filesChanged: j.review_result.files_changed ?? j.review_result.filesChanged ?? 0,
-        testsPassed: j.review_result.tests_passed ?? j.review_result.testsPassed ?? true,
+        testsPassed: j.review_result.tests_passed ?? j.review_result.testsPassed,
         linesAdded: j.review_result.lines_added ?? j.review_result.linesAdded ?? 0,
         linesRemoved: j.review_result.lines_removed ?? j.review_result.linesRemoved ?? 0,
         summary: cleanSummary(j.review_result.summary ?? ''),
@@ -334,6 +346,91 @@ export default function App() {
     tasksTotal: wsTasks.length,
   };
 
+  const handleSwapWorkstreams = (draggedId: string, targetId: string) => {
+    const dragged = workstreams.workstreams.find(w => w.id === draggedId);
+    const target = workstreams.workstreams.find(w => w.id === targetId);
+    if (!dragged || !target) return;
+
+    const draggedPosition = dragged.position;
+    const targetPosition = target.position;
+
+    workstreams.setWorkstreams(prev => prev.map(w => {
+      if (w.id === draggedId) return { ...w, position: targetPosition };
+      if (w.id === targetId) return { ...w, position: draggedPosition };
+      return w;
+    }));
+
+    void (async () => {
+      try {
+        await Promise.all([
+          apiUpdateWorkstream(draggedId, { position: targetPosition }),
+          apiUpdateWorkstream(targetId, { position: draggedPosition }),
+        ]);
+      } catch (err) {
+        workstreams.setWorkstreams(prev => prev.map(w => {
+          if (w.id === draggedId) return { ...w, position: draggedPosition };
+          if (w.id === targetId) return { ...w, position: targetPosition };
+          return w;
+        }));
+        await workstreams.reload();
+        await modal.alert('Error', getErrorMessage(err, 'Failed to reorder workstreams'));
+      }
+    })();
+  };
+
+  const handleMoveTask = (taskId: string, workstreamId: string | null, newPosition: number) => {
+    const originalTask = tasks.tasks.find(t => t.id === taskId);
+    if (!originalTask) return;
+
+    tasks.setTasks(prev => prev.map(t =>
+      t.id === taskId ? { ...t, workstream_id: workstreamId, position: newPosition } : t
+    ));
+
+    void (async () => {
+      try {
+        await updateTask(taskId, { workstream_id: workstreamId, position: newPosition });
+      } catch (err) {
+        tasks.setTasks(prev => prev.map(t => (
+          t.id === taskId ? originalTask : t
+        )));
+        await tasks.reload();
+        await modal.alert('Error', getErrorMessage(err, 'Failed to move task'));
+      }
+    })();
+  };
+
+  const handleSwapFlows = (draggedId: string, targetId: string) => {
+    const dragged = aiFlows.flows.find(f => f.id === draggedId);
+    const target = aiFlows.flows.find(f => f.id === targetId);
+    if (!dragged || !target) return;
+
+    const draggedPosition = dragged.position;
+    const targetPosition = target.position;
+
+    aiFlows.setFlows(prev => prev.map(f => {
+      if (f.id === draggedId) return { ...f, position: targetPosition };
+      if (f.id === targetId) return { ...f, position: draggedPosition };
+      return f;
+    }).sort((a, b) => a.position - b.position));
+
+    void (async () => {
+      try {
+        await Promise.all([
+          apiUpdateFlow(draggedId, { position: targetPosition }),
+          apiUpdateFlow(targetId, { position: draggedPosition }),
+        ]);
+      } catch (err) {
+        aiFlows.setFlows(prev => prev.map(f => {
+          if (f.id === draggedId) return { ...f, position: draggedPosition };
+          if (f.id === targetId) return { ...f, position: targetPosition };
+          return f;
+        }).sort((a, b) => a.position - b.position));
+        await aiFlows.reload();
+        await modal.alert('Error', getErrorMessage(err, 'Failed to reorder flows'));
+      }
+    })();
+  };
+
   return (
     <>
       {webNotifs.showPrompt && (
@@ -362,7 +459,7 @@ export default function App() {
 
       <Header
         projectName={projects.current?.name || ''}
-        localPath={projects.current?.local_path}
+        localPath={projects.current?.local_path ?? undefined}
         milestone={wsProgress}
         notifications={notifs.unreadCount}
         notificationList={notifs.notifications}
@@ -406,18 +503,7 @@ export default function App() {
               await workstreams.deleteWorkstream(id);
               tasks.reload();
             }}
-            onSwapColumns={(draggedId, targetId) => {
-              const dragged = workstreams.workstreams.find(w => w.id === draggedId);
-              const target = workstreams.workstreams.find(w => w.id === targetId);
-              if (!dragged || !target) return;
-              workstreams.setWorkstreams(prev => prev.map(w => {
-                if (w.id === draggedId) return { ...w, position: target.position };
-                if (w.id === targetId) return { ...w, position: dragged.position };
-                return w;
-              }));
-              apiUpdateWorkstream(draggedId, { position: target.position });
-              apiUpdateWorkstream(targetId, { position: dragged.position });
-            }}
+            onSwapColumns={handleSwapWorkstreams}
             onAddTask={(workstreamId) => {
               setTaskFormWorkstream(workstreamId);
               setShowTaskForm(true);
@@ -438,8 +524,8 @@ export default function App() {
                 await runTaskApi(wsTasks[0].id, projects.current.id, projects.current.local_path, true);
                 jobs.reload();
                 tasks.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to start workstream');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to start workstream'));
               }
             }}
             onRunTask={async (taskId) => {
@@ -451,8 +537,8 @@ export default function App() {
                 await runTaskApi(taskId, projects.current.id, projects.current.local_path, false);
                 jobs.reload();
                 tasks.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to start task');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to start task'));
               }
             }}
             onEditTask={(task) => {
@@ -480,12 +566,7 @@ export default function App() {
             onUpdateTask={async (taskId, data) => {
               await tasks.updateTask(taskId, data);
             }}
-            onMoveTask={(taskId, workstreamId, newPosition) => {
-              tasks.setTasks(prev => prev.map(t =>
-                t.id === taskId ? { ...t, workstream_id: workstreamId, position: newPosition } : t
-              ));
-              updateTask(taskId, { workstream_id: workstreamId, position: newPosition });
-            }}
+            onMoveTask={handleMoveTask}
             onTerminate={async (jobId) => {
               if (await modal.confirm('Terminate job', 'Terminate this running job?', { label: 'Terminate', danger: true })) {
                 await terminateJob(jobId);
@@ -498,8 +579,8 @@ export default function App() {
                 await replyToJob(jobId, answer, projects.current?.local_path || '');
                 jobs.reload();
                 tasks.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to send reply');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to send reply'));
               }
             }}
             onApprove={async (jobId) => {
@@ -507,8 +588,8 @@ export default function App() {
                 await approveJob(jobId);
                 jobs.reload();
                 tasks.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to approve');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to approve'));
               }
             }}
             onReject={async (jobId) => {
@@ -516,8 +597,8 @@ export default function App() {
                 await rejectJob(jobId);
                 jobs.reload();
                 tasks.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to reject');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to reject'));
               }
             }}
             onRework={async (jobId, note) => {
@@ -525,16 +606,16 @@ export default function App() {
                 await reworkJob(jobId, note, projects.current!.id, projects.current!.local_path!);
                 jobs.reload();
                 tasks.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to rework');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to rework'));
               }
             }}
             onDeleteJob={async (jobId) => {
               try {
                 await deleteJob(jobId);
                 jobs.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to dismiss job');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to dismiss job'));
               }
             }}
             onMoveToBacklog={async (jobId) => {
@@ -542,8 +623,8 @@ export default function App() {
                 await moveToBacklog(jobId);
                 jobs.reload();
                 tasks.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to move to backlog');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to move to backlog'));
               }
             }}
             onContinue={async (jobId) => {
@@ -551,8 +632,8 @@ export default function App() {
                 await continueJob(jobId);
                 jobs.reload();
                 tasks.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to continue job');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to continue job'));
               }
             }}
             onCreatePr={async (workstreamId, opts) => {
@@ -563,8 +644,8 @@ export default function App() {
                   const result = await createWorkstreamPr(workstreamId, projects.current?.local_path || '');
                   if (result.prUrl) workstreams.reload();
                 }
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed');
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed'));
               }
             }}
           />
@@ -590,18 +671,7 @@ export default function App() {
               onSaveSteps={async (flowId, steps) => { await aiFlows.updateFlowSteps(flowId, steps); await aiFlows.reload(); }}
               onCreateFlow={async (data) => { return await aiFlows.createFlow(data); }}
               onDeleteFlow={async (flowId) => { await aiFlows.deleteFlow(flowId); }}
-              onSwapColumns={(draggedId, targetId) => {
-                const dragged = aiFlows.flows.find(f => f.id === draggedId);
-                const target = aiFlows.flows.find(f => f.id === targetId);
-                if (!dragged || !target) return;
-                aiFlows.setFlows(prev => prev.map(f => {
-                  if (f.id === draggedId) return { ...f, position: target.position };
-                  if (f.id === targetId) return { ...f, position: dragged.position };
-                  return f;
-                }).sort((a, b) => a.position - b.position));
-                apiUpdateFlow(draggedId, { position: target.position });
-                apiUpdateFlow(targetId, { position: dragged.position });
-              }}
+              onSwapColumns={handleSwapFlows}
             />
           ) : <div />
         } />
@@ -609,7 +679,7 @@ export default function App() {
 
       {showTaskForm && projects.current && (
         <TaskForm
-          localPath={projects.current?.local_path}
+          localPath={projects.current?.local_path ?? undefined}
           workstreams={workstreams.active.map(w => ({ id: w.id, name: w.name }))}
           defaultWorkstreamId={taskFormWorkstream}
           members={members.members.map(m => ({ id: m.id, name: m.name, initials: m.initials }))}
@@ -618,18 +688,14 @@ export default function App() {
           onSaveCustomType={async (name, pipeline) => {
             await customTypes.addType(name, pipeline);
           }}
-          existingTasks={tasks.tasks
-            .filter(t => t.status !== 'done' && t.status !== 'canceled')
-            .map(t => ({ id: t.id, title: t.title }))
-          }
           onSubmit={async (data) => {
             await tasks.createTask({
               project_id: projects.current!.id,
               title: data.title,
               description: data.description,
               type: data.type,
-              mode: data.mode as any,
-              effort: data.effort as any,
+              mode: data.mode,
+              effort: data.effort,
               multiagent: data.multiagent,
               assignee: data.assignee,
               flow_id: data.flow_id,
@@ -646,7 +712,7 @@ export default function App() {
 
       {editingTask && projects.current && (
         <TaskForm
-          localPath={projects.current?.local_path}
+          localPath={projects.current?.local_path ?? undefined}
           workstreams={workstreams.active.map(w => ({ id: w.id, name: w.name }))}
           members={members.members.map(m => ({ id: m.id, name: m.name, initials: m.initials }))}
           flows={aiFlows.flows}
@@ -654,10 +720,6 @@ export default function App() {
           onSaveCustomType={async (name, pipeline) => {
             await customTypes.addType(name, pipeline);
           }}
-          existingTasks={tasks.tasks
-            .filter(t => t.status !== 'done' && t.status !== 'canceled' && t.id !== editingTask.id)
-            .map(t => ({ id: t.id, title: t.title }))
-          }
           editTask={editingTask}
           onSubmit={async (data) => {
             await tasks.updateTask(editingTask.id, {

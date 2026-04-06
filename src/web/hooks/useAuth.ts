@@ -26,13 +26,13 @@ export function useAuth() {
   const [loggedIn, setLoggedIn] = useState(hasToken);
 
   useEffect(() => {
-    if (!getToken()) { setLoading(false); return; }
+    if (!getToken()) return;
 
     getMe()
       .then(data => {
         setProfile(data.profile);
         setLoggedIn(true);
-        try { sessionStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data.profile)); } catch {}
+        try { sessionStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(data.profile)); } catch { /* ignore storage errors */ }
       })
       .catch(() => {
         clearSession();
