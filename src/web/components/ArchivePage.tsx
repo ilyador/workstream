@@ -53,7 +53,22 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
     return map;
   }, [jobs]);
 
-  if (workstreams.length === 0) {
+  const completedBacklogTasks = useMemo(() => {
+    return tasks
+      .filter(t => !(t as any).workstream_id && t.status === 'done')
+      .map(t => {
+        const member = (t as any).assignee ? memberMap[(t as any).assignee] : null;
+        return {
+          ...t,
+          assignee: member
+            ? { type: 'user', name: member.name, initials: member.initials }
+            : (t as any).assignee ? { type: 'ai' } : null,
+        };
+      })
+      .sort((a, b) => ((a as any).position || 0) - ((b as any).position || 0));
+  }, [tasks, memberMap]);
+
+  if (workstreams.length === 0 && completedBacklogTasks.length === 0) {
     return (
       <div className={s.empty}>
         <span>No archived workstreams</span>
@@ -63,6 +78,25 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
 
   return (
     <div className={s.archive}>
+      {completedBacklogTasks.length > 0 && (
+        <div className={s.columnWrap}>
+          <WorkstreamColumn
+            workstream={null}
+            tasks={completedBacklogTasks}
+            taskJobMap={taskJobMap}
+            isBacklog
+            canRunAi={false}
+            projectId={projectId}
+            mentionedTaskIds={emptySet}
+            focusTaskId={null}
+            draggedTaskId={null}
+            onDragTaskStart={noop}
+            onDragTaskEnd={noop}
+            onDropTask={noop}
+            onAddTask={noop}
+          />
+        </div>
+      )}
       {workstreams.map(ws => {
         const wsTasks = tasks
           .filter(t => (t as any).workstream_id === ws.id)

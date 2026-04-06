@@ -55,6 +55,7 @@ interface TaskCardProps {
   dragDisabled?: boolean;
   skipDragGhost?: boolean;
   showPriority?: boolean;
+  isBacklog?: boolean;
   projectId?: string;
   hasUnreadMention?: boolean;
   commentCount?: number;
@@ -97,6 +98,7 @@ export function TaskCard({
   dragDisabled,
   skipDragGhost,
   showPriority,
+  isBacklog,
   projectId,
   hasUnreadMention,
   commentCount = 0,
@@ -423,6 +425,7 @@ export function TaskCard({
             <IdleDetail
               task={task}
               canRunAi={canRunAi}
+              isBacklog={isBacklog}
               projectId={projectId}
               onRun={onRun}
               onEdit={onEdit}
@@ -444,6 +447,7 @@ export function TaskCard({
 function IdleDetail({
   task,
   canRunAi,
+  isBacklog,
   projectId,
   onRun,
   onEdit,
@@ -456,6 +460,7 @@ function IdleDetail({
 }: {
   task: TaskCardProps['task'];
   canRunAi: boolean;
+  isBacklog?: boolean;
   projectId?: string;
   onRun?: (taskId: string) => void;
   onEdit?: () => void;
@@ -469,6 +474,13 @@ function IdleDetail({
   const modal = useModal();
   const ownArtifacts = useArtifacts(task.id);
   const prevArtifacts = useArtifacts(prevTaskId || null);
+  const [showComplete, setShowComplete] = useState(false);
+  const [completeNote, setCompleteNote] = useState('');
+  const completeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showComplete) completeInputRef.current?.focus();
+  }, [showComplete]);
 
   // Chaining completion rules
   const chaining = task.chaining || 'none';
@@ -522,6 +534,15 @@ function IdleDetail({
           )}
         </div>
         <div className={s.actionsRight}>
+          {isBacklog && onUpdateTask && (
+            <button
+              className="btn btnGhost btnSm"
+              style={{ color: 'var(--green)' }}
+              onClick={() => setShowComplete(v => !v)}
+              disabled={completionBlocked}
+              title={blockReason || 'Mark as complete'}
+            >Complete</button>
+          )}
           {onEdit && (
             <button className="btn btnGhost btnSm" onClick={onEdit}>Edit</button>
           )}
@@ -534,6 +555,41 @@ function IdleDetail({
           )}
         </div>
       </div>
+
+      {showComplete && onUpdateTask && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <input
+            ref={completeInputRef}
+            style={{
+              flex: 1, padding: '4px 10px', background: 'var(--white)', border: '1.5px solid var(--divider)',
+              borderRadius: 6, fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', outline: 'none',
+            }}
+            value={completeNote}
+            onChange={e => setCompleteNote(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && completeNote.trim()) {
+                if (completeNote.trim()) commentsData.addComment(`Completed: ${completeNote.trim()}`);
+                onUpdateTask(task.id, { status: 'done' });
+                setShowComplete(false);
+                setCompleteNote('');
+              }
+              if (e.key === 'Escape') { setShowComplete(false); setCompleteNote(''); }
+            }}
+            placeholder="Completion status..."
+          />
+          <button
+            className="btn btnSuccess btnSm"
+            style={{ padding: '3px 10px', fontSize: 11 }}
+            disabled={!completeNote.trim()}
+            onClick={() => {
+              if (completeNote.trim()) commentsData.addComment(`Completed: ${completeNote.trim()}`);
+              onUpdateTask(task.id, { status: 'done' });
+              setShowComplete(false);
+              setCompleteNote('');
+            }}
+          >Submit</button>
+        </div>
+      )}
 
       {!hideComments && <CardComments data={commentsData} projectId={projectId} />}
     </>

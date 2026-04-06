@@ -757,6 +757,7 @@ export function WorkstreamColumn({
                             task={gt}
                             job={job}
                             canRunAi={canRunAi}
+                            isBacklog={isBacklog}
                             showPriority={isBacklog}
                             projectId={projectId || undefined}
                             hasUnreadMention={mentionedTaskIds.has(gt.id)}
@@ -814,6 +815,7 @@ export function WorkstreamColumn({
                     task={task}
                     job={job}
                     canRunAi={canRunAi}
+                    isBacklog={isBacklog}
                     showPriority={isBacklog}
                     projectId={projectId || undefined}
                     hasUnreadMention={mentionedTaskIds.has(task.id)}
