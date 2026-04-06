@@ -8,7 +8,7 @@ import { ProjectTaskDialogs } from './ProjectTaskDialogs';
 import type { EditTaskData, TaskFormData } from './TaskForm';
 import { AddProjectModal } from './AddProjectModal';
 import { MembersModal } from './MembersModal';
-import { FlowEditor2 } from './FlowEditor2';
+import { FlowEditor } from './FlowEditor';
 import type { JobView } from './job-types';
 import appStyles from '../App.module.css';
 
@@ -262,7 +262,7 @@ export function ProjectWorkspace({
           />
         } />
         <Route path="/flows" element={
-          <FlowEditor2
+          <FlowEditor
             flows={flows}
             setFlows={setFlows}
             projectId={project.id}

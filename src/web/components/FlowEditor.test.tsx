@@ -2,7 +2,7 @@
 
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { FlowEditor2 } from './FlowEditor2';
+import { FlowEditor } from './FlowEditor';
 import { ModalContext, type ModalContextValue } from '../hooks/modal-context';
 import type { Flow } from '../lib/api';
 
@@ -67,11 +67,11 @@ const modalValue: ModalContextValue = {
   confirm: vi.fn().mockResolvedValue(false),
 };
 
-describe('FlowEditor2 flow step rendering', () => {
+describe('FlowEditor flow step rendering', () => {
   it('renders flow steps without mounting task-only comments or artifact hooks', () => {
     render(
       <ModalContext.Provider value={modalValue}>
-        <FlowEditor2
+        <FlowEditor
           flows={[makeFlow()]}
           setFlows={vi.fn()}
           onSave={vi.fn().mockResolvedValue(undefined)}
