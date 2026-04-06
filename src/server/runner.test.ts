@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { execFileSync } from 'child_process';
 
 // Mock supabase before importing runner
 vi.mock('./supabase.js', () => {
@@ -365,5 +366,105 @@ describe('artifact production without code changes', () => {
 
     // Verify log output
     expect(logs.some(l => l.includes('Captured: compliance-report.md'))).toBe(true);
+  });
+
+  it('DB record has correct structure for produced artifact', async () => {
+    const artifactsDir = join(tempDir, '.artifacts');
+    mkdirSync(artifactsDir, { recursive: true });
+    const content = '# Architecture\n\nOverview of the system.';
+    writeFileSync(join(artifactsDir, 'architecture.md'), content);
+
+    await scanAndUploadArtifacts(tempDir, 'task-042', 'job-099', 'document', () => {});
+
+    const fromMock = supabase.from as ReturnType<typeof vi.fn>;
+    const artifactCalls = fromMock.mock.calls.filter((c: any[]) => c[0] === 'task_artifacts');
+    expect(artifactCalls).toHaveLength(1);
+
+    // Get the insert mock and verify the payload
+    const insertMock = fromMock.mock.results.find(
+      (_r: any, i: number) => fromMock.mock.calls[i][0] === 'task_artifacts',
+    )?.value.insert as ReturnType<typeof vi.fn>;
+    expect(insertMock).toHaveBeenCalledTimes(1);
+
+    const record = insertMock.mock.calls[0][0];
+    expect(record).toEqual({
+      task_id: 'task-042',
+      job_id: 'job-099',
+      phase: 'document',
+      filename: 'architecture.md',
+      mime_type: 'text/markdown',
+      size_bytes: Buffer.byteLength(content),
+      storage_path: 'proj-123/task-042/architecture.md',
+    });
+  });
+
+  it('uses application/octet-stream for unknown file extensions', async () => {
+    const artifactsDir = join(tempDir, '.artifacts');
+    mkdirSync(artifactsDir, { recursive: true });
+    writeFileSync(join(artifactsDir, 'data.xyz'), 'binary-ish data');
+
+    const logs: string[] = [];
+    await scanAndUploadArtifacts(tempDir, 'task-001', 'job-001', 'implement', (t) => logs.push(t));
+
+    const storageMock = supabase.storage.from as ReturnType<typeof vi.fn>;
+    const uploadMock = storageMock.mock.results[0]?.value.upload as ReturnType<typeof vi.fn>;
+
+    expect(uploadMock).toHaveBeenCalledTimes(1);
+    expect(uploadMock.mock.calls[0][2]).toEqual(
+      expect.objectContaining({ contentType: 'application/octet-stream' }),
+    );
+    expect(logs.some(l => l.includes('application/octet-stream'))).toBe(true);
+  });
+
+  it('continues uploading remaining files when one file fails', async () => {
+    const artifactsDir = join(tempDir, '.artifacts');
+    mkdirSync(artifactsDir, { recursive: true });
+    writeFileSync(join(artifactsDir, 'good.md'), 'good content');
+    writeFileSync(join(artifactsDir, 'bad.md'), 'will fail');
+    writeFileSync(join(artifactsDir, 'also-good.txt'), 'more content');
+
+    // Get the upload mock by invoking the factory and make it fail for 'bad.md'
+    const uploadFn = (supabase.storage.from('task-artifacts') as any).upload as ReturnType<typeof vi.fn>;
+    uploadFn.mockImplementation((path: string) => {
+      if (path.includes('bad.md')) return Promise.reject(new Error('Upload failed'));
+      return Promise.resolve({ data: {}, error: null });
+    });
+
+    const logs: string[] = [];
+    await scanAndUploadArtifacts(tempDir, 'task-001', 'job-001', 'implement', (t) => logs.push(t));
+
+    // The good files should still be captured
+    expect(logs.some(l => l.includes('Captured: good.md'))).toBe(true);
+    expect(logs.some(l => l.includes('Captured: also-good.txt'))).toBe(true);
+    // The bad file should have a failure log
+    expect(logs.some(l => l.includes('Failed to capture bad.md'))).toBe(true);
+  });
+
+  it('captures artifacts in a git repo with a clean working tree', async () => {
+    // Set up a real git repo to verify artifact capture is independent of git state
+    execFileSync('git', ['init'], { cwd: tempDir });
+    execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: tempDir });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: tempDir });
+    writeFileSync(join(tempDir, 'main.ts'), 'console.log("hello")');
+    execFileSync('git', ['add', '.'], { cwd: tempDir });
+    execFileSync('git', ['commit', '-m', 'init'], { cwd: tempDir });
+
+    // git status is now clean — no code changes at all
+    const status = execFileSync('git', ['status', '--porcelain'], { cwd: tempDir, encoding: 'utf-8' }).trim();
+    expect(status).toBe('');
+
+    // Simulate AI writing only to .artifacts/ (no code changes)
+    const artifactsDir = join(tempDir, '.artifacts');
+    mkdirSync(artifactsDir, { recursive: true });
+    writeFileSync(join(artifactsDir, 'report.md'), '# Status Report\n\nEverything is fine.');
+
+    const logs: string[] = [];
+    await scanAndUploadArtifacts(tempDir, 'task-001', 'job-001', 'implement', (t) => logs.push(t));
+
+    const storMock = supabase.storage.from as ReturnType<typeof vi.fn>;
+    const upMock = storMock.mock.results[0]?.value.upload as ReturnType<typeof vi.fn>;
+    expect(upMock).toHaveBeenCalledTimes(1);
+    expect(upMock.mock.calls[0][0]).toBe('proj-123/task-001/report.md');
+    expect(logs.some(l => l.includes('Captured: report.md'))).toBe(true);
   });
 });

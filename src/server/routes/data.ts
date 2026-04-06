@@ -555,6 +555,26 @@ dataRouter.delete('/api/artifacts/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+dataRouter.patch('/api/artifacts/:id', requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const { content } = req.body;
+  if (typeof content !== 'string') return res.status(400).json({ error: 'content (string) is required' });
+
+  const { data: artifact } = await supabase.from('task_artifacts').select('*').eq('id', req.params.id).single();
+  if (!artifact) return res.status(404).json({ error: 'Artifact not found' });
+  const access = await verifyTaskAccess(userId, artifact.task_id);
+  if (!access) return res.status(403).json({ error: 'Not authorized' });
+
+  const buffer = Buffer.from(content, 'utf-8');
+  const { error: uploadErr } = await supabase.storage
+    .from('task-artifacts')
+    .upload(artifact.storage_path, buffer, { contentType: artifact.mime_type, upsert: true });
+  if (uploadErr) return res.status(500).json({ error: `Storage upload failed: ${uploadErr.message}` });
+
+  await supabase.from('task_artifacts').update({ size_bytes: buffer.length }).eq('id', req.params.id);
+  res.json({ ok: true, size_bytes: buffer.length });
+});
+
 // --- Notifications ---
 
 dataRouter.get('/api/notifications', requireAuth, async (req, res) => {

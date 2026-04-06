@@ -347,6 +347,13 @@ export async function deleteArtifact(id: string) {
   return apiFetch(`/api/artifacts/${id}`, { method: 'DELETE' });
 }
 
+export async function updateArtifactContent(id: string, content: string): Promise<{ ok: boolean; size_bytes: number }> {
+  return apiFetch(`/api/artifacts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ content }),
+  });
+}
+
 // --- Notifications ---
 export async function getNotifications() {
   return apiFetch('/api/notifications');

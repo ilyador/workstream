@@ -228,6 +228,48 @@
   margin: 24px 0;
 }
 
+/* Edit button */
+.editBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.editBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.saveBtn {
+  font-size: 12px;
+  padding: 4px 12px;
+}
+
+/* Markdown editor textarea */
+.mdEditor {
+  width: 100%;
+  max-width: 800px;
+  min-height: 100%;
+  padding: 32px;
+  margin: 0;
+  border: none;
+  outline: none;
+  background: var(--white);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.7;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  resize: none;
+  box-sizing: border-box;
+}
+
 /* Code / text */
 .previewCode {
   width: 100%;

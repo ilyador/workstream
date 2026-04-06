@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { formatFileSize } from '../lib/file-utils';
+import { updateArtifactContent } from '../lib/api';
 import s from './FilePreview.module.css';
 
 interface PreviewFile {
+  id?: string;
   url: string;
   filename: string;
   mime_type: string;
@@ -34,7 +36,11 @@ function isPreviewable(mime: string): boolean {
   return PREVIEWABLE.some(p => mime.startsWith(p));
 }
 
-function PreviewContent({ file }: { file: PreviewFile }) {
+function isMdFile(mime: string, filename: string): boolean {
+  return mime === 'text/markdown' || filename.endsWith('.md');
+}
+
+function PreviewContent({ file, editing, onTextChange }: { file: PreviewFile; editing: boolean; onTextChange?: (text: string) => void }) {
   const { mime_type: mime, url, filename } = file;
   const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -45,9 +51,9 @@ function PreviewContent({ file }: { file: PreviewFile }) {
     setLoading(true);
     fetch(url)
       .then(r => r.text())
-      .then(t => { setText(t); setLoading(false); })
+      .then(t => { setText(t); onTextChange?.(t); setLoading(false); })
       .catch(() => { setText('Failed to load file'); setLoading(false); });
-  }, [url, mime]);
+  }, [url, mime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Images
   if (mime.startsWith('image/')) {
@@ -76,8 +82,18 @@ function PreviewContent({ file }: { file: PreviewFile }) {
   }
 
   // Markdown
-  if (mime === 'text/markdown' || filename.endsWith('.md')) {
+  if (isMdFile(mime, filename)) {
     if (loading) return <div className={s.loading}>Loading...</div>;
+    if (editing) {
+      return (
+        <textarea
+          className={s.mdEditor}
+          value={text || ''}
+          onChange={e => { setText(e.target.value); onTextChange?.(e.target.value); }}
+          spellCheck={false}
+        />
+      );
+    }
     return (
       <div className={s.previewMarkdown}>
         <Markdown remarkPlugins={[remarkGfm]}>{text || ''}</Markdown>
@@ -104,16 +120,45 @@ function PreviewContent({ file }: { file: PreviewFile }) {
 
 export function FilePreviewProvider({ children }: { children: React.ReactNode }) {
   const [file, setFile] = useState<PreviewFile | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [contentKey, setContentKey] = useState(0);
+  const textRef = useRef('');
 
   const preview = useCallback((f: PreviewFile) => {
     if (isPreviewable(f.mime_type)) {
       setFile(f);
+      setEditing(false);
+      setDirty(false);
     } else {
       window.open(f.url, '_blank');
     }
   }, []);
 
-  const close = useCallback(() => setFile(null), []);
+  const close = useCallback(() => {
+    setFile(null);
+    setEditing(false);
+    setDirty(false);
+  }, []);
+
+  const handleTextChange = useCallback((text: string) => {
+    textRef.current = text;
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!file?.id || saving) return;
+    setSaving(true);
+    try {
+      await updateArtifactContent(file.id, textRef.current);
+      setDirty(false);
+      setEditing(false);
+    } catch (err) {
+      console.error('Failed to save artifact:', err);
+    } finally {
+      setSaving(false);
+    }
+  }, [file?.id, saving]);
 
   useEffect(() => {
     if (!file) return;
@@ -121,6 +166,8 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [file, close]);
+
+  const canEdit = file ? isMdFile(file.mime_type, file.filename) && !!file.id : false;
 
   return (
     <FilePreviewContext.Provider value={{ preview }}>
@@ -134,6 +181,31 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
                 {file.size_bytes ? <span className={s.size}>{formatFileSize(file.size_bytes)}</span> : null}
               </div>
               <div className={s.headerActions}>
+                {canEdit && !editing && (
+                  <button className={s.editBtn} onClick={() => setEditing(true)} title="Edit">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                )}
+                {editing && (
+                  <>
+                    <button
+                      className={`btn btnPrimary btnSm ${s.saveBtn}`}
+                      onClick={handleSave}
+                      disabled={saving || !dirty}
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      className="btn btnGhost btnSm"
+                      onClick={() => { setEditing(false); setDirty(false); setContentKey(k => k + 1); }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
                 <a href={file.url} download={file.filename} className={s.downloadBtn} title="Download">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
@@ -146,7 +218,15 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
             </div>
             <div className={s.body}>
               {isPreviewable(file.mime_type) ? (
-                <PreviewContent file={file} />
+                <PreviewContent
+                  key={contentKey}
+                  file={file}
+                  editing={editing}
+                  onTextChange={(text) => {
+                    handleTextChange(text);
+                    if (editing) setDirty(true);
+                  }}
+                />
               ) : (
                 <div className={s.unsupported}>
                   <div className={s.unsupportedIcon}>&#128196;</div>
