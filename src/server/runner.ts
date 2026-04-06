@@ -276,7 +276,11 @@ async function buildStepPrompt(
       }
       case 'git_diff': {
         try {
-          const diff = execFileSync('git', ['diff', 'HEAD'], { cwd: localPath, encoding: 'utf-8', timeout: 10000 }).trim();
+          // Stage everything (including new files) so they appear in the diff
+          execFileSync('git', ['add', '-A'], { cwd: localPath, timeout: 5000 });
+          const diff = execFileSync('git', ['diff', '--staged', 'HEAD'], { cwd: localPath, encoding: 'utf-8', timeout: 10000 }).trim();
+          // Unstage so we don't interfere with the working tree
+          execFileSync('git', ['reset'], { cwd: localPath, timeout: 5000 });
           if (diff) {
             prompt += `## Git Diff (changes made)\n\`\`\`diff\n${diff.substring(0, 12000)}\n\`\`\`\n\n`;
           }
@@ -594,8 +598,11 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
   let linesRemoved = 0;
   const changedFiles: string[] = [];
   try {
-    const diffStat = execFileSync('git', ['diff', '--stat', '--cached'], { cwd: localPath, encoding: 'utf-8', timeout: 5000 }).trim();
-    const stat = diffStat || execFileSync('git', ['diff', '--stat'], { cwd: localPath, encoding: 'utf-8', timeout: 5000 }).trim();
+    // Stage everything so new files appear in the stat
+    execFileSync('git', ['add', '-A'], { cwd: localPath, timeout: 5000 });
+    const diffStat = execFileSync('git', ['diff', '--stat', '--staged', 'HEAD'], { cwd: localPath, encoding: 'utf-8', timeout: 5000 }).trim();
+    execFileSync('git', ['reset'], { cwd: localPath, timeout: 5000 });
+    const stat = diffStat;
     const match = stat.match(/(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/);
     if (match) { filesChanged = parseInt(match[1]) || 0; linesAdded = parseInt(match[2]) || 0; linesRemoved = parseInt(match[3]) || 0; }
     const lines = stat.split('\n').slice(0, -1);
@@ -1377,13 +1384,13 @@ export async function runJob(ctx: JobContext): Promise<void> {
   let linesRemoved = 0;
   const changedFiles: string[] = [];
   try {
-    const diffStat = execFileSync('git', ['diff', '--stat', '--cached'], {
+    // Stage everything so new files appear in the stat
+    execFileSync('git', ['add', '-A'], { cwd: localPath, timeout: 5000 });
+    const diffStat = execFileSync('git', ['diff', '--stat', '--staged', 'HEAD'], {
       cwd: localPath, encoding: 'utf-8', timeout: 5000
     }).trim();
-    // If no staged changes, try unstaged
-    const stat = diffStat || execFileSync('git', ['diff', '--stat'], {
-      cwd: localPath, encoding: 'utf-8', timeout: 5000
-    }).trim();
+    execFileSync('git', ['reset'], { cwd: localPath, timeout: 5000 });
+    const stat = diffStat;
 
     // Parse "3 files changed, 28 insertions(+), 12 deletions(-)"
     const match = stat.match(/(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/);
