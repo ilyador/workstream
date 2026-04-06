@@ -751,7 +751,7 @@ export function WorkstreamColumn({
                     const job = taskJobMap[gt.id] || null;
                     return (
                       <React.Fragment key={gt.id}>
-                        {gi > 0 && <ArtifactConnector taskId={groupTasks[gi - 1].id} />}
+                        {gi > 0 && <ArtifactConnector taskId={groupTasks[gi - 1].id} projectId={projectId || undefined} />}
                         <div className={s.cardWrap} data-task-id={gt.id}>
                           <TaskCard
                             task={gt}
@@ -809,7 +809,7 @@ export function WorkstreamColumn({
             const job = taskJobMap[task.id] || null;
             return (
               <div key={task.id}>
-                {showConnector && <ArtifactConnector taskId={prevTask.id} />}
+                {showConnector && <ArtifactConnector taskId={prevTask.id} projectId={projectId || undefined} />}
                 <div className={s.cardWrap} data-task-id={task.id}>
                   <TaskCard
                     task={task}

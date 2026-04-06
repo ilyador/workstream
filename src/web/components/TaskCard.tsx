@@ -152,7 +152,7 @@ export function TaskCard({
   const [showDoneReject, setShowDoneReject] = useState(false);
 
   // Eagerly fetch comments so data is ready before expansion
-  const commentsData = useComments(task.id);
+  const commentsData = useComments(task.id, projectId);
 
   return (
     <div
@@ -302,7 +302,7 @@ export function TaskCard({
           {/* REVIEW */}
           {jobStatus === 'review' && (
             <div className={s.reviewSection}>
-              <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
+              <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
               {job.review?.changedFiles && (
                 <div className={s.files}>
                   <span className={s.filesLabel}>Changed files</span>
@@ -371,7 +371,7 @@ export function TaskCard({
             {job.review?.summary && (
               <div className={s.doneSummary}>{job.review.summary}</div>
             )}
-            <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
+            <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
             <CardComments data={commentsData} projectId={projectId} />
           </div>
         </div>
@@ -472,7 +472,7 @@ function IdleDetail({
   prevTaskId?: string | null;
 }) {
   const modal = useModal();
-  const ownArtifacts = useArtifacts(task.id);
+  const ownArtifacts = useArtifacts(task.id, projectId);
   const prevArtifacts = useArtifacts(prevTaskId || null);
   const [showComplete, setShowComplete] = useState(false);
   const [completeNote, setCompleteNote] = useState('');
@@ -510,7 +510,7 @@ function IdleDetail({
         )}
       </div>
 
-      <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
+      <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
 
       {completionBlocked && (
         <div style={{ padding: '8px 12px', background: 'var(--amber-bg)', borderLeft: '3px solid var(--amber)', borderRadius: 6, fontSize: 12, color: 'var(--amber)', fontWeight: 500 }}>
@@ -597,8 +597,8 @@ function IdleDetail({
 }
 
 /** Attachments section using artifacts API */
-function TaskAttachments({ taskId, legacyImages, readOnly }: { taskId: string; legacyImages?: string[]; readOnly?: boolean }) {
-  const { artifacts, loaded, upload, remove } = useArtifacts(taskId);
+function TaskAttachments({ taskId, projectId, legacyImages, readOnly }: { taskId: string; projectId?: string; legacyImages?: string[]; readOnly?: boolean }) {
+  const { artifacts, loaded, upload, remove } = useArtifacts(taskId, projectId);
   const { preview } = useFilePreview();
   // Include legacy task.images as read-only artifacts for backward compat
   const legacyArtifacts = (legacyImages || []).map((url, i) => ({

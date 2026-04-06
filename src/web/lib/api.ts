@@ -122,7 +122,7 @@ export async function getProjects() {
 }
 
 export type SupabaseConfig = {
-  mode: 'local' | 'cloud';
+  mode: 'local' | 'cloud' | 'custom';
   url?: string;
   serviceRoleKey?: string;
 };

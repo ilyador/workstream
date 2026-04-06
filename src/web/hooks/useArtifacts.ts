@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getArtifacts, uploadArtifact as apiUpload, deleteArtifact as apiDelete, type Artifact } from '../lib/api';
+import { subscribeProjectEvents } from './useProjectEvents';
 
-export function useArtifacts(taskId: string | null) {
+export function useArtifacts(taskId: string | null, projectId?: string | null) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -17,7 +18,18 @@ export function useArtifacts(taskId: string | null) {
     setLoading(false);
   }, [taskId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    if (!projectId) return;
+    const unsub = subscribeProjectEvents(projectId, (event) => {
+      if ((event.type === 'artifact_changed' || event.type === 'artifact_deleted') && event.task_id === taskId) {
+        load();
+      } else if (event.type === 'full_sync') {
+        load();
+      }
+    });
+    return unsub;
+  }, [taskId, projectId, load]);
 
   async function upload(file: File) {
     if (!taskId) return;

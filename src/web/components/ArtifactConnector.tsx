@@ -6,10 +6,11 @@ import { useFilePreview } from './FilePreview';
 
 interface Props {
   taskId: string;  // The producing task's ID
+  projectId?: string;
 }
 
-export function ArtifactConnector({ taskId }: Props) {
-  const { artifacts, loading } = useArtifacts(taskId);
+export function ArtifactConnector({ taskId, projectId }: Props) {
+  const { artifacts, loading } = useArtifacts(taskId, projectId);
   const { preview } = useFilePreview();
   const [expanded, setExpanded] = useState(false);
   const hasFiles = !loading && artifacts.length > 0;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getComments, addComment as apiAddComment, deleteComment as apiDeleteComment } from '../lib/api';
+import { subscribeProjectEvents } from './useProjectEvents';
 
 interface Comment {
   id: string;
@@ -10,7 +11,7 @@ interface Comment {
   profiles?: { name: string; initials: string };
 }
 
-export function useComments(taskId: string | null) {
+export function useComments(taskId: string | null, projectId?: string | null) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -21,7 +22,18 @@ export function useComments(taskId: string | null) {
     setLoaded(true);
   }, [taskId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    if (!projectId) return;
+    const unsub = subscribeProjectEvents(projectId, (event) => {
+      if ((event.type === 'comment_changed' || event.type === 'comment_deleted') && event.task_id === taskId) {
+        load();
+      } else if (event.type === 'full_sync') {
+        load();
+      }
+    });
+    return unsub;
+  }, [taskId, projectId, load]);
 
   async function addComment(body: string) {
     if (!taskId) return;
