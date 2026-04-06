@@ -1,29 +1,27 @@
-import { useState, useEffect, useCallback } from 'react';
-import { getCustomTypes, createCustomType, deleteCustomType, type CustomTaskType } from '../lib/api';
+import { useEffect, useCallback } from 'react';
+import { getCustomTypes, createCustomType, deleteCustomType } from '../lib/api';
 import { subscribeProjectEvents } from './useProjectEvents';
+import { useProjectResource } from './useProjectResource';
 
 export function useCustomTypes(projectId: string | null) {
-  const [types, setTypes] = useState<CustomTaskType[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    if (!projectId) { setLoading(false); return; }
-    try {
-      const data = await getCustomTypes(projectId);
-      setTypes(data);
-    } catch {
-      // Silently handle
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
+  const {
+    data: types,
+    setData: setTypes,
+    loading,
+    error,
+    ready,
+    reload: load,
+  } = useProjectResource(projectId, getCustomTypes, {
+    createInitialValue: () => [],
+    getErrorMessage: (err) => err instanceof Error ? err.message : 'Failed to load custom types',
+  });
 
   useEffect(() => {
-    load();
+    void load();
     if (!projectId) return;
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if (event.type === 'custom_type_changed' || event.type === 'full_sync') {
-        load();
+        void load();
       }
     });
     return unsub;
@@ -34,12 +32,12 @@ export function useCustomTypes(projectId: string | null) {
     const created = await createCustomType(projectId, name, pipeline, description);
     setTypes(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
     return created;
-  }, [projectId]);
+  }, [projectId, setTypes]);
 
   const removeType = useCallback(async (id: string) => {
     await deleteCustomType(id);
     setTypes(prev => prev.filter(t => t.id !== id));
-  }, []);
+  }, [setTypes]);
 
-  return { types, loading, reload: load, addType, removeType };
+  return { types, setTypes, loading, error, ready, reload: load, addType, removeType };
 }

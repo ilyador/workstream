@@ -40,6 +40,7 @@ export interface WorkstreamTaskCardProps {
   metaItems?: { label: string; value: string }[];
   hideComments?: boolean;
   prevTaskId?: string | null;
+  mentionMembers?: Array<{ id: string; name: string; initials: string }>;
 }
 
 interface WorkstreamColumnProps {
@@ -768,8 +769,9 @@ export function WorkstreamColumn({
                             canRunAi,
                             isBacklog,
                             showPriority: isBacklog,
-                            projectId: projectId || undefined,
-                            hasUnreadMention: mentionedTaskIds.has(gt.id),
+    projectId: projectId || undefined,
+    mentionMembers: members,
+    hasUnreadMention: mentionedTaskIds.has(gt.id),
                             commentCount: commentCounts?.[gt.id] || 0,
                             brokenLink: brokenLinks.get(gt.id) || null,
                             prevTaskId: gi > 0 ? groupTasks[gi - 1].id : (index > 0 ? tasks[index - 1]?.id : null),
@@ -827,6 +829,7 @@ export function WorkstreamColumn({
                     isBacklog,
                     showPriority: isBacklog,
                     projectId: projectId || undefined,
+                    mentionMembers: members,
                     hasUnreadMention: mentionedTaskIds.has(task.id),
                     commentCount: commentCounts?.[task.id] || 0,
                     brokenLink: brokenLinks.get(task.id) || null,

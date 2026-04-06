@@ -1,27 +1,27 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { getFlows, createFlow as apiCreate, updateFlow as apiUpdate, deleteFlow as apiDelete, updateFlowSteps as apiUpdateSteps, type Flow } from '../lib/api';
 import { subscribeProjectEvents } from './useProjectEvents';
+import { useProjectResource } from './useProjectResource';
 
 export function useFlows(projectId: string | null) {
-  const [flows, setFlows] = useState<Flow[]>([]);
-  const [loading, setLoading] = useState(true);
-
   type FlowStepInput = Parameters<typeof apiUpdateSteps>[1][number];
-
-  const load = useCallback(async () => {
-    if (!projectId) { setLoading(false); return; }
-    try {
-      const data = await getFlows(projectId);
-      setFlows(data.sort((a, b) => a.position - b.position));
-    } catch (err) {
-      console.error('[useFlows] Failed to load flows:', err instanceof Error ? err.message : err);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
+  const {
+    data: flows,
+    setData: setFlows,
+    loading,
+    error,
+    ready,
+    reload: load,
+  } = useProjectResource(projectId, async (id) => {
+    const data = await getFlows(id);
+    return data.sort((a, b) => a.position - b.position);
+  }, {
+    createInitialValue: () => [],
+    getErrorMessage: (err) => err instanceof Error ? err.message : 'Failed to load flows',
+  });
 
   useEffect(() => {
-    load();
+    void load();
     if (!projectId) return;
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if (event.type === 'flow_changed' && event.flow) {
@@ -37,11 +37,11 @@ export function useFlows(projectId: string | null) {
       } else if (event.type === 'flow_deleted' && event.flow_id) {
         setFlows(prev => prev.filter(f => f.id !== event.flow_id));
       } else if (event.type === 'full_sync') {
-        load();
+        void load();
       }
     });
     return unsub;
-  }, [projectId, load]);
+  }, [projectId, load, setFlows]);
 
   const createFlow = useCallback(async (data: { project_id: string; name: string; description?: string; steps?: FlowStepInput[] }): Promise<Flow> => {
     const created = await apiCreate(data);
@@ -53,7 +53,7 @@ export function useFlows(projectId: string | null) {
     // Optimistic update so subsequent reads (e.g. rapid tag toggles) see fresh state
     setFlows(prev => prev.map(f => f.id === id ? { ...f, ...data } as Flow : f));
     await apiUpdate(id, data);
-  }, []);
+  }, [setFlows]);
 
   const deleteFlow = useCallback(async (id: string) => {
     await apiDelete(id);
@@ -71,5 +71,5 @@ export function useFlows(projectId: string | null) {
     await load();
   }, [load]);
 
-  return { flows, setFlows, loading, reload: load, createFlow, updateFlow, deleteFlow, updateFlowSteps, saveFlow };
+  return { flows, setFlows, loading, error, ready, reload: load, createFlow, updateFlow, deleteFlow, updateFlowSteps, saveFlow };
 }

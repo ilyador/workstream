@@ -26,6 +26,7 @@ import { FlowEditor2 } from './components/FlowEditor2';
 import { useModal } from './hooks/modal-context';
 import appStyles from './App.module.css';
 import { applyPositionUpdates, applyTaskMove, replaceItemById } from './lib/optimistic-updates';
+import { pickPrimaryJobs } from './lib/job-selection';
 import './styles/global.css';
 
 import { timeAgo } from './lib/time';
@@ -236,8 +237,11 @@ export default function App() {
         changedFiles: j.review_result.changed_files ?? j.review_result.changedFiles ?? undefined,
       } : undefined,
       completedAgo: j.completed_at ? timeAgo(j.completed_at) : undefined,
+      completedAt: j.completed_at || undefined,
     }));
   }, [jobs.jobs, taskTitleMap, taskTypeMap]);
+
+  const primaryJobViews = useMemo(() => pickPrimaryJobs(jobViews), [jobViews]);
 
   // Workstream name lookup for sublabels
   const wsNameMap = useMemo(() => {
@@ -278,7 +282,7 @@ export default function App() {
       }
     }
     // Jobs awaiting review
-    for (const job of jobViews) {
+    for (const job of primaryJobViews) {
       if (job.status === 'review') {
         const task = tasks.tasks.find(t => t.id === job.taskId);
         items.push({
@@ -291,7 +295,7 @@ export default function App() {
       }
     }
     // Jobs with questions
-    for (const job of jobViews) {
+    for (const job of primaryJobViews) {
       if (job.status === 'paused' && job.question) {
         const task = tasks.tasks.find(t => t.id === job.taskId);
         items.push({
@@ -304,7 +308,7 @@ export default function App() {
       }
     }
     return items;
-  }, [jobViews, tasks.tasks, wsNameMap, workstreams.workstreams, auth.profile?.id]);
+  }, [primaryJobViews, tasks.tasks, wsNameMap, workstreams.workstreams, auth.profile?.id]);
 
   // Step 1: Environment check
   if (!envReady) {
@@ -335,6 +339,22 @@ export default function App() {
   // Step 5: No projects yet
   if (projects.projects.length === 0) {
     return <NewProject onCreate={async (name, supabaseConfig, localPath) => { await projects.createProject(name, supabaseConfig, localPath); }} />;
+  }
+
+  if (!projects.current) {
+    return <Loading text="Loading project..." />;
+  }
+
+  const projectReady = tasks.ready
+    && jobs.ready
+    && workstreams.ready
+    && members.ready
+    && aiFlows.ready
+    && customTypes.ready
+    && commentCounts.ready;
+
+  if (!projectReady) {
+    return <Loading text="Loading project..." />;
   }
 
   // Workstream progress for header

@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useComments } from '../hooks/useComments';
-import { useMembers } from '../hooks/useMembers';
 import { useArtifacts } from '../hooks/useArtifacts';
 import { getFileIcon, formatFileSize } from '../lib/file-utils';
 import { useModal } from '../hooks/modal-context';
@@ -48,11 +47,11 @@ export interface TaskCardProps {
   metaItems?: { label: string; value: string }[];
   hideComments?: boolean;
   prevTaskId?: string | null;
+  mentionMembers?: Array<{ id: string; name: string; initials: string }>;
 }
 
 interface TaskCardViewProps extends TaskCardProps {
   viewMode?: 'task' | 'flow-step';
-  commentsData?: ReturnType<typeof useComments>;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -67,8 +66,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function TaskCard({
   ...props
 }: TaskCardProps) {
-  const commentsData = useComments(props.task.id, props.projectId);
-  return <TaskCardView {...props} commentsData={commentsData} viewMode="task" />;
+  return <TaskCardView {...props} viewMode="task" />;
 }
 
 export function TaskCardView({
@@ -103,7 +101,7 @@ export function TaskCardView({
   metaItems,
   hideComments,
   prevTaskId,
-  commentsData,
+  mentionMembers,
   viewMode = 'task',
 }: TaskCardViewProps) {
   const jobStatus = job?.status;
@@ -144,7 +142,6 @@ export function TaskCardView({
   const elapsedText = jobStatus === 'running' && job?.startedAt ? elapsed(job.startedAt) : '';
 
   const [showRework, setShowRework] = useState(false);
-  const [showDoneReject, setShowDoneReject] = useState(false);
 
   return (
     <div
@@ -341,46 +338,16 @@ export function TaskCardView({
 
       {/* Done section -- no border separator */}
       {!isActive && isExpanded && taskDone && (jobStatus === 'done' || !job) && (
-        <div onClick={(e) => e.stopPropagation()} className={s.doneWrap}>
-          <div className={s.doneSection}>
-            {job && (
-              <>
-                <div className={s.doneHeader}>
-                  <span className={s.doneLabel}>&#10003; Completed {job.completedAgo}</span>
-                  <button className="btn btnWarning btnSm" onClick={() => setShowDoneReject(v => !v)}>Reject</button>
-                </div>
-                {showDoneReject && (
-                  <div className={s.doneRejectPanel}>
-                    {onRework && (
-                      <ReplyInput
-                        onReply={(answer) => { onRework(job.id, answer); setShowDoneReject(false); }}
-                        placeholder="What needs to change?"
-                      />
-                    )}
-                    {onMoveToBacklog && (
-                      <button className="btn btnGhost btnSm" onClick={() => onMoveToBacklog(job.id)}>
-                        Move to backlog
-                      </button>
-                    )}
-                  </div>
-                )}
-                {job.review?.summary && (
-                  <div className={s.doneSummary}>{job.review.summary}</div>
-                )}
-              </>
-            )}
-            {!job && (
-              <div className={s.doneHeader}>
-                <span className={s.doneLabel}>&#10003; Completed</span>
-                {onUpdateTask && (
-                  <button className="btn btnGhost btnSm" onClick={() => onUpdateTask(task.id, { status: 'backlog' })}>Unarchive</button>
-                )}
-              </div>
-            )}
-            <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
-            {commentsData && <CardComments data={commentsData} projectId={projectId} />}
-          </div>
-        </div>
+        <DoneDetail
+          task={task}
+          job={job}
+          projectId={projectId}
+          onUpdateTask={onUpdateTask}
+          onRework={onRework}
+          onMoveToBacklog={onMoveToBacklog}
+          hideComments={hideComments}
+          mentionMembers={mentionMembers}
+        />
       )}
 
       {/* Expanded detail for non-active states (click to toggle) */}
@@ -448,8 +415,8 @@ export function TaskCardView({
               onUpdateTask={onUpdateTask}
               metaItems={metaItems}
               hideComments={hideComments}
-              commentsData={commentsData}
               prevTaskId={prevTaskId}
+              mentionMembers={mentionMembers}
             />
           )}
         </div>
@@ -505,8 +472,8 @@ function IdleDetail({
   onUpdateTask,
   metaItems,
   hideComments,
-  commentsData,
   prevTaskId,
+  mentionMembers,
 }: {
   task: TaskCardProps['task'];
   canRunAi: boolean;
@@ -518,10 +485,11 @@ function IdleDetail({
   onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
   metaItems?: { label: string; value: string }[];
   hideComments?: boolean;
-  commentsData: ReturnType<typeof useComments>;
   prevTaskId?: string | null;
+  mentionMembers?: Array<{ id: string; name: string; initials: string }>;
 }) {
   const modal = useModal();
+  const commentsData = useComments(task.id, projectId);
   const ownArtifacts = useArtifacts(task.id, projectId);
   const prevArtifacts = useArtifacts(prevTaskId || null, projectId);
   const [showComplete, setShowComplete] = useState(false);
@@ -560,7 +528,7 @@ function IdleDetail({
         )}
       </div>
 
-      <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
+      <TaskAttachmentsView artifactsData={ownArtifacts} legacyImages={task.images} readOnly />
 
       {completionBlocked && (
         <div className={s.completionBlockedNotice}>
@@ -635,14 +603,27 @@ function IdleDetail({
         </div>
       )}
 
-      {!hideComments && <CardComments data={commentsData} projectId={projectId} />}
+      {!hideComments && <CardComments data={commentsData} mentionMembers={mentionMembers} />}
     </>
   );
 }
 
 /** Attachments section using artifacts API */
 function TaskAttachments({ taskId, projectId, legacyImages, readOnly }: { taskId: string; projectId?: string; legacyImages?: string[]; readOnly?: boolean }) {
-  const { artifacts, loaded, upload, remove } = useArtifacts(taskId, projectId);
+  const artifactsData = useArtifacts(taskId, projectId);
+  return <TaskAttachmentsView artifactsData={artifactsData} legacyImages={legacyImages} readOnly={readOnly} />;
+}
+
+function TaskAttachmentsView({
+  artifactsData,
+  legacyImages,
+  readOnly,
+}: {
+  artifactsData: ReturnType<typeof useArtifacts>;
+  legacyImages?: string[];
+  readOnly?: boolean;
+}) {
+  const { artifacts, loaded, upload, remove } = artifactsData;
   const { preview } = useFilePreview();
   // Include legacy task.images as read-only artifacts for backward compat
   const legacyArtifacts = (legacyImages || []).map((url, i) => ({
@@ -708,9 +689,14 @@ function TaskAttachments({ taskId, projectId, legacyImages, readOnly }: { taskId
 }
 
 /** Inline comments for a task card */
-function CardComments({ data, projectId }: { data: ReturnType<typeof useComments>; projectId?: string }) {
+function CardComments({
+  data,
+  mentionMembers = [],
+}: {
+  data: ReturnType<typeof useComments>;
+  mentionMembers?: Array<{ id: string; name: string; initials: string }>;
+}) {
   const { comments, addComment, removeComment } = data;
-  const { members } = useMembers(projectId || null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -718,7 +704,7 @@ function CardComments({ data, projectId }: { data: ReturnType<typeof useComments
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const mentionMatches = mentionQuery !== null
-    ? members.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5)
+    ? mentionMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5)
     : [];
 
   const handleSend = async () => {
@@ -838,6 +824,72 @@ function CardComments({ data, projectId }: { data: ReturnType<typeof useComments
             Send
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DoneDetail({
+  task,
+  job,
+  projectId,
+  onUpdateTask,
+  onRework,
+  onMoveToBacklog,
+  hideComments,
+  mentionMembers,
+}: {
+  task: TaskView;
+  job: JobView | null;
+  projectId?: string;
+  onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
+  onRework?: (jobId: string, note: string) => void;
+  onMoveToBacklog?: (jobId: string) => void;
+  hideComments?: boolean;
+  mentionMembers?: Array<{ id: string; name: string; initials: string }>;
+}) {
+  const commentsData = useComments(task.id, projectId);
+  const [showDoneReject, setShowDoneReject] = useState(false);
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} className={s.doneWrap}>
+      <div className={s.doneSection}>
+        {job && (
+          <>
+            <div className={s.doneHeader}>
+              <span className={s.doneLabel}>&#10003; Completed {job.completedAgo}</span>
+              <button className="btn btnWarning btnSm" onClick={() => setShowDoneReject(v => !v)}>Reject</button>
+            </div>
+            {showDoneReject && (
+              <div className={s.doneRejectPanel}>
+                {onRework && (
+                  <ReplyInput
+                    onReply={(answer) => { onRework(job.id, answer); setShowDoneReject(false); }}
+                    placeholder="What needs to change?"
+                  />
+                )}
+                {onMoveToBacklog && (
+                  <button className="btn btnGhost btnSm" onClick={() => onMoveToBacklog(job.id)}>
+                    Move to backlog
+                  </button>
+                )}
+              </div>
+            )}
+            {job.review?.summary && (
+              <div className={s.doneSummary}>{job.review.summary}</div>
+            )}
+          </>
+        )}
+        {!job && (
+          <div className={s.doneHeader}>
+            <span className={s.doneLabel}>&#10003; Completed</span>
+            {onUpdateTask && (
+              <button className="btn btnGhost btnSm" onClick={() => onUpdateTask(task.id, { status: 'backlog' })}>Unarchive</button>
+            )}
+          </div>
+        )}
+        <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
+        {!hideComments && <CardComments data={commentsData} mentionMembers={mentionMembers} />}
       </div>
     </div>
   );

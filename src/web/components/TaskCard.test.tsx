@@ -1,29 +1,34 @@
 // @vitest-environment jsdom
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskCard } from './TaskCard';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
 
-vi.mock('../hooks/useComments', () => ({
-  useComments: () => ({
+const { useCommentsMock, useArtifactsMock } = vi.hoisted(() => ({
+  useCommentsMock: vi.fn(() => ({
     comments: [],
     loaded: true,
     addComment: vi.fn(),
     removeComment: vi.fn(),
-  }),
-}));
-
-vi.mock('../hooks/useArtifacts', () => ({
-  useArtifacts: () => ({
+  })),
+  useArtifactsMock: vi.fn(() => ({
     artifacts: [],
     loading: false,
     loaded: true,
     upload: vi.fn(),
     remove: vi.fn(),
     reload: vi.fn(),
-  }),
+  })),
+}));
+
+vi.mock('../hooks/useComments', () => ({
+  useComments: useCommentsMock,
+}));
+
+vi.mock('../hooks/useArtifacts', () => ({
+  useArtifacts: useArtifactsMock,
 }));
 
 function makeTask(): TaskView {
@@ -53,6 +58,29 @@ function makeReviewJob(review: JobView['review']): JobView {
 }
 
 describe('TaskCard review checks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not mount comments or artifacts for a collapsed idle card', () => {
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'backlog',
+          mode: 'ai',
+        }}
+        job={null}
+        canRunAi
+        isExpanded={false}
+        onToggleExpand={() => {}}
+      />,
+    );
+
+    expect(useCommentsMock).not.toHaveBeenCalled();
+    expect(useArtifactsMock).not.toHaveBeenCalled();
+  });
+
   it('shows the tests badge only when testsPassed is explicitly true', () => {
     render(
       <TaskCard
