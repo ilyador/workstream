@@ -10,7 +10,7 @@ import { useCommentCounts } from './hooks/useCommentCounts';
 import { useWebNotifications } from './hooks/useWebNotifications';
 import { useFlows } from './hooks/useFlows';
 import { useCustomTypes } from './hooks/useCustomTypes';
-import { signUp, signIn, signOut, runTaskApi, replyToJob, approveJob, rejectJob, reworkJob, terminateJob, deleteJob, moveToBacklog, continueJob, updateTask, updateWorkstream as apiUpdateWorkstream, updateFlow as apiUpdateFlow, reviewAndCreatePr, createWorkstreamPr } from './lib/api';
+import { signUp, signIn, signOut, updateTask, updateWorkstream as apiUpdateWorkstream, updateFlow as apiUpdateFlow } from './lib/api';
 import { Routes, Route, useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
@@ -24,6 +24,7 @@ import { AddProjectModal } from './components/AddProjectModal';
 import { MembersModal } from './components/MembersModal';
 import { FlowEditor2 } from './components/FlowEditor2';
 import { useModal } from './hooks/modal-context';
+import { useExecutionActions } from './hooks/useExecutionActions';
 import appStyles from './App.module.css';
 import { applyPositionUpdates, applyTaskMove, replaceItemById } from './lib/optimistic-updates';
 import { pickPrimaryJobs } from './lib/job-selection';
@@ -109,6 +110,14 @@ export default function App() {
   const focusWsId = searchParams.get('ws');
   const { notify } = webNotifs;
   const currentProjectName = projects.current?.name || null;
+  const executionActions = useExecutionActions({
+    projectId: projects.current?.id || null,
+    localPath: projects.current?.local_path,
+    modal,
+    tasks,
+    jobs,
+    workstreams,
+  });
 
   // Compute which tasks have unread @mentions
   const mentionedTaskIds = useMemo(() => {
@@ -507,48 +516,14 @@ export default function App() {
             onUpdateWorkstream={async (id, data) => {
               await workstreams.updateWorkstream(id, data);
             }}
-            onDeleteWorkstream={async (id) => {
-              await workstreams.deleteWorkstream(id);
-              tasks.reload();
-            }}
+            onDeleteWorkstream={executionActions.deleteWorkstreamAndReloadTasks}
             onSwapColumns={handleSwapWorkstreams}
             onAddTask={(workstreamId) => {
               setTaskFormWorkstream(workstreamId);
               setShowTaskForm(true);
             }}
-            onRunWorkstream={async (workstreamId) => {
-              if (!projects.current?.id || !projects.current?.local_path) {
-                await modal.alert('Missing path', 'Set a local folder path for this project first.');
-                return;
-              }
-              const wsTasks = tasks.tasks
-                .filter(t => t.workstream_id === workstreamId && ['backlog', 'todo'].includes(t.status) && t.mode === 'ai')
-                .sort((a, b) => a.position - b.position);
-              if (wsTasks.length === 0) {
-                await modal.alert('No tasks', 'No runnable AI tasks in this workstream.');
-                return;
-              }
-              try {
-                await runTaskApi(wsTasks[0].id, projects.current.id, projects.current.local_path, true);
-                jobs.reload();
-                tasks.reload();
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed to start workstream'));
-              }
-            }}
-            onRunTask={async (taskId) => {
-              if (!projects.current?.id || !projects.current?.local_path) {
-                await modal.alert('Missing path', 'Set a local folder path for this project first.');
-                return;
-              }
-              try {
-                await runTaskApi(taskId, projects.current.id, projects.current.local_path, false);
-                jobs.reload();
-                tasks.reload();
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed to start task'));
-              }
-            }}
+            onRunWorkstream={executionActions.runWorkstream}
+            onRunTask={executionActions.runTask}
             onEditTask={(task) => {
               const rawTask = tasks.tasks.find(t => t.id === task.id);
               setEditingTask({
@@ -575,87 +550,15 @@ export default function App() {
               await tasks.updateTask(taskId, data);
             }}
             onMoveTask={handleMoveTask}
-            onTerminate={async (jobId) => {
-              if (await modal.confirm('Terminate job', 'Terminate this running job?', { label: 'Terminate', danger: true })) {
-                await terminateJob(jobId);
-                jobs.reload();
-                tasks.reload();
-              }
-            }}
-            onReply={async (jobId, answer) => {
-              try {
-                await replyToJob(jobId, answer, projects.current?.local_path || '');
-                jobs.reload();
-                tasks.reload();
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed to send reply'));
-              }
-            }}
-            onApprove={async (jobId) => {
-              try {
-                await approveJob(jobId);
-                jobs.reload();
-                tasks.reload();
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed to approve'));
-              }
-            }}
-            onReject={async (jobId) => {
-              try {
-                await rejectJob(jobId);
-                jobs.reload();
-                tasks.reload();
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed to reject'));
-              }
-            }}
-            onRework={async (jobId, note) => {
-              try {
-                await reworkJob(jobId, note, projects.current!.id, projects.current!.local_path!);
-                jobs.reload();
-                tasks.reload();
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed to rework'));
-              }
-            }}
-            onDeleteJob={async (jobId) => {
-              try {
-                await deleteJob(jobId);
-                jobs.reload();
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed to dismiss job'));
-              }
-            }}
-            onMoveToBacklog={async (jobId) => {
-              try {
-                await moveToBacklog(jobId);
-                jobs.reload();
-                tasks.reload();
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed to move to backlog'));
-              }
-            }}
-            onContinue={async (jobId) => {
-              try {
-                await continueJob(jobId);
-                jobs.reload();
-                tasks.reload();
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed to continue job'));
-              }
-            }}
-            onCreatePr={async (workstreamId, opts) => {
-              try {
-                if (opts?.review) {
-                  await reviewAndCreatePr(workstreamId, projects.current?.local_path || '');
-                } else {
-                  const result = await createWorkstreamPr(workstreamId, projects.current?.local_path || '');
-                  if (result.prUrl) workstreams.reload();
-                }
-              } catch (err) {
-                await modal.alert('Error', getErrorMessage(err, 'Failed'));
-              }
-            }}
+            onTerminate={executionActions.terminate}
+            onReply={executionActions.reply}
+            onApprove={executionActions.approve}
+            onReject={executionActions.reject}
+            onRework={executionActions.rework}
+            onDeleteJob={executionActions.dismissJob}
+            onMoveToBacklog={executionActions.sendToBacklog}
+            onContinue={executionActions.continueExecution}
+            onCreatePr={executionActions.createPr}
           />
         } />
         <Route path="/archive" element={

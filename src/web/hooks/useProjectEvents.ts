@@ -1,19 +1,5 @@
-import { subscribeToChanges, type Flow } from '../lib/api';
+import { subscribeToChanges, type Flow, type TaskRecord, type WorkstreamRecord } from '../lib/api';
 import type { JobRecord } from '../components/job-types';
-import type { TaskRecord } from './useTasks';
-
-type WorkstreamEventRecord = {
-  id: string;
-  project_id: string;
-  name: string;
-  description: string;
-  has_code: boolean;
-  status: string;
-  position: number;
-  pr_url: string | null;
-  reviewer_id: string | null;
-  created_at: string;
-};
 
 export type ProjectEvent =
   | { type: 'task_changed'; task: TaskRecord }
@@ -26,7 +12,7 @@ export type ProjectEvent =
   | { type: 'comment_deleted'; task_id: string }
   | { type: 'flow_changed'; flow: Flow }
   | { type: 'flow_deleted'; flow_id: string }
-  | { type: 'workstream_changed'; workstream: WorkstreamEventRecord }
+  | { type: 'workstream_changed'; workstream: WorkstreamRecord }
   | { type: 'member_changed' }
   | { type: 'custom_type_changed' }
   | { type: 'full_sync' }

@@ -3,30 +3,6 @@ import { getTasks, createTask as apiCreateTask, updateTask as apiUpdateTask, del
 import { subscribeProjectEvents } from './useProjectEvents';
 import { useProjectResource } from './useProjectResource';
 
-export interface TaskRecord {
-  id: string;
-  project_id: string;
-  title: string;
-  description: string;
-  type: string;
-  mode: string;
-  effort: string;
-  multiagent: string;
-  status: string;
-  auto_continue: boolean;
-  assignee: string | null;
-  workstream_id: string | null;
-  position: number;
-  priority: string;
-  images: string[];
-  followup_notes: string | null;
-  created_at: string;
-  completed_at: string | null;
-  created_by: string | null;
-  flow_id: string | null;
-  chaining?: string;
-}
-
 export function useTasks(projectId: string | null) {
   const {
     data: tasks,

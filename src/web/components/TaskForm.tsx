@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { getSkills, type SkillInfo, type Flow } from '../lib/api';
+import { getSkills, type CustomTaskType, type Flow, type MemberRecord, type SkillInfo, type WorkstreamRecord } from '../lib/api';
 import { MdField } from './MdField';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { computeSkillInsert } from '../lib/skill-insert';
@@ -7,22 +7,9 @@ import { useArtifacts } from '../hooks/useArtifacts';
 import { getFileIcon, formatFileSize } from '../lib/file-utils';
 import s from './TaskForm.module.css';
 
-interface Workstream {
-  id: string;
-  name: string;
-}
-
-interface Member {
-  id: string;
-  name: string;
-  initials: string;
-}
-
-interface CustomType {
-  id: string;
-  name: string;
-  pipeline: string;
-}
+type WorkstreamOption = Pick<WorkstreamRecord, 'id' | 'name'>;
+type MemberOption = Pick<MemberRecord, 'id' | 'name' | 'initials'>;
+type CustomTypeOption = Pick<CustomTaskType, 'id' | 'name' | 'pipeline'>;
 
 export interface TaskFormData {
   title: string;
@@ -58,10 +45,10 @@ export interface EditTaskData {
 }
 
 interface Props {
-  workstreams: Workstream[];
-  members: Member[];
+  workstreams: WorkstreamOption[];
+  members: MemberOption[];
   flows?: Flow[];
-  customTypes?: CustomType[];
+  customTypes?: CustomTypeOption[];
   onSaveCustomType?: (name: string, pipeline: string) => Promise<void>;
   localPath?: string;
   defaultWorkstreamId?: string | null;

@@ -1,23 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import type { NotificationRecord, ProjectSummary } from '../lib/api';
 import { timeAgo } from '../lib/time';
 import { useTheme } from '../hooks/useTheme';
 import s from './Header.module.css';
-
-interface Project {
-  id: string;
-  name: string;
-}
-
-interface Notification {
-  id: string;
-  type: string;
-  task_id: string | null;
-  workstream_id?: string | null;
-  message: string;
-  read: boolean;
-  created_at: string;
-}
 
 export interface ActionItem {
   id: string;
@@ -33,13 +19,13 @@ interface Props {
   localPath?: string;
   milestone: { name: string; tasksDone: number; tasksTotal: number };
   notifications: number;
-  notificationList?: Notification[];
+  notificationList?: NotificationRecord[];
   onMarkRead?: (id: string) => void;
   onMarkAllRead?: () => void;
   todoItems?: ActionItem[];
   reviewItems?: ActionItem[];
   userInitials: string;
-  projects: Project[];
+  projects: Array<Pick<ProjectSummary, 'id' | 'name'>>;
   currentProjectId: string | null;
   onSwitchProject: (id: string) => void;
   onNewProject: () => void;

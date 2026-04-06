@@ -1,16 +1,7 @@
 import { useEffect } from 'react';
-import { getMembers } from '../lib/api';
+import { getMembers, type MemberRecord } from '../lib/api';
 import { subscribeProjectEvents } from './useProjectEvents';
 import { useProjectResource } from './useProjectResource';
-
-export interface Member {
-  id: string;
-  name: string;
-  initials: string;
-  role: string;
-  email?: string;
-  pending?: boolean;
-}
 
 export function useMembers(projectId: string | null) {
   const {
@@ -20,7 +11,7 @@ export function useMembers(projectId: string | null) {
     error,
     ready,
     reload: load,
-  } = useProjectResource(projectId, getMembers, {
+  } = useProjectResource<MemberRecord[]>(projectId, getMembers, {
     createInitialValue: () => [],
     getErrorMessage: (err) => err instanceof Error ? err.message : 'Failed to load members',
   });

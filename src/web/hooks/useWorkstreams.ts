@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { getWorkstreams, createWorkstream as apiCreate, updateWorkstream as apiUpdate, deleteWorkstream as apiDelete } from '../lib/api';
+import { getWorkstreams, createWorkstream as apiCreate, updateWorkstream as apiUpdate, deleteWorkstream as apiDelete, type WorkstreamRecord } from '../lib/api';
 import { subscribeProjectEvents } from './useProjectEvents';
 import { useProjectResource } from './useProjectResource';
 
@@ -11,7 +11,7 @@ export function useWorkstreams(projectId: string | null) {
     error,
     ready,
     reload: load,
-  } = useProjectResource(projectId, getWorkstreams, {
+  } = useProjectResource<WorkstreamRecord[]>(projectId, getWorkstreams, {
     createInitialValue: () => [],
     getErrorMessage: (err) => err instanceof Error ? err.message : 'Failed to load workstreams',
   });

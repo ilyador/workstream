@@ -88,6 +88,15 @@ export interface NotificationRecord {
   created_at: string;
 }
 
+export interface MemberRecord {
+  id: string;
+  name: string;
+  initials: string;
+  role: string;
+  email?: string;
+  pending?: boolean;
+}
+
 interface WorkstreamPrResponse {
   prUrl?: string | null;
 }
@@ -250,7 +259,7 @@ export async function checkHealth(): Promise<{ ok: boolean }> {
 
 // --- Members ---
 export async function getMembers(projectId: string) {
-  return apiFetch(`/api/members?project_id=${projectId}`) as Promise<{ id: string; name: string; initials: string; role: string; email?: string; pending?: boolean }[]>;
+  return apiFetch(`/api/members?project_id=${projectId}`) as Promise<MemberRecord[]>;
 }
 
 // --- Workstreams ---
