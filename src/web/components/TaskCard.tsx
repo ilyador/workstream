@@ -346,30 +346,39 @@ export function TaskCard({
       )}
 
       {/* Done section -- no border separator */}
-      {!isActive && isExpanded && taskDone && jobStatus === 'done' && job && (
+      {!isActive && isExpanded && taskDone && (jobStatus === 'done' || !job) && (
         <div onClick={(e) => e.stopPropagation()} style={{ padding: '0 12px 10px' }}>
           <div className={s.doneSection}>
-            <div className={s.doneHeader}>
-              <span className={s.doneLabel}>&#10003; Completed {job.completedAgo}</span>
-              <button className="btn btnWarning btnSm" onClick={() => setShowDoneReject(v => !v)}>Reject</button>
-            </div>
-            {showDoneReject && (
-              <div className={s.doneRejectPanel}>
-                {onRework && (
-                  <ReplyInput
-                    onReply={(answer) => { onRework(job.id, answer); setShowDoneReject(false); }}
-                    placeholder="What needs to change?"
-                  />
+            {job && (
+              <>
+                <div className={s.doneHeader}>
+                  <span className={s.doneLabel}>&#10003; Completed {job.completedAgo}</span>
+                  <button className="btn btnWarning btnSm" onClick={() => setShowDoneReject(v => !v)}>Reject</button>
+                </div>
+                {showDoneReject && (
+                  <div className={s.doneRejectPanel}>
+                    {onRework && (
+                      <ReplyInput
+                        onReply={(answer) => { onRework(job.id, answer); setShowDoneReject(false); }}
+                        placeholder="What needs to change?"
+                      />
+                    )}
+                    {onMoveToBacklog && (
+                      <button className="btn btnGhost btnSm" onClick={() => onMoveToBacklog(job.id)}>
+                        Move to backlog
+                      </button>
+                    )}
+                  </div>
                 )}
-                {onMoveToBacklog && (
-                  <button className="btn btnGhost btnSm" onClick={() => onMoveToBacklog(job.id)}>
-                    Move to backlog
-                  </button>
+                {job.review?.summary && (
+                  <div className={s.doneSummary}>{job.review.summary}</div>
                 )}
-              </div>
+              </>
             )}
-            {job.review?.summary && (
-              <div className={s.doneSummary}>{job.review.summary}</div>
+            {!job && (
+              <div className={s.doneHeader}>
+                <span className={s.doneLabel}>&#10003; Completed</span>
+              </div>
             )}
             <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
             <CardComments data={commentsData} projectId={projectId} />
