@@ -4,7 +4,7 @@ import { MdField } from './MdField';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { computeSkillInsert } from '../lib/skill-insert';
 import { useArtifacts } from '../hooks/useArtifacts';
-import { getFileIcon, formatFileSize } from '../lib/file-utils';
+import { AttachmentList } from './AttachmentList';
 import s from './TaskForm.module.css';
 
 type WorkstreamOption = Pick<WorkstreamRecord, 'id' | 'name'>;
@@ -552,74 +552,20 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
 /** Inline attachments editor for the edit modal */
 function TaskAttachmentsEdit({ taskId }: { taskId: string }) {
   const { artifacts, upload, remove } = useArtifacts(taskId);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    for (const file of Array.from(e.dataTransfer.files)) upload(file);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    for (const file of Array.from(e.target.files || [])) upload(file);
-    e.target.value = '';
-  };
-
 
   return (
-    <div className={s.attachmentsEditor}>
-      <div className={s.attachmentsHeader}>
-        <span className={s.attachmentsCount}>
-          {artifacts.length > 0 ? `${artifacts.length} file${artifacts.length > 1 ? 's' : ''}` : ''}
-        </span>
-        <button
-          type="button"
-          className="btn btnGhost btnSm"
-          onClick={() => fileInputRef.current?.click()}
-        >+ Add</button>
-        <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileSelect} />
-      </div>
-      {artifacts.length > 0 ? (
-        <div className={s.attachmentsList}>
-          {artifacts.map(a => (
-            <div key={a.id} className={s.attachmentItem}>
-              {a.mime_type.startsWith('image/') ? (
-                <a href={a.url} target="_blank" rel="noopener noreferrer">
-                  <img src={a.url} alt={a.filename} className={s.attachmentImage} />
-                </a>
-              ) : (
-                <span className={s.attachmentIcon}>{getFileIcon(a.mime_type)}</span>
-              )}
-              <div className={s.attachmentMeta}>
-                <a href={a.url} target="_blank" rel="noopener noreferrer" className={s.attachmentLink}>{a.filename}</a>
-                {a.size_bytes > 0 && <span className={s.attachmentSize}>{formatFileSize(a.size_bytes)}</span>}
-              </div>
-              <button
-                type="button"
-                onClick={() => remove(a.id)}
-                title="Remove"
-                className={s.attachmentRemove}
-              >&times;</button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div
-          onDragOver={e => e.preventDefault()}
-          onDrop={handleDrop}
-          className={s.attachmentDropZone}
-        >
-          Drop files here or click + Add
-        </div>
-      )}
-      {artifacts.length > 0 && (
-        <div
-          onDragOver={e => e.preventDefault()}
-          onDrop={handleDrop}
-          className={s.attachmentDropMore}
-        >
-          Drop more files here
-        </div>
-      )}
-    </div>
+    <AttachmentList
+      className={s.attachmentsEditor}
+      items={artifacts}
+      onAddFiles={(files) => {
+        for (const file of files) upload(file);
+      }}
+      onRemoveItem={remove}
+      onOpenItem={(item) => {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+      }}
+      emptyMessage="Drop files here or click + Add"
+      extraDropHint="Drop more files here"
+    />
   );
 }

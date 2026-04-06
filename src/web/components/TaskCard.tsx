@@ -3,12 +3,12 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useComments } from '../hooks/useComments';
 import { useArtifacts } from '../hooks/useArtifacts';
-import { getFileIcon, formatFileSize } from '../lib/file-utils';
 import { useModal } from '../hooks/modal-context';
 import { useFilePreview } from './filePreviewContext';
 import { timeAgo, elapsed } from '../lib/time';
 import { LiveLogs } from './LiveLogs';
 import { ReplyInput } from './ReplyInput';
+import { AttachmentList, type AttachmentListItem } from './AttachmentList';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
 import s from './TaskCard.module.css';
@@ -626,7 +626,7 @@ function TaskAttachmentsView({
   const { artifacts, loaded, upload, remove } = artifactsData;
   const { preview } = useFilePreview();
   // Include legacy task.images as read-only artifacts for backward compat
-  const legacyArtifacts = (legacyImages || []).map((url, i) => ({
+  const legacyArtifacts: AttachmentListItem[] = (legacyImages || []).map((url, i) => ({
     id: `legacy-${i}`,
     url,
     filename: url.split('/').pop() || `image-${i + 1}`,
@@ -635,56 +635,19 @@ function TaskAttachmentsView({
     isLegacy: true,
   }));
   const allFiles = [...artifacts.map(a => ({ ...a, isLegacy: false })), ...legacyArtifacts];
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!loaded) return null;
-  if (readOnly && allFiles.length === 0) return null;
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    for (const file of Array.from(e.dataTransfer.files)) upload(file);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    for (const file of Array.from(e.target.files || [])) upload(file);
-    e.target.value = '';
-  };
-
-
   return (
-    <div className={s.attachments}>
-      <div className={s.attachmentsHeader}>
-        <span>Attachments{allFiles.length > 0 ? ` (${allFiles.length})` : ''}</span>
-        {!readOnly && (
-          <>
-            <button className={s.attachAddBtn} onClick={() => fileInputRef.current?.click()}>+ Add</button>
-            <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileSelect} />
-          </>
-        )}
-      </div>
-      {allFiles.length > 0 ? (
-        <div className={s.attachList} {...(!readOnly ? { onDragOver: (e: React.DragEvent) => e.preventDefault(), onDrop: handleDrop } : {})}>
-          {allFiles.map(a => (
-            <div key={a.id} className={`${s.attachItem} ${s.attachItemClickable}`} onClick={(e) => { e.stopPropagation(); preview(a); }}>
-              {a.mime_type.startsWith('image/') ? (
-                <img src={a.url} alt={a.filename} className={s.attachThumb} />
-              ) : (
-                <span className={s.attachIcon}>{getFileIcon(a.mime_type)}</span>
-              )}
-              <div className={s.attachInfo}>
-                <span className={s.attachName}>{a.filename}</span>
-                {a.size_bytes > 0 && <span className={s.attachSize}>{formatFileSize(a.size_bytes)}</span>}
-              </div>
-              {!readOnly && !a.isLegacy && <button className={s.attachDelete} onClick={(e) => { e.stopPropagation(); remove(a.id); }} title="Remove">&times;</button>}
-            </div>
-          ))}
-        </div>
-      ) : !readOnly ? (
-        <div className={s.attachDropZone} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
-          Drop files here
-        </div>
-      ) : null}
-    </div>
+    <AttachmentList
+      items={allFiles}
+      readOnly={readOnly}
+      separated
+      onAddFiles={readOnly ? undefined : (files) => {
+        for (const file of files) upload(file);
+      }}
+      onRemoveItem={readOnly ? undefined : remove}
+      onOpenItem={preview}
+    />
   );
 }
 
