@@ -25,6 +25,7 @@ import { MembersModal } from './components/MembersModal';
 import { FlowEditor2 } from './components/FlowEditor2';
 import { useModal } from './hooks/modal-context';
 import appStyles from './App.module.css';
+import { applyPositionUpdates, applyTaskMove, replaceItemById } from './lib/optimistic-updates';
 import './styles/global.css';
 
 import { timeAgo } from './lib/time';
@@ -355,10 +356,9 @@ export default function App() {
     const draggedPosition = dragged.position;
     const targetPosition = target.position;
 
-    workstreams.setWorkstreams(prev => prev.map(w => {
-      if (w.id === draggedId) return { ...w, position: targetPosition };
-      if (w.id === targetId) return { ...w, position: draggedPosition };
-      return w;
+    workstreams.setWorkstreams(prev => applyPositionUpdates(prev, {
+      [draggedId]: targetPosition,
+      [targetId]: draggedPosition,
     }));
 
     void (async () => {
@@ -368,10 +368,9 @@ export default function App() {
           apiUpdateWorkstream(targetId, { position: draggedPosition }),
         ]);
       } catch (err) {
-        workstreams.setWorkstreams(prev => prev.map(w => {
-          if (w.id === draggedId) return { ...w, position: draggedPosition };
-          if (w.id === targetId) return { ...w, position: targetPosition };
-          return w;
+        workstreams.setWorkstreams(prev => applyPositionUpdates(prev, {
+          [draggedId]: draggedPosition,
+          [targetId]: targetPosition,
         }));
         await workstreams.reload();
         await modal.alert('Error', getErrorMessage(err, 'Failed to reorder workstreams'));
@@ -383,17 +382,13 @@ export default function App() {
     const originalTask = tasks.tasks.find(t => t.id === taskId);
     if (!originalTask) return;
 
-    tasks.setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, workstream_id: workstreamId, position: newPosition } : t
-    ));
+    tasks.setTasks(prev => applyTaskMove(prev, taskId, workstreamId, newPosition));
 
     void (async () => {
       try {
         await updateTask(taskId, { workstream_id: workstreamId, position: newPosition });
       } catch (err) {
-        tasks.setTasks(prev => prev.map(t => (
-          t.id === taskId ? originalTask : t
-        )));
+        tasks.setTasks(prev => replaceItemById(prev, originalTask));
         await tasks.reload();
         await modal.alert('Error', getErrorMessage(err, 'Failed to move task'));
       }
@@ -408,11 +403,10 @@ export default function App() {
     const draggedPosition = dragged.position;
     const targetPosition = target.position;
 
-    aiFlows.setFlows(prev => prev.map(f => {
-      if (f.id === draggedId) return { ...f, position: targetPosition };
-      if (f.id === targetId) return { ...f, position: draggedPosition };
-      return f;
-    }).sort((a, b) => a.position - b.position));
+    aiFlows.setFlows(prev => applyPositionUpdates(prev, {
+      [draggedId]: targetPosition,
+      [targetId]: draggedPosition,
+    }, { sort: true }));
 
     void (async () => {
       try {
@@ -421,11 +415,10 @@ export default function App() {
           apiUpdateFlow(targetId, { position: draggedPosition }),
         ]);
       } catch (err) {
-        aiFlows.setFlows(prev => prev.map(f => {
-          if (f.id === draggedId) return { ...f, position: draggedPosition };
-          if (f.id === targetId) return { ...f, position: targetPosition };
-          return f;
-        }).sort((a, b) => a.position - b.position));
+        aiFlows.setFlows(prev => applyPositionUpdates(prev, {
+          [draggedId]: draggedPosition,
+          [targetId]: targetPosition,
+        }, { sort: true }));
         await aiFlows.reload();
         await modal.alert('Error', getErrorMessage(err, 'Failed to reorder flows'));
       }

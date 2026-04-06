@@ -387,7 +387,7 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
                   >&times;</button>
                 </div>
               ) : (
-                <select className={s.select} value={type} onChange={e => {
+                <select aria-label="Type" className={s.select} value={type} onChange={e => {
                   if (e.target.value === '__custom__') {
                     setCustomPipeline(
                       PIPELINE_OPTIONS.some(option => option.value === type) ? type : 'feature'
@@ -414,7 +414,7 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
             </div>
             <div className={s.field}>
               <label className={s.label}>Assignee</label>
-              <select className={s.select} value={assignee ? `human:${assignee}` : (flowId ? `flow:${flowId}` : '')} onChange={e => {
+              <select aria-label="Assignee" className={s.select} value={assignee ? `human:${assignee}` : (flowId ? `flow:${flowId}` : '')} onChange={e => {
                 const val = e.target.value;
                 if (val.startsWith('flow:')) {
                   setFlowId(val.slice(5));
