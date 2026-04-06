@@ -459,7 +459,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
         const phaseOutput = {
           phase: step.name,
-          attempt,
+          attempt: displayAttempt,
           output: output.substring(0, 10000),
           summary: extractPhaseSummary(output),
         };
@@ -546,7 +546,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
                 completed_at: new Date().toISOString(),
                 question: failMsg,
               }).eq('id', jobId);
-              await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
+              await supabase.from('tasks').update({ status: 'failed' }).eq('id', task.id);
               onFail(failMsg);
               return;
             }
@@ -563,7 +563,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         if (err.message === 'Job canceled') return;
 
         onLog(`\nError in step ${step.name}: ${err.message}\n`);
-        if (attempt >= maxAttempts) {
+        if (displayAttempt >= maxAttempts) {
           let failMessage = `Step '${step.name}' failed: ${err.message}`;
           try {
             const { revertToCheckpoint } = await import('./checkpoint.js');
@@ -1229,7 +1229,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
         const phaseOutput = {
           phase,
-          attempt,
+          attempt: displayAttempt,
           output: output.substring(0, 10000), // Cap output size
           summary: extractPhaseSummary(output),
         };
@@ -1337,7 +1337,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
         if (err.message === 'Job canceled') return;
 
         onLog(`\nError in phase ${phase}: ${err.message}\n`);
-        if (attempt >= maxAttempts) {
+        if (displayAttempt >= maxAttempts) {
           let failMessage = `Phase '${phase}' failed: ${err.message}`;
           let revertSucceeded = false;
           try {
@@ -1569,7 +1569,7 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
       // If claude streamed a result event but exited non-zero, treat as success.
       // The CLI sometimes exits 1 after completing successfully (e.g. max turns reached).
       const hasResult = fullOutput.includes('[done] Phase complete');
-      if (code === 0 || hasResult) {
+      if (code === 0 || code === null || hasResult) {
         resolve(fullOutput);
       } else {
         // Include stderr in error for diagnosability

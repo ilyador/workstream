@@ -456,10 +456,6 @@ dataRouter.post('/api/comments', requireAuth, async (req, res) => {
     }
   }
 
-  // Broadcast comment change for live updates
-  const { data: commentTask } = await supabase.from('tasks').select('project_id').eq('id', task_id).single();
-  if (commentTask?.project_id) broadcast(commentTask.project_id, { type: 'comment_changed', task_id });
-
   res.json(data);
 });
 
@@ -471,11 +467,6 @@ dataRouter.delete('/api/comments/:id', requireAuth, async (req, res) => {
   if (comment.user_id !== userId) return res.status(403).json({ error: 'Can only delete your own comments' });
   const { error } = await supabase.from('comments').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ error: error.message });
-  // Broadcast comment deletion for live updates
-  if (comment.task_id) {
-    const { data: commentTask } = await supabase.from('tasks').select('project_id').eq('id', comment.task_id).single();
-    if (commentTask?.project_id) broadcast(commentTask.project_id, { type: 'comment_deleted', task_id: comment.task_id });
-  }
   res.json({ ok: true });
 });
 
@@ -516,7 +507,6 @@ dataRouter.post('/api/artifacts', requireAuth, async (req, res) => {
     repo_path: repo_path || null,
   }).select().single();
   if (error) return res.status(400).json({ error: error.message });
-  broadcast(access.projectId, { type: 'artifact_changed', task_id });
   res.json({ ...artifact, url: `/api/artifacts/${artifact.id}/download` });
 });
 
@@ -562,7 +552,6 @@ dataRouter.delete('/api/artifacts/:id', requireAuth, async (req, res) => {
   await supabase.storage.from('task-artifacts').remove([artifact.storage_path]);
   const { error } = await supabase.from('task_artifacts').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ error: error.message });
-  if (projectId) broadcast(projectId, { type: 'artifact_deleted', task_id: artifact.task_id });
   res.json({ ok: true });
 });
 
@@ -583,7 +572,6 @@ dataRouter.patch('/api/artifacts/:id', requireAuth, async (req, res) => {
   if (uploadErr) return res.status(500).json({ error: `Storage upload failed: ${uploadErr.message}` });
 
   await supabase.from('task_artifacts').update({ size_bytes: buffer.length }).eq('id', req.params.id);
-  broadcast(access.projectId, { type: 'artifact_changed', task_id: artifact.task_id });
   res.json({ ok: true, size_bytes: buffer.length });
 });
 

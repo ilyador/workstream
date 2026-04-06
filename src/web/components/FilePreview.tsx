@@ -125,6 +125,7 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
   const [saving, setSaving] = useState(false);
   const [contentKey, setContentKey] = useState(0);
   const textRef = useRef('');
+  const canceledRef = useRef(false);
 
   const preview = useCallback((f: PreviewFile) => {
     if (isPreviewable(f.mime_type)) {
@@ -200,7 +201,7 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
                     </button>
                     <button
                       className="btn btnGhost btnSm"
-                      onClick={() => { setEditing(false); setDirty(false); setContentKey(k => k + 1); }}
+                      onClick={() => { canceledRef.current = true; setEditing(false); setDirty(false); setContentKey(k => k + 1); }}
                     >
                       Cancel
                     </button>
@@ -224,6 +225,7 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
                   editing={editing}
                   onTextChange={(text) => {
                     handleTextChange(text);
+                    if (canceledRef.current) { canceledRef.current = false; return; }
                     if (editing) setDirty(true);
                   }}
                 />
