@@ -1,14 +1,11 @@
 import React from 'react';
-import { ArtifactConnector } from './ArtifactConnector';
 import type { TaskCardProps } from './TaskCard';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
+import { WorkstreamTaskChainGroup } from './WorkstreamTaskChainGroup';
+import { WorkstreamTaskListItem } from './WorkstreamTaskListItem';
+import type { BuildTaskCardProps, ChainGroup } from './workstream-task-list-types';
 import s from './WorkstreamColumn.module.css';
-
-interface ChainGroup {
-  taskIds: string[];
-  startIndex: number;
-}
 
 interface WorkstreamTaskListProps {
   tasks: TaskView[];
@@ -104,7 +101,7 @@ export function WorkstreamTaskList({
     });
   };
 
-  const buildCardProps = (
+  const buildCardProps: BuildTaskCardProps = (
     task: TaskView,
     index: number,
     options?: {
@@ -206,61 +203,21 @@ export function WorkstreamTaskList({
             const isGroupDragging = draggedGroupIds ? group.taskIds.some(id => draggedGroupIds.includes(id)) : false;
             group.taskIds.forEach(id => rendered.add(id));
 
-            const handleGroupDragStart = (e?: React.DragEvent) => {
-              if (e) {
-                const chainGroupEl = (e.target as HTMLElement).closest(`.${s.chainGroup}`) as HTMLElement;
-                if (chainGroupEl) {
-                  const clone = chainGroupEl.cloneNode(true) as HTMLElement;
-                  clone.style.width = `${chainGroupEl.offsetWidth}px`;
-                  clone.style.transform = 'rotate(2deg) scale(1.02)';
-                  clone.style.boxShadow = '0 12px 32px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.1)';
-                  clone.style.borderRadius = '10px';
-                  clone.style.opacity = '0.92';
-                  clone.style.position = 'fixed';
-                  clone.style.top = '-9999px';
-                  clone.style.left = '-9999px';
-                  clone.style.pointerEvents = 'none';
-                  clone.id = '__drag-preview__';
-                  document.getElementById('__drag-preview__')?.remove();
-                  document.body.appendChild(clone);
-                  e.dataTransfer.setDragImage(clone, chainGroupEl.offsetWidth / 2, 20);
-                }
-              }
-              onDragGroupStart?.(group.taskIds);
-            };
-
-            const handleGroupDragEnd = () => {
-              document.getElementById('__drag-preview__')?.remove();
-              onDragTaskEnd();
-            };
-
             return (
-              <div
+              <WorkstreamTaskChainGroup
                 key={`chain-${group.taskIds[0]}`}
-                className={`${s.chainGroup} ${isGroupDragging ? s.chainGroupDragging : ''}`}
-                data-group-ids={group.taskIds.join(',')}
-              >
-                {groupTasks.map((groupTask, groupIndex) => (
-                  <React.Fragment key={groupTask.id}>
-                    {groupIndex > 0 && (
-                      <ArtifactConnector
-                        taskId={groupTasks[groupIndex - 1].id}
-                        projectId={projectId || undefined}
-                      />
-                    )}
-                    <div className={s.cardWrap} data-task-id={groupTask.id}>
-                      {renderCard(buildCardProps(groupTask, index, {
-                        prevTaskId: groupIndex > 0 ? groupTasks[groupIndex - 1].id : (index > 0 ? tasks[index - 1]?.id : null),
-                        onDragStart: handleGroupDragStart,
-                        onDragEnd: handleGroupDragEnd,
-                        isDragging: isGroupDragging,
-                        dragDisabled: dragDisabledGlobal || index <= freezeIndex,
-                        skipDragGhost: true,
-                      }))}
-                    </div>
-                  </React.Fragment>
-                ))}
-              </div>
+                group={group}
+                groupTasks={groupTasks}
+                index={index}
+                previousTaskId={index > 0 ? tasks[index - 1]?.id || null : null}
+                projectId={projectId || undefined}
+                isDragging={isGroupDragging}
+                dragDisabled={dragDisabledGlobal || index <= freezeIndex}
+                buildCardProps={buildCardProps}
+                renderCard={renderCard}
+                onDragGroupStart={onDragGroupStart}
+                onDragTaskEnd={onDragTaskEnd}
+              />
             );
           }
 
@@ -276,18 +233,20 @@ export function WorkstreamTaskList({
           );
 
           return (
-            <div key={task.id}>
-              {showConnector && <ArtifactConnector taskId={prevTask.id} projectId={projectId || undefined} />}
-              <div className={s.cardWrap} data-task-id={task.id}>
-                {renderCard(buildCardProps(task, index, {
-                  prevTaskId: prevTask?.id || null,
-                  onDragStart: () => onDragTaskStart(task.id),
-                  onDragEnd: onDragTaskEnd,
-                  isDragging: draggedTaskId === task.id,
-                  dragDisabled: dragDisabledGlobal || index <= freezeIndex,
-                }))}
-              </div>
-            </div>
+            <WorkstreamTaskListItem
+              key={task.id}
+              task={task}
+              index={index}
+              prevTask={prevTask}
+              projectId={projectId || undefined}
+              draggedTaskId={draggedTaskId}
+              dragDisabled={dragDisabledGlobal || index <= freezeIndex}
+              showConnector={showConnector}
+              buildCardProps={buildCardProps}
+              renderCard={renderCard}
+              onDragTaskStart={onDragTaskStart}
+              onDragTaskEnd={onDragTaskEnd}
+            />
           );
         });
       })()}

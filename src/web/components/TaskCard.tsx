@@ -7,6 +7,7 @@ import { TaskIdleDetail } from './TaskIdleDetail';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
 import type { MentionMember, TaskCardMetaItem } from './task-card-types';
+import { clearDragPreview, setClonedDragPreview } from '../lib/drag-preview';
 import s from './TaskCard.module.css';
 
 function cap(str: string) { return str.charAt(0).toUpperCase() + str.slice(1); }
@@ -145,19 +146,7 @@ export function TaskCardView({
               if (!skipDragGhost) {
                 const card = (e.target as HTMLElement).closest(`.${s.card}`) as HTMLElement;
                 if (card) {
-                  const clone = card.cloneNode(true) as HTMLElement;
-                  clone.style.width = `${card.offsetWidth}px`;
-                  clone.style.transform = 'rotate(2deg) scale(1.02)';
-                  clone.style.boxShadow = '0 12px 32px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.1)';
-                  clone.style.borderRadius = '10px';
-                  clone.style.opacity = '0.92';
-                  clone.style.position = 'fixed';
-                  clone.style.top = '-9999px';
-                  clone.style.left = '-9999px';
-                  clone.style.pointerEvents = 'none';
-                  clone.id = '__drag-preview__';
-                  document.body.appendChild(clone);
-                  e.dataTransfer.setDragImage(clone, card.offsetWidth / 2, 20);
+                  setClonedDragPreview(card, e.dataTransfer);
                 }
               }
               onDragStart?.(e);
@@ -165,7 +154,7 @@ export function TaskCardView({
             }}
             onDragEnd={(e) => {
               e.stopPropagation();
-              document.getElementById('__drag-preview__')?.remove();
+              clearDragPreview();
               onDragEnd?.();
             }}
             onClick={(e) => e.stopPropagation()}
