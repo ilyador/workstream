@@ -66,8 +66,8 @@ export function NewProject({ onCreate }: Props) {
         ...(mode === 'local' ? { url: 'http://127.0.0.1:54321' } : {}),
       };
       await onCreate(name.trim(), config, localPath.trim());
-    } catch (err: any) {
-      setError(err.message || 'Failed to create project');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create project');
     } finally {
       setLoading(false);
     }

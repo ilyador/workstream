@@ -47,6 +47,7 @@
   .right { gap: 4px; flex-shrink: 0; }
   .logo { display: none; }
   .sep { display: none; }
+  .milestone { display: none; }
   .localPath { display: none; }
   .localPathBtn { display: none; }
   .localPathInput { display: none; }

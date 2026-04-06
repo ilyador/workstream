@@ -17,13 +17,15 @@ export function useComments(taskId: string | null, projectId?: string | null) {
 
   const load = useCallback(async () => {
     if (!taskId) return;
-    const data = await getComments(taskId);
+    const data = await getComments(taskId) as Comment[];
     setComments(data);
     setLoaded(true);
   }, [taskId]);
 
   useEffect(() => {
-    load();
+    queueMicrotask(() => {
+      void load();
+    });
     if (!projectId) return;
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if ((event.type === 'comment_changed' || event.type === 'comment_deleted') && event.task_id === taskId) {

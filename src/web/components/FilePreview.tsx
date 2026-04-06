@@ -1,27 +1,10 @@
-import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { formatFileSize } from '../lib/file-utils';
 import { updateArtifactContent } from '../lib/api';
+import { FilePreviewContext, type PreviewFile } from './filePreviewContext';
 import s from './FilePreview.module.css';
-
-interface PreviewFile {
-  id?: string;
-  url: string;
-  filename: string;
-  mime_type: string;
-  size_bytes?: number;
-}
-
-interface FilePreviewContextValue {
-  preview: (file: PreviewFile) => void;
-}
-
-const FilePreviewContext = createContext<FilePreviewContextValue>({ preview: () => {} });
-
-export function useFilePreview() {
-  return useContext(FilePreviewContext);
-}
 
 const PREVIEWABLE = [
   'image/',
@@ -48,7 +31,9 @@ function PreviewContent({ file, editing, onTextChange }: { file: PreviewFile; ed
   useEffect(() => {
     const isText = mime.startsWith('text/') || mime === 'application/json';
     if (!isText) return;
-    setLoading(true);
+    queueMicrotask(() => {
+      setLoading(true);
+    });
     fetch(url)
       .then(r => r.text())
       .then(t => { setText(t); onTextChange?.(t); setLoading(false); })
@@ -105,7 +90,11 @@ function PreviewContent({ file, editing, onTextChange }: { file: PreviewFile; ed
   if (mime === 'application/json') {
     if (loading) return <div className={s.loading}>Loading...</div>;
     let formatted = text || '';
-    try { formatted = JSON.stringify(JSON.parse(formatted), null, 2); } catch {}
+    try {
+      formatted = JSON.stringify(JSON.parse(formatted), null, 2);
+    } catch {
+      // Leave invalid JSON as-is for inspection.
+    }
     return <pre className={s.previewCode}>{formatted}</pre>;
   }
 

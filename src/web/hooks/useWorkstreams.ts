@@ -27,7 +27,9 @@ export function useWorkstreams(projectId: string | null) {
   }, [projectId]);
 
   useEffect(() => {
-    load();
+    queueMicrotask(() => {
+      void load();
+    });
     if (!projectId) return;
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if (event.type === 'workstream_changed' && event.workstream) {

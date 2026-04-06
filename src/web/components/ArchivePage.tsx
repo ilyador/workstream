@@ -22,11 +22,22 @@ interface Task {
   effort: string;
   multiagent?: string;
   auto_continue: boolean;
-  assignee?: { type: string; name?: string; initials?: string } | null;
+  assignee?: string | null;
   images?: string[];
   status?: string;
   priority?: string;
+  workstream_id?: string | null;
+  position?: number;
+  flow_id?: string | null;
+  chaining?: string;
 }
+
+type ArchiveColumnTask = Omit<Task, 'assignee' | 'workstream_id' | 'position' | 'chaining'> & {
+  assignee: { type: string; name?: string; initials?: string } | null;
+  workstream_id: string | null;
+  position: number;
+  chaining?: 'none' | 'produce' | 'accept' | 'both';
+};
 
 interface ArchivePageProps {
   workstreams: Workstream[];
@@ -40,6 +51,28 @@ interface ArchivePageProps {
 
 const emptySet = new Set<string>();
 const noop = () => {};
+
+function normalizeChaining(value?: string): 'none' | 'produce' | 'accept' | 'both' | undefined {
+  return value === 'none' || value === 'produce' || value === 'accept' || value === 'both'
+    ? value
+    : undefined;
+}
+
+function mapArchiveTask(
+  task: Task,
+  memberMap: Record<string, { name: string; initials: string }>,
+): ArchiveColumnTask {
+  const member = task.assignee ? memberMap[task.assignee] : null;
+  return {
+    ...task,
+    assignee: member
+      ? { type: 'user', name: member.name, initials: member.initials }
+      : task.assignee ? { type: 'ai' } : null,
+    workstream_id: task.workstream_id ?? null,
+    position: task.position ?? 0,
+    chaining: normalizeChaining(task.chaining),
+  };
+}
 
 export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, onRestore, onUpdateTask }: ArchivePageProps) {
   const taskJobMap = useMemo(() => {
@@ -56,17 +89,9 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
 
   const completedBacklogTasks = useMemo(() => {
     return tasks
-      .filter(t => !(t as any).workstream_id && t.status === 'done')
-      .map(t => {
-        const member = (t as any).assignee ? memberMap[(t as any).assignee] : null;
-        return {
-          ...t,
-          assignee: member
-            ? { type: 'user', name: member.name, initials: member.initials }
-            : (t as any).assignee ? { type: 'ai' } : null,
-        };
-      })
-      .sort((a, b) => ((a as any).position || 0) - ((b as any).position || 0));
+      .filter(t => !t.workstream_id && t.status === 'done')
+      .map(t => mapArchiveTask(t, memberMap))
+      .sort((a, b) => a.position - b.position);
   }, [tasks, memberMap]);
 
   if (workstreams.length === 0 && completedBacklogTasks.length === 0) {
@@ -101,17 +126,9 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
       )}
       {workstreams.map(ws => {
         const wsTasks = tasks
-          .filter(t => (t as any).workstream_id === ws.id)
-          .map(t => {
-            const member = (t as any).assignee ? memberMap[(t as any).assignee] : null;
-            return {
-              ...t,
-              assignee: member
-                ? { type: 'user', name: member.name, initials: member.initials }
-                : (t as any).assignee ? { type: 'ai' } : null,
-            };
-          })
-          .sort((a, b) => ((a as any).position || 0) - ((b as any).position || 0));
+          .filter(t => t.workstream_id === ws.id)
+          .map(t => mapArchiveTask(t, memberMap))
+          .sort((a, b) => a.position - b.position);
 
         return (
           <div key={ws.id} className={s.columnWrap}>

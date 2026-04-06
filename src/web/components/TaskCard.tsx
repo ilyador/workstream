@@ -5,8 +5,8 @@ import { useComments } from '../hooks/useComments';
 import { useMembers } from '../hooks/useMembers';
 import { useArtifacts } from '../hooks/useArtifacts';
 import { getFileIcon, formatFileSize } from '../lib/file-utils';
-import { useModal } from '../hooks/useModal';
-import { useFilePreview } from './FilePreview';
+import { useModal } from '../hooks/modal-context';
+import { useFilePreview } from './filePreviewContext';
 import { timeAgo, elapsed } from '../lib/time';
 import { LiveLogs } from './LiveLogs';
 import { ReplyInput } from './ReplyInput';
@@ -135,18 +135,13 @@ export function TaskCard({
     ? s[`tag${cap(jobStatus)}`] : '';
 
   // Local elapsed timer — only ticks when this card's job is running
-  const [elapsedText, setElapsedText] = useState(
-    jobStatus === 'running' && job?.startedAt ? elapsed(job.startedAt) : ''
-  );
+  const [, setElapsedTick] = useState(0);
   useEffect(() => {
-    if (jobStatus !== 'running' || !job?.startedAt) {
-      setElapsedText('');
-      return;
-    }
-    setElapsedText(elapsed(job.startedAt));
-    const interval = setInterval(() => setElapsedText(elapsed(job.startedAt!)), 1000);
+    if (jobStatus !== 'running' || !job?.startedAt) return;
+    const interval = setInterval(() => setElapsedTick(tick => tick + 1), 1000);
     return () => clearInterval(interval);
   }, [jobStatus, job?.startedAt]);
+  const elapsedText = jobStatus === 'running' && job?.startedAt ? elapsed(job.startedAt) : '';
 
   const [showRework, setShowRework] = useState(false);
   const [showDoneReject, setShowDoneReject] = useState(false);
@@ -269,9 +264,11 @@ export function TaskCard({
                   </span>
                 </div>
               )}
-              {job.phases.some(p => p.status === 'completed' && p.summary) && (
+              {job.phases?.some(p => p.status === 'completed' && p.summary) && (
                 <div className={s.stepSummaries}>
-                  {job.phases.filter(p => p.status === 'completed' && p.summary).map(p => (
+                  {job.phases
+                    .filter(p => p.status === 'completed' && p.summary)
+                    .map(p => (
                     <div key={p.name} className={s.stepSummary}>
                       <span className={s.stepName}>{p.name}</span> {p.summary}
                     </div>
@@ -311,10 +308,9 @@ export function TaskCard({
                   ))}
                 </div>
               )}
-              {job.review && (job.review.filesChanged ?? 0) > 0 && (
+              {job.review?.testsPassed === true && (
                 <div className={s.checks}>
                   <span className={s.checkOk}>&#10003; Tests pass</span>
-                  <span className={s.checkOk}>&#10003; Architecture rules pass</span>
                 </div>
               )}
               <div className={s.reviewActions}>

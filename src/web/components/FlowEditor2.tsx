@@ -1,9 +1,11 @@
-import { useState, useCallback, useMemo } from 'react';
-import { updateFlowSteps as apiUpdateFlowSteps, type Flow, type FlowStep } from '../lib/api';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import type { Flow, FlowStep } from '../lib/api';
 import { MdField } from './MdField';
 import { WorkstreamColumn } from './WorkstreamColumn';
 import { useBoardDrag } from '../hooks/useBoardDrag';
+import { useModal } from '../hooks/modal-context';
 import { BUILT_IN_TYPES, ALL_TOOLS, ALL_CONTEXT_SOURCES, MODEL_OPTIONS, ON_MAX_RETRIES_OPTIONS } from '../lib/constants';
+import { FlowStepCard } from './FlowStepCard';
 import boardStyles from './Board.module.css';
 import colStyles from './WorkstreamColumn.module.css';
 import formStyles from './TaskForm.module.css';
@@ -13,8 +15,8 @@ interface FlowEditor2Props {
   flows: Flow[];
   setFlows: React.Dispatch<React.SetStateAction<Flow[]>>;
   onSave: (flowId: string, updates: { name?: string; description?: string; agents_md?: string; default_types?: string[]; position?: number }) => Promise<void>;
-  onSaveSteps: (flowId: string, steps: any[]) => Promise<void>;
-  onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: any[] }) => Promise<Flow>;
+  onSaveSteps: (flowId: string, steps: FlowStepInput[]) => Promise<void>;
+  onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: FlowStepInput[] }) => Promise<Flow>;
   onDeleteFlow: (flowId: string) => Promise<void>;
   onSwapColumns: (draggedId: string, targetId: string) => void;
   projectId: string;
@@ -23,6 +25,12 @@ interface FlowEditor2Props {
 
 const EMPTY_JOB_MAP = {};
 const EMPTY_SET = new Set<string>();
+
+type FlowStepInput = Omit<FlowStep, 'id'>;
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
 
 function makeBlankStep(position: number): FlowStep {
   return {
@@ -35,7 +43,7 @@ function makeBlankStep(position: number): FlowStep {
   };
 }
 
-function stepsPayload(steps: FlowStep[]) {
+function stepsPayload(steps: FlowStep[]): FlowStepInput[] {
   return steps.map((st, i) => ({
     name: st.name.trim() || `Step ${i + 1}`, position: i + 1,
     instructions: st.instructions, model: st.model, tools: st.tools,
@@ -207,14 +215,15 @@ function StepModalWrapper({
   onClose: () => void;
 }) {
   const isNew = stepIdx === -1;
-  const sorted = useMemo(() => sortedSteps(flow), [flow.flow_steps]);
+  const modal = useModal();
+  const sorted = sortedSteps(flow);
   const [steps, setSteps] = useState<FlowStep[]>(() =>
     isNew ? [...sorted, makeBlankStep(sorted.length + 1)] : sorted
   );
   const activeIdx = isNew ? steps.length - 1 : stepIdx;
   const step = steps[activeIdx];
 
-  if (!step) { onClose(); return null; }
+  if (!step) return null;
 
   const update = (patch: Partial<FlowStep>) =>
     setSteps(prev => prev.map((s, i) => i === activeIdx ? { ...s, ...patch } : s));
@@ -226,13 +235,21 @@ function StepModalWrapper({
       { ...s, context_sources: s.context_sources.includes(src) ? s.context_sources.filter(c => c !== src) : [...s.context_sources, src] }));
 
   const handleSave = async () => {
-    try { await onSaveSteps(flow.id, stepsPayload(steps)); onClose(); }
-    catch (err: any) { console.error(err); }
+    try {
+      await onSaveSteps(flow.id, stepsPayload(steps));
+      onClose();
+    } catch (err) {
+      await modal.alert('Error', getErrorMessage(err, 'Failed to save flow steps'));
+    }
   };
   const handleDelete = async () => {
     const next = steps.filter((_, i) => i !== activeIdx).map((s, i) => ({ ...s, position: i + 1 }));
-    try { await onSaveSteps(flow.id, stepsPayload(next)); onClose(); }
-    catch (err: any) { console.error(err); }
+    try {
+      await onSaveSteps(flow.id, stepsPayload(next));
+      onClose();
+    } catch (err) {
+      await modal.alert('Error', getErrorMessage(err, 'Failed to delete flow step'));
+    }
   };
 
   return (
@@ -275,32 +292,41 @@ function FlowHeaderExtra({ flow, allFlows, onSave, taskTypes }: {
    Agents.md collapsible section (flow-specific, passed via listHeader)
    ───────────────────────────────────────────────── */
 function AgentsMdSection({ flow, onSave }: { flow: Flow; onSave: FlowEditor2Props['onSave'] }) {
+  const modal = useModal();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(flow.agents_md ?? '');
   const [saving, setSaving] = useState(false);
 
-  // Sync on external changes
   const flowAgentsMd = flow.agents_md ?? '';
+  useEffect(() => {
+    setValue(flowAgentsMd);
+  }, [flowAgentsMd]);
   const dirty = value !== flowAgentsMd;
 
   return (
     <div className={s.agentsMdSection}>
-      <button className={s.sectionToggle} onClick={() => setOpen(v => !v)} type="button">
-        <span className={`${s.sectionArrow} ${open ? s.sectionArrowOpen : ''}`}>&#9654;</span>
-        agents.md
-        {flowAgentsMd && !open && <span className={s.sectionHint}>(has content)</span>}
+      <div className={s.sectionHeader}>
+        <button className={s.sectionToggle} onClick={() => setOpen(v => !v)} type="button">
+          <span className={`${s.sectionArrow} ${open ? s.sectionArrowOpen : ''}`}>&#9654;</span>
+          agents.md
+          {flowAgentsMd && !open && <span className={s.sectionHint}>(has content)</span>}
+        </button>
         {dirty && (
           <button className="btn btnPrimary btnSm" style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: 11 }}
-            onClick={async (e) => {
-              e.stopPropagation();
+            onClick={async () => {
               setSaving(true);
-              try { await onSave(flow.id, { agents_md: value }); }
-              catch {} finally { setSaving(false); }
+              try {
+                await onSave(flow.id, { agents_md: value });
+              } catch (err) {
+                await modal.alert('Error', getErrorMessage(err, 'Failed to save agents.md'));
+              } finally {
+                setSaving(false);
+              }
             }}
             disabled={saving}
           >{saving ? 'Saving...' : 'Save'}</button>
         )}
-      </button>
+      </div>
       {open && (
         <div className={s.agentsMdBody}>
           <MdField value={value} onChange={setValue}
@@ -318,6 +344,7 @@ export function FlowEditor2({ flows, setFlows, onSave, onSaveSteps, onCreateFlow
   const [creating, setCreating] = useState(false);
 
   const drag = useBoardDrag({ onSwapColumns });
+  const modal = useModal();
 
   // Modal state at board level (not clipped by column overflow: hidden)
   const [modalTarget, setModalTarget] = useState<{ flowId: string; stepIdx: number } | null>(null);
@@ -343,7 +370,7 @@ export function FlowEditor2({ flows, setFlows, onSave, onSaveSteps, onCreateFlow
   }, [flows]);
 
   // Task (step) drop: reorder within flow
-  const handleDropTask = useCallback((workstreamId: string | null, dropBeforeTaskId: string | null) => {
+  const handleDropTask = useCallback(async (workstreamId: string | null, dropBeforeTaskId: string | null) => {
     if (!drag.draggedTaskId || !workstreamId) return;
     const info = stepLookup.get(drag.draggedTaskId);
     if (!info || info.flowId !== workstreamId) return;
@@ -366,14 +393,25 @@ export function FlowEditor2({ flows, setFlows, onSave, onSaveSteps, onCreateFlow
     setFlows(prev => prev.map(f =>
       f.id === workstreamId ? { ...f, flow_steps: reordered } : f
     ));
-    apiUpdateFlowSteps(workstreamId, stepsPayload(reordered));
-    drag.setDraggedTaskId(null);
-  }, [drag.draggedTaskId, stepLookup, flows, setFlows]);
+    try {
+      await onSaveSteps(workstreamId, stepsPayload(reordered));
+    } catch (err) {
+      setFlows(prev => prev.map(f =>
+        f.id === workstreamId ? { ...f, flow_steps: sorted } : f
+      ));
+      await modal.alert('Error', getErrorMessage(err, 'Failed to reorder flow steps'));
+    } finally {
+      drag.setDraggedTaskId(null);
+    }
+  }, [drag, stepLookup, flows, setFlows, onSaveSteps, modal]);
 
   const handleNewFlow = useCallback(async () => {
     setCreating(true);
-    try { await onCreateFlow({ project_id: projectId, name: 'New Flow', description: '', steps: [] }); }
-    catch (err: any) { console.error('Failed to create flow:', err); }
+    try {
+      await onCreateFlow({ project_id: projectId, name: 'New Flow', description: '', steps: [] });
+    } catch (err) {
+      console.error('Failed to create flow:', err);
+    }
     finally { setCreating(false); }
   }, [projectId, onCreateFlow]);
 
@@ -437,6 +475,9 @@ export function FlowEditor2({ flows, setFlows, onSave, onSaveSteps, onCreateFlow
               ...(step.is_gate ? [{ label: 'gate', value: `max ${step.max_retries} retries, then ${step.on_max_retries}` }] : []),
             ];
           }}
+          renderTaskCard={(cardProps) => (
+            <FlowStepCard {...cardProps} />
+          )}
         />
       ))}
 

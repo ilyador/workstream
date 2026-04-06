@@ -35,16 +35,18 @@ export function ReplyInput({ onReply, localPath, placeholder }: { onReply: (answ
     slash.handleTextChange(text, cursor);
   }, [slash]);
 
-  const handleReply = async () => {
+  const handleReply = useCallback(async () => {
     if (!val.trim() || sending) return;
     setSending(true);
     try {
       await onReply(val.trim());
       setVal('');
       slash.dismiss();
-    } catch { /* error handled by parent */ }
+    } catch {
+      // Error handled by parent.
+    }
     finally { setSending(false); }
-  };
+  }, [onReply, sending, slash, val]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (slash.handleKeyDown(e, insertSkill)) return;

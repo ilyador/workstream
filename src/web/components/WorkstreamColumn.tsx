@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useModal } from '../hooks/useModal';
+import { useModal } from '../hooks/modal-context';
 import { TaskCard } from './TaskCard';
 import { ArtifactConnector } from './ArtifactConnector';
 import type { JobView } from './job-types';
 import s from './WorkstreamColumn.module.css';
 import taskStyles from './TaskCard.module.css';
+
+const UNTOUCHED_STATUSES = new Set(['backlog', 'todo']);
 
 interface Task {
   id: string;
@@ -20,6 +22,9 @@ interface Task {
   status?: string;
   priority?: string;
   chaining?: 'none' | 'produce' | 'accept' | 'both';
+  workstream_id?: string | null;
+  position?: number;
+  flow_id?: string | null;
 }
 
 interface Workstream {
@@ -32,6 +37,40 @@ interface Workstream {
   pr_url?: string | null;
   reviewer_id?: string | null;
   review_output?: string | null;
+}
+
+export interface WorkstreamTaskCardProps {
+  task: Task;
+  job: JobView | null;
+  canRunAi: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onRun?: (taskId: string) => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
+  onTerminate?: (jobId: string) => void;
+  onReply?: (jobId: string, answer: string) => void;
+  onApprove?: (jobId: string) => void;
+  onReject?: (jobId: string) => void;
+  onRework?: (jobId: string, note: string) => void;
+  onDeleteJob?: (jobId: string) => void;
+  onMoveToBacklog?: (jobId: string) => void;
+  onContinue?: (jobId: string) => void;
+  onDragStart?: (e?: React.DragEvent) => void;
+  onDragEnd?: () => void;
+  isDragging?: boolean;
+  dragDisabled?: boolean;
+  skipDragGhost?: boolean;
+  showPriority?: boolean;
+  isBacklog?: boolean;
+  projectId?: string;
+  hasUnreadMention?: boolean;
+  commentCount?: number;
+  brokenLink?: { up: boolean; down: boolean } | null;
+  metaItems?: { label: string; value: string }[];
+  hideComments?: boolean;
+  prevTaskId?: string | null;
 }
 
 interface WorkstreamColumnProps {
@@ -84,6 +123,7 @@ interface WorkstreamColumnProps {
   hideComments?: boolean;
   listHeader?: React.ReactNode;
   headerExtra?: React.ReactNode;
+  renderTaskCard?: (props: WorkstreamTaskCardProps) => React.ReactNode;
 }
 
 export function WorkstreamColumn({
@@ -131,6 +171,7 @@ export function WorkstreamColumn({
   hideComments,
   listHeader,
   headerExtra,
+  renderTaskCard,
 }: WorkstreamColumnProps) {
   const modal = useModal();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -144,8 +185,6 @@ export function WorkstreamColumn({
   const dragCountRef = useRef(0); // track enter/leave balance to handle child elements
   const colDragCountRef = useRef(0);
   const columnScrollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const groupGhostRef = useRef<HTMLElement | null>(null);
 
   // Detect chains: consecutive tasks where prev produces and current accepts
   const chainGroups = useMemo(() => {
@@ -179,7 +218,6 @@ export function WorkstreamColumn({
   }, [chainGroups]);
 
   // Freeze line: index of last task with a non-default status (touched tasks are locked)
-  const UNTOUCHED_STATUSES = new Set(['backlog', 'todo']);
   const freezeIndex = useMemo(() => {
     let lastTouched = -1;
     for (let i = 0; i < tasks.length; i++) {
@@ -265,14 +303,16 @@ export function WorkstreamColumn({
 
   const prevActiveRef = useRef<string | null>(null);
   useEffect(() => {
-    if (activeTaskId && activeTaskId !== prevActiveRef.current) {
+    if (!activeTaskId || activeTaskId === prevActiveRef.current) return;
+    const frameId = requestAnimationFrame(() => {
       setExpandedIds(prev => {
         const next = new Set(prev);
         next.add(activeTaskId);
         return next;
       });
-    }
+    });
     prevActiveRef.current = activeTaskId;
+    return () => cancelAnimationFrame(frameId);
   }, [activeTaskId]);
 
   // Focus a task from ?task= URL param: expand, scroll into view, highlight
@@ -282,14 +322,13 @@ export function WorkstreamColumn({
     const match = tasks.find(t => t.id === focusTaskId);
     if (!match) return;
     focusedRef.current = focusTaskId;
-    // Expand the card
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      next.add(focusTaskId);
-      return next;
-    });
     // Scroll into view and apply highlight after a tick (DOM needs to update)
     const rafId = requestAnimationFrame(() => {
+      setExpandedIds(prev => {
+        const next = new Set(prev);
+        next.add(focusTaskId);
+        return next;
+      });
       const container = tasksRef.current;
       if (!container) return;
       const wraps = Array.from(container.querySelectorAll<HTMLElement>(`.${s.cardWrap}`));
@@ -321,7 +360,7 @@ export function WorkstreamColumn({
   // Clean up column scroll interval and group ghost on unmount
   useEffect(() => () => {
     if (columnScrollInterval.current) clearInterval(columnScrollInterval.current);
-    groupGhostRef.current?.remove();
+    document.getElementById('__drag-preview__')?.remove();
   }, []);
 
   // Focus name input when editing
@@ -338,6 +377,11 @@ export function WorkstreamColumn({
       onRenameWorkstream?.(workstream.id, trimmed);
     }
     setEditing(false);
+  };
+
+  const renderCard = (cardProps: WorkstreamTaskCardProps) => {
+    if (renderTaskCard) return renderTaskCard(cardProps);
+    return <TaskCard {...cardProps} />;
   };
 
   // --- Drag indicator via DOM classes (no React state, no re-renders) ---
@@ -728,15 +772,12 @@ export function WorkstreamColumn({
                     document.getElementById('__drag-preview__')?.remove();
                     document.body.appendChild(clone);
                     e.dataTransfer.setDragImage(clone, chainGroupEl.offsetWidth / 2, 20);
-                    groupGhostRef.current = clone;
                   }
                 }
                 onDragGroupStart?.(group.taskIds);
               };
 
               const handleGroupDragEnd = () => {
-                groupGhostRef.current?.remove();
-                groupGhostRef.current = null;
                 document.getElementById('__drag-preview__')?.remove();
                 onDragTaskEnd();
               };
@@ -753,44 +794,44 @@ export function WorkstreamColumn({
                       <React.Fragment key={gt.id}>
                         {gi > 0 && <ArtifactConnector taskId={groupTasks[gi - 1].id} projectId={projectId || undefined} />}
                         <div className={s.cardWrap} data-task-id={gt.id}>
-                          <TaskCard
-                            task={gt}
-                            job={job}
-                            canRunAi={canRunAi}
-                            isBacklog={isBacklog}
-                            showPriority={isBacklog}
-                            projectId={projectId || undefined}
-                            hasUnreadMention={mentionedTaskIds.has(gt.id)}
-                            commentCount={commentCounts?.[gt.id] || 0}
-                            brokenLink={brokenLinks.get(gt.id) || null}
-                            prevTaskId={gi > 0 ? groupTasks[gi - 1].id : (index > 0 ? tasks[index - 1]?.id : null)}
-                            isExpanded={expandedIds.has(gt.id)}
-                            onToggleExpand={() => setExpandedIds(prev => {
+                          {renderCard({
+                            task: gt,
+                            job,
+                            canRunAi,
+                            isBacklog,
+                            showPriority: isBacklog,
+                            projectId: projectId || undefined,
+                            hasUnreadMention: mentionedTaskIds.has(gt.id),
+                            commentCount: commentCounts?.[gt.id] || 0,
+                            brokenLink: brokenLinks.get(gt.id) || null,
+                            prevTaskId: gi > 0 ? groupTasks[gi - 1].id : (index > 0 ? tasks[index - 1]?.id : null),
+                            isExpanded: expandedIds.has(gt.id),
+                            onToggleExpand: () => setExpandedIds(prev => {
                               const next = new Set(prev);
                               if (next.has(gt.id)) next.delete(gt.id);
                               else next.add(gt.id);
                               return next;
-                            })}
-                            onRun={isBacklog || brokenLinks.has(gt.id) ? undefined : onRunTask}
-                            onEdit={onEditTask ? () => onEditTask(gt) : undefined}
-                            onDelete={onDeleteTask && index > freezeIndex ? () => onDeleteTask(gt.id) : undefined}
-                            onUpdateTask={onUpdateTask}
-                            onTerminate={onTerminate}
-                            onReply={onReply}
-                            onApprove={onApprove}
-                            onReject={onReject}
-                            onRework={onRework}
-                            onDeleteJob={onDeleteJob}
-                            onMoveToBacklog={onMoveToBacklog}
-                    onContinue={onContinue}
-                            onDragStart={handleGroupDragStart}
-                            onDragEnd={handleGroupDragEnd}
-                            isDragging={isGroupDragging}
-                            dragDisabled={dragDisabledGlobal || index <= freezeIndex}
-                            skipDragGhost
-                            metaItems={metaItems?.(gt.id)}
-                            hideComments={hideComments}
-                          />
+                            }),
+                            onRun: isBacklog || brokenLinks.has(gt.id) ? undefined : onRunTask,
+                            onEdit: onEditTask ? () => onEditTask(gt) : undefined,
+                            onDelete: onDeleteTask && index > freezeIndex ? () => onDeleteTask(gt.id) : undefined,
+                            onUpdateTask,
+                            onTerminate,
+                            onReply,
+                            onApprove,
+                            onReject,
+                            onRework,
+                            onDeleteJob,
+                            onMoveToBacklog,
+                            onContinue,
+                            onDragStart: handleGroupDragStart,
+                            onDragEnd: handleGroupDragEnd,
+                            isDragging: isGroupDragging,
+                            dragDisabled: dragDisabledGlobal || index <= freezeIndex,
+                            skipDragGhost: true,
+                            metaItems: metaItems?.(gt.id),
+                            hideComments,
+                          })}
                         </div>
                       </React.Fragment>
                     );
@@ -811,43 +852,43 @@ export function WorkstreamColumn({
               <div key={task.id}>
                 {showConnector && <ArtifactConnector taskId={prevTask.id} projectId={projectId || undefined} />}
                 <div className={s.cardWrap} data-task-id={task.id}>
-                  <TaskCard
-                    task={task}
-                    job={job}
-                    canRunAi={canRunAi}
-                    isBacklog={isBacklog}
-                    showPriority={isBacklog}
-                    projectId={projectId || undefined}
-                    hasUnreadMention={mentionedTaskIds.has(task.id)}
-                    commentCount={commentCounts?.[task.id] || 0}
-                    brokenLink={brokenLinks.get(task.id) || null}
-                    prevTaskId={prevTask?.id || null}
-                    isExpanded={expandedIds.has(task.id)}
-                    onToggleExpand={() => setExpandedIds(prev => {
+                  {renderCard({
+                    task,
+                    job,
+                    canRunAi,
+                    isBacklog,
+                    showPriority: isBacklog,
+                    projectId: projectId || undefined,
+                    hasUnreadMention: mentionedTaskIds.has(task.id),
+                    commentCount: commentCounts?.[task.id] || 0,
+                    brokenLink: brokenLinks.get(task.id) || null,
+                    prevTaskId: prevTask?.id || null,
+                    isExpanded: expandedIds.has(task.id),
+                    onToggleExpand: () => setExpandedIds(prev => {
                       const next = new Set(prev);
                       if (next.has(task.id)) next.delete(task.id);
                       else next.add(task.id);
                       return next;
-                    })}
-                    onRun={isBacklog || brokenLinks.has(task.id) ? undefined : onRunTask}
-                    onEdit={onEditTask ? () => onEditTask(task) : undefined}
-                    onDelete={onDeleteTask && index > freezeIndex ? () => onDeleteTask(task.id) : undefined}
-                    onUpdateTask={onUpdateTask}
-                    onTerminate={onTerminate}
-                    onReply={onReply}
-                    onApprove={onApprove}
-                    onReject={onReject}
-                    onRework={onRework}
-                    onDeleteJob={onDeleteJob}
-                    onMoveToBacklog={onMoveToBacklog}
-                    onContinue={onContinue}
-                    onDragStart={() => onDragTaskStart(task.id)}
-                    onDragEnd={onDragTaskEnd}
-                    isDragging={draggedTaskId === task.id}
-                    dragDisabled={dragDisabledGlobal || index <= freezeIndex}
-                    metaItems={metaItems?.(task.id)}
-                    hideComments={hideComments}
-                  />
+                    }),
+                    onRun: isBacklog || brokenLinks.has(task.id) ? undefined : onRunTask,
+                    onEdit: onEditTask ? () => onEditTask(task) : undefined,
+                    onDelete: onDeleteTask && index > freezeIndex ? () => onDeleteTask(task.id) : undefined,
+                    onUpdateTask,
+                    onTerminate,
+                    onReply,
+                    onApprove,
+                    onReject,
+                    onRework,
+                    onDeleteJob,
+                    onMoveToBacklog,
+                    onContinue,
+                    onDragStart: () => onDragTaskStart(task.id),
+                    onDragEnd: onDragTaskEnd,
+                    isDragging: draggedTaskId === task.id,
+                    dragDisabled: dragDisabledGlobal || index <= freezeIndex,
+                    metaItems: metaItems?.(task.id),
+                    hideComments,
+                  })}
                 </div>
               </div>
             );

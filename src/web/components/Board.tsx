@@ -22,6 +22,12 @@ interface Task {
   flow_id?: string | null;
 }
 
+type BoardColumnTask = Omit<Task, 'assignee' | 'workstream_id' | 'position'> & {
+  assignee?: { type: string; name?: string; initials?: string } | null;
+  workstream_id?: string | null;
+  position?: number;
+};
+
 interface Workstream {
   id: string;
   name: string;
@@ -55,7 +61,7 @@ interface BoardProps {
   onAddTask: (workstreamId: string | null) => void;
   onRunTask: (taskId: string) => void;
   onRunWorkstream: (workstreamId: string) => void;
-  onEditTask: (task: any) => void;
+  onEditTask: (task: BoardColumnTask) => void;
   onDeleteTask: (taskId: string) => void;
   onUpdateTask: (taskId: string, data: Record<string, unknown>) => Promise<void>;
   onMoveTask: (taskId: string, workstreamId: string | null, newPosition: number) => void;
@@ -107,7 +113,19 @@ export function Board({
   onCreatePr,
   currentUserId,
 }: BoardProps) {
-  const drag = useBoardDrag({ onSwapColumns });
+  const {
+    boardRef,
+    draggedTaskId,
+    setDraggedTaskId,
+    draggedGroupIds,
+    draggedWsId,
+    setDraggedWsId,
+    handleDragGroupStart,
+    handleColumnDrop,
+    handleDragEnd,
+    handleBoardDragOver,
+    isDragging,
+  } = useBoardDrag({ onSwapColumns });
 
   const [addingWs, setAddingWs] = useState(false);
   const [newWsName, setNewWsName] = useState('');
@@ -127,7 +145,7 @@ export function Board({
   }, [jobs]);
 
   const tasksByWorkstream = useMemo(() => {
-    const groups: Record<string, any[]> = { __backlog__: [] };
+    const groups: Record<string, BoardColumnTask[]> = { __backlog__: [] };
     for (const ws of workstreams) groups[ws.id] = [];
 
     for (const task of tasks) {
@@ -151,7 +169,7 @@ export function Board({
     }
 
     for (const key of Object.keys(groups)) {
-      groups[key].sort((a: any, b: any) => a.position - b.position);
+      groups[key].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
     }
     return groups;
   }, [tasks, workstreams, memberMap, flowMap, typeFlowMap]);
@@ -167,14 +185,14 @@ export function Board({
   );
 
   const handleDropTask = (targetWsId: string | null, dropBeforeTaskId: string | null) => {
-    if (!drag.draggedTaskId) return;
+    if (!draggedTaskId) return;
 
-    const idsToMove = drag.draggedGroupIds.length > 0 ? drag.draggedGroupIds : [drag.draggedTaskId];
+    const idsToMove = draggedGroupIds.length > 0 ? draggedGroupIds : [draggedTaskId];
 
     // Get tasks in the target column, excluding all tasks being moved
     const targetKey = targetWsId || '__backlog__';
     const idsSet = new Set(idsToMove);
-    const targetTasks = (tasksByWorkstream[targetKey] || []).filter((t: any) => !idsSet.has(t.id));
+    const targetTasks = (tasksByWorkstream[targetKey] || []).filter(t => !idsSet.has(t.id));
 
     // Prevent dropping above the freeze line (last touched task)
     const untouched = new Set(['backlog', 'todo']);
@@ -183,7 +201,7 @@ export function Board({
       if (!untouched.has(targetTasks[i].status || 'backlog')) freezeIdx = i;
     }
     if (dropBeforeTaskId && freezeIdx >= 0) {
-      const dropIdx = targetTasks.findIndex((t: any) => t.id === dropBeforeTaskId);
+      const dropIdx = targetTasks.findIndex(t => t.id === dropBeforeTaskId);
       if (dropIdx >= 0 && dropIdx <= freezeIdx) return; // Can't drop into the frozen zone
     }
 
@@ -192,23 +210,23 @@ export function Board({
     if (!dropBeforeTaskId) {
       // Dropped at end
       const last = targetTasks[targetTasks.length - 1];
-      basePosition = last ? last.position + 1 : 1;
+      basePosition = last ? (last.position ?? 0) + 1 : 1;
     } else {
-      const dropIdx = targetTasks.findIndex((t: any) => t.id === dropBeforeTaskId);
+      const dropIdx = targetTasks.findIndex(t => t.id === dropBeforeTaskId);
       if (dropIdx === 0) {
         // Dropped at start
-        basePosition = targetTasks[0].position - idsToMove.length;
+        basePosition = (targetTasks[0]?.position ?? idsToMove.length) - idsToMove.length;
       } else if (dropIdx > 0) {
         // Dropped between two items — ensure all group members fit in the gap
         const before = targetTasks[dropIdx - 1];
         const after = targetTasks[dropIdx];
-        const gap = after.position - before.position;
+        const gap = (after?.position ?? 0) - (before?.position ?? 0);
         const spacing = gap / (idsToMove.length + 1);
-        basePosition = before.position + spacing;
+        basePosition = (before?.position ?? 0) + spacing;
       } else {
         // dropBeforeTaskId not found -- drop at end
         const last = targetTasks[targetTasks.length - 1];
-        basePosition = last ? last.position + 1 : 1;
+        basePosition = last ? (last.position ?? 0) + 1 : 1;
       }
     }
 
@@ -218,7 +236,7 @@ export function Board({
       onMoveTask(idsToMove[i], targetWsId, basePosition + i * step);
     }
 
-    drag.setDraggedTaskId(null);
+    setDraggedTaskId(null);
   };
 
   const handleCreateWorkstream = async () => {
@@ -233,9 +251,9 @@ export function Board({
 
   return (
     <div
-      className={`${s.board} ${drag.isDragging ? s.boardDragging : ''}`}
-      ref={drag.boardRef}
-      onDragOver={drag.handleBoardDragOver}
+      className={`${s.board} ${isDragging ? s.boardDragging : ''}`}
+      ref={boardRef}
+      onDragOver={handleBoardDragOver}
       data-board
     >
       {/* Backlog column */}
@@ -249,11 +267,11 @@ export function Board({
         mentionedTaskIds={mentionedTaskIds}
         commentCounts={commentCounts}
         focusTaskId={focusTaskId}
-        draggedTaskId={drag.draggedTaskId}
-        draggedGroupIds={drag.draggedGroupIds}
-        onDragTaskStart={drag.setDraggedTaskId}
-        onDragGroupStart={drag.handleDragGroupStart}
-        onDragTaskEnd={drag.handleDragEnd}
+        draggedTaskId={draggedTaskId}
+        draggedGroupIds={draggedGroupIds}
+        onDragTaskStart={setDraggedTaskId}
+        onDragGroupStart={handleDragGroupStart}
+        onDragTaskEnd={handleDragEnd}
         onDropTask={handleDropTask}
         onAddTask={() => onAddTask(null)}
         onRunTask={onRunTask}
@@ -286,15 +304,15 @@ export function Board({
         commentCounts={commentCounts}
           focusTaskId={focusTaskId}
           focusWsId={focusWsId}
-          draggedTaskId={drag.draggedTaskId}
-          draggedGroupIds={drag.draggedGroupIds}
-          draggedWsId={drag.draggedWsId}
-          onDragTaskStart={drag.setDraggedTaskId}
-          onDragGroupStart={drag.handleDragGroupStart}
-          onDragTaskEnd={drag.handleDragEnd}
+          draggedTaskId={draggedTaskId}
+          draggedGroupIds={draggedGroupIds}
+          draggedWsId={draggedWsId}
+          onDragTaskStart={setDraggedTaskId}
+          onDragGroupStart={handleDragGroupStart}
+          onDragTaskEnd={handleDragEnd}
           onDropTask={handleDropTask}
-          onColumnDragStart={drag.setDraggedWsId}
-          onColumnDrop={drag.handleColumnDrop}
+          onColumnDragStart={setDraggedWsId}
+          onColumnDrop={handleColumnDrop}
           onRenameWorkstream={(id, name) => onUpdateWorkstream(id, { name })}
           onDeleteWorkstream={onDeleteWorkstream}
           onUpdateWorkstream={onUpdateWorkstream}
@@ -317,7 +335,7 @@ export function Board({
           onArchive={async () => {
             try {
               await onUpdateWorkstream(ws.id, { status: 'archived' });
-            } catch (err: any) {
+            } catch (err) {
               console.error('Archive failed:', err);
             }
           }}

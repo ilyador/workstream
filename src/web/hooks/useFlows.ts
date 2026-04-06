@@ -6,13 +6,15 @@ export function useFlows(projectId: string | null) {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [loading, setLoading] = useState(true);
 
+  type FlowStepInput = Parameters<typeof apiUpdateSteps>[1][number];
+
   const load = useCallback(async () => {
     if (!projectId) { setLoading(false); return; }
     try {
       const data = await getFlows(projectId);
       setFlows(data.sort((a, b) => a.position - b.position));
-    } catch (err: any) {
-      console.error('[useFlows] Failed to load flows:', err.message);
+    } catch (err) {
+      console.error('[useFlows] Failed to load flows:', err instanceof Error ? err.message : err);
     } finally {
       setLoading(false);
     }
@@ -41,7 +43,7 @@ export function useFlows(projectId: string | null) {
     return unsub;
   }, [projectId, load]);
 
-  const createFlow = useCallback(async (data: { project_id: string; name: string; description?: string; steps?: any[] }): Promise<Flow> => {
+  const createFlow = useCallback(async (data: { project_id: string; name: string; description?: string; steps?: FlowStepInput[] }): Promise<Flow> => {
     const created = await apiCreate(data);
     await load();
     return created;
@@ -58,12 +60,12 @@ export function useFlows(projectId: string | null) {
     await load();
   }, [load]);
 
-  const updateFlowSteps = useCallback(async (flowId: string, steps: any[]) => {
+  const updateFlowSteps = useCallback(async (flowId: string, steps: FlowStepInput[]) => {
     await apiUpdateSteps(flowId, steps);
   }, []);
 
   /** Save flow metadata + steps in one go, then reload once. */
-  const saveFlow = useCallback(async (id: string, data: Record<string, unknown>, steps: any[]) => {
+  const saveFlow = useCallback(async (id: string, data: Record<string, unknown>, steps: FlowStepInput[]) => {
     await apiUpdate(id, data);
     await apiUpdateSteps(id, steps);
     await load();

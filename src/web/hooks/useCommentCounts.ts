@@ -14,7 +14,9 @@ export function useCommentCounts(projectId: string | null) {
   }, [projectId]);
 
   useEffect(() => {
-    load();
+    queueMicrotask(() => {
+      void load();
+    });
     if (!projectId) return;
     // Reload when tasks change (comments might have been added)
     const unsub = subscribeProjectEvents(projectId, (event) => {

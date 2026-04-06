@@ -25,7 +25,11 @@ export function initSessionRestore() {
         boardScrollLeft: board?.scrollLeft ?? 0,
         timestamp: Date.now(),
       };
-      try { sessionStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch {}
+      try {
+        sessionStorage.setItem(STATE_KEY, JSON.stringify(state));
+      } catch {
+        // Ignore storage write failures.
+      }
     }
   });
 
@@ -51,12 +55,16 @@ export function initSessionRestore() {
         requestAnimationFrame(() => requestAnimationFrame(restore));
         setTimeout(restore, 300);
       }
-    } catch {}
+    } catch {
+      // Ignore malformed saved state.
+    }
     sessionStorage.removeItem(STATE_KEY);
   }
 
   // Request persistent storage on iOS 17+
   if (navigator.storage?.persist) {
-    navigator.storage.persist().catch(() => {});
+    navigator.storage.persist().catch(() => {
+      // Ignore unsupported or denied persistence requests.
+    });
   }
 }

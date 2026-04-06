@@ -1,27 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getProjects, createProject as apiCreateProject, updateProjectLocalPath } from '../lib/api';
-import type { SupabaseConfig } from '../lib/api';
-
-interface Project {
-  id: string;
-  name: string;
-  role: string;
-  local_path: string | null;
-}
+import type { ProjectSummary, SupabaseConfig } from '../lib/api';
 
 const STORAGE_KEY = 'workstream-current-project';
 
 export function useProjects(userId: string | undefined) {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEY));
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!userId) return;
-    loadProjects();
-  }, [userId]);
+  const switchProject = useCallback((id: string) => {
+    setCurrentId(id);
+    localStorage.setItem(STORAGE_KEY, id);
+  }, []);
 
-  async function loadProjects() {
+  const loadProjects = useCallback(async () => {
     try {
       const list = await getProjects();
       setProjects(list);
@@ -30,12 +23,14 @@ export function useProjects(userId: string | undefined) {
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }
+  }, [currentId, switchProject]);
 
-  function switchProject(id: string) {
-    setCurrentId(id);
-    localStorage.setItem(STORAGE_KEY, id);
-  }
+  useEffect(() => {
+    if (!userId) return;
+    queueMicrotask(() => {
+      void loadProjects();
+    });
+  }, [userId, loadProjects]);
 
   async function createProject(name: string, supabaseConfig?: SupabaseConfig, localPath?: string): Promise<string> {
     const project = await apiCreateProject(name, supabaseConfig, localPath);

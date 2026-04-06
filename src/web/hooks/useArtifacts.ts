@@ -19,7 +19,9 @@ export function useArtifacts(taskId: string | null, projectId?: string | null) {
   }, [taskId]);
 
   useEffect(() => {
-    load();
+    queueMicrotask(() => {
+      void load();
+    });
     if (!projectId) return;
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if ((event.type === 'artifact_changed' || event.type === 'artifact_deleted') && event.task_id === taskId) {

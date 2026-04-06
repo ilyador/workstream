@@ -1,4 +1,3 @@
-Connecting to db 5432
 export type Json =
   | string
   | number
@@ -579,4 +578,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
