@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useProjects } from './hooks/useProjects';
 import { useTasks } from './hooks/useTasks';
@@ -18,72 +18,20 @@ import { NewProject } from './components/NewProject';
 import { Header } from './components/Header';
 import { Board } from './components/Board';
 import { ArchivePage } from './components/ArchivePage';
-import type { CompletedPhaseRecord, FlowSnapshotRecord, JobView } from './components/job-types';
-import { TaskForm, type EditTaskData } from './components/TaskForm';
+import { ProjectTaskDialogs } from './components/ProjectTaskDialogs';
+import type { EditTaskData } from './components/TaskForm';
 import { AddProjectModal } from './components/AddProjectModal';
 import { MembersModal } from './components/MembersModal';
 import { FlowEditor2 } from './components/FlowEditor2';
 import { useModal } from './hooks/modal-context';
 import { useExecutionActions } from './hooks/useExecutionActions';
+import { useProjectViewModels } from './hooks/useProjectViewModels';
 import appStyles from './App.module.css';
 import { applyPositionUpdates, applyTaskMove, replaceItemById } from './lib/optimistic-updates';
-import { pickPrimaryJobs } from './lib/job-selection';
 import './styles/global.css';
-
-import { timeAgo } from './lib/time';
-
-/** Full phase pipeline per task type (mirrors server DEFAULT_TASK_TYPES + final). */
-const TASK_TYPE_PHASES: Record<string, string[]> = {
-  'bug-fix': ['plan', 'analyze', 'fix', 'verify', 'review'],
-  'feature': ['plan', 'implement', 'verify', 'review'],
-  'refactor': ['plan', 'analyze', 'refactor', 'verify', 'review'],
-  'test': ['plan', 'write-tests', 'verify', 'review'],
-  'ui-fix': ['plan', 'implement', 'verify', 'review'],
-  'design': ['plan', 'implement', 'verify', 'review'],
-  'chore': ['plan', 'implement', 'verify', 'review'],
-};
-
-/** Strip tool-call log lines from review summary for display. */
-function cleanSummary(raw: string): string {
-  return raw
-    .split('\n')
-    .filter(line => {
-      const trimmed = line.trim();
-      if (!trimmed) return false;
-      if (/^\[/.test(trimmed)) return false;
-      return true;
-    })
-    .join('\n')
-    .trim();
-}
 
 function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
-}
-
-function buildPhases(
-  phasesCompleted: Array<string | CompletedPhaseRecord>,
-  currentPhase: string | null,
-  taskType: string,
-  flowSnapshot?: FlowSnapshotRecord | null,
-): { name: string; status: string; summary?: string }[] {
-  const completedMap = new Map<string, string>();
-  for (const p of phasesCompleted) {
-    const name = typeof p === 'string' ? p : p.name || p.phase || '';
-    if (!name) continue;
-    const summary = typeof p === 'string' ? '' : p.summary || '';
-    completedMap.set(name, summary);
-  }
-  // Use flow_snapshot steps if available, otherwise fall back to legacy type mapping
-  const allPhases = flowSnapshot?.steps?.map(step => step.name)
-    || TASK_TYPE_PHASES[taskType]
-    || TASK_TYPE_PHASES.feature;
-
-  return allPhases.map((name: string) => {
-    if (completedMap.has(name)) return { name, status: 'completed', summary: completedMap.get(name) || undefined };
-    if (name === currentPhase) return { name, status: 'current' };
-    return { name, status: 'pending' };
-  });
 }
 
 export default function App() {
@@ -119,15 +67,6 @@ export default function App() {
     workstreams,
   });
 
-  // Compute which tasks have unread @mentions
-  const mentionedTaskIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const n of notifs.notifications) {
-      if (!n.read && n.type === 'mention' && n.task_id) ids.add(n.task_id);
-    }
-    return ids;
-  }, [notifs.notifications]);
-
   // Clear ?task= and ?ws= params after a short delay so they don't stick
   useEffect(() => {
     if (focusTaskId || focusWsId) {
@@ -136,19 +75,26 @@ export default function App() {
     }
   }, [focusTaskId, focusWsId, setSearchParams]);
 
-  // Build a task-title lookup from all tasks
-  const taskTitleMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const t of tasks.tasks) map[t.id] = t.title;
-    return map;
-  }, [tasks.tasks]);
-
-  // Build a task-type lookup from all tasks (id -> type)
-  const taskTypeMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const t of tasks.tasks) map[t.id] = t.type;
-    return map;
-  }, [tasks.tasks]);
+  const {
+    mentionedTaskIds,
+    taskTitleMap,
+    memberMap,
+    flowMap,
+    typeFlowMap,
+    jobViews,
+    todoItems,
+    reviewItems,
+    wsProgress,
+  } = useProjectViewModels({
+    tasks: tasks.tasks,
+    jobs: jobs.jobs,
+    activeWorkstreams: workstreams.active,
+    workstreams: workstreams.workstreams,
+    members: members.members,
+    flows: aiFlows.flows,
+    notifications: notifs.notifications,
+    currentUserId: auth.profile?.id,
+  });
 
   // Track previous job/task statuses for web push notifications
   const prevJobStatuses = useRef<Record<string, string>>({});
@@ -194,130 +140,6 @@ export default function App() {
       ? `${currentProjectName} - WorkStream`
       : 'WorkStream';
   }, [currentProjectName]);
-
-  // Build a member lookup from project members
-  const memberMap = useMemo(() => {
-    const map: Record<string, { name: string; initials: string }> = {};
-    for (const m of members.members) map[m.id] = { name: m.name, initials: m.initials };
-    return map;
-  }, [members.members]);
-
-  // Build flow name lookup (id -> name)
-  const flowMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const f of aiFlows.flows) map[f.id] = f.name;
-    return map;
-  }, [aiFlows.flows]);
-
-  // Build task-type -> flow id lookup (for AI assignee display when flow_id not set)
-  const typeFlowMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const f of aiFlows.flows) {
-      for (const t of f.default_types || []) {
-        if (!map[t]) map[t] = f.id;
-      }
-    }
-    return map;
-  }, [aiFlows.flows]);
-
-  // Map API jobs to JobView shape
-  const jobViews: JobView[] = useMemo(() => {
-    const order: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
-    const sorted = [...jobs.jobs].sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5));
-
-    return sorted.map(j => ({
-      id: j.id,
-      taskId: j.task_id,
-      title: taskTitleMap[j.task_id] || 'Task',
-      type: 'task',
-      status: j.status as JobView['status'],
-      currentPhase: j.current_phase || undefined,
-      attempt: j.attempt,
-      maxAttempts: j.max_attempts,
-      startedAt: j.started_at || undefined,
-      phases: buildPhases(j.phases_completed || [], j.current_phase, taskTypeMap[j.task_id] || 'feature', j.flow_snapshot),
-      question: j.question || undefined,
-      review: j.review_result ? {
-        filesChanged: j.review_result.files_changed ?? j.review_result.filesChanged ?? 0,
-        testsPassed: j.review_result.tests_passed ?? j.review_result.testsPassed,
-        linesAdded: j.review_result.lines_added ?? j.review_result.linesAdded ?? 0,
-        linesRemoved: j.review_result.lines_removed ?? j.review_result.linesRemoved ?? 0,
-        summary: cleanSummary(j.review_result.summary ?? ''),
-        changedFiles: j.review_result.changed_files ?? j.review_result.changedFiles ?? undefined,
-      } : undefined,
-      completedAgo: j.completed_at ? timeAgo(j.completed_at) : undefined,
-      completedAt: j.completed_at || undefined,
-    }));
-  }, [jobs.jobs, taskTitleMap, taskTypeMap]);
-
-  const primaryJobViews = useMemo(() => pickPrimaryJobs(jobViews), [jobViews]);
-
-  // Workstream name lookup for sublabels
-  const wsNameMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const w of workstreams.workstreams) map[w.id] = w.name;
-    return map;
-  }, [workstreams.workstreams]);
-
-  // Action items for header
-  const todoItems = useMemo(() => {
-    const uid = auth.profile?.id;
-    if (!uid) return [];
-    return tasks.tasks
-      .filter(t => t.assignee === uid && t.status !== 'done' && t.workstream_id)
-      .map(t => ({
-        id: t.id,
-        label: t.title,
-        sublabel: t.workstream_id ? wsNameMap[t.workstream_id] : undefined,
-        tag: t.type,
-        taskId: t.id,
-      }));
-  }, [tasks.tasks, wsNameMap, auth.profile?.id]);
-
-  const reviewItems = useMemo(() => {
-    const uid = auth.profile?.id;
-    const items: Array<{ id: string; label: string; sublabel?: string; tag?: string; taskId?: string; workstreamId?: string }> = [];
-    // Workstreams assigned to current user for review (not yet merged/archived)
-    if (uid) {
-      for (const ws of workstreams.workstreams) {
-        if (ws.reviewer_id === uid && ws.status !== 'merged' && ws.status !== 'archived') {
-          items.push({
-            id: `ws-${ws.id}`,
-            label: ws.name,
-            sublabel: 'Workstream review',
-            workstreamId: ws.id,
-          });
-        }
-      }
-    }
-    // Jobs awaiting review
-    for (const job of primaryJobViews) {
-      if (job.status === 'review') {
-        const task = tasks.tasks.find(t => t.id === job.taskId);
-        items.push({
-          id: job.id,
-          label: job.title,
-          sublabel: task?.workstream_id ? wsNameMap[task.workstream_id] : undefined,
-          tag: task?.type,
-          taskId: job.taskId,
-        });
-      }
-    }
-    // Jobs with questions
-    for (const job of primaryJobViews) {
-      if (job.status === 'paused' && job.question) {
-        const task = tasks.tasks.find(t => t.id === job.taskId);
-        items.push({
-          id: job.id,
-          label: job.title,
-          sublabel: 'Question asked',
-          tag: task?.type,
-          taskId: job.taskId,
-        });
-      }
-    }
-    return items;
-  }, [primaryJobViews, tasks.tasks, wsNameMap, workstreams.workstreams, auth.profile?.id]);
 
   // Step 1: Environment check
   if (!envReady) {
@@ -365,17 +187,6 @@ export default function App() {
   if (!projectReady) {
     return <Loading text="Loading project..." />;
   }
-
-  // Workstream progress for header
-  const activeWs = workstreams.active[0];
-  const wsTasks = activeWs
-    ? tasks.tasks.filter(t => t.workstream_id === activeWs.id)
-    : tasks.tasks;
-  const wsProgress = {
-    name: activeWs?.name || 'All',
-    tasksDone: wsTasks.filter(t => t.status === 'done').length,
-    tasksTotal: wsTasks.length,
-  };
 
   const handleSwapWorkstreams = (draggedId: string, targetId: string) => {
     const dragged = workstreams.workstreams.find(w => w.id === draggedId);
@@ -588,20 +399,21 @@ export default function App() {
         } />
       </Routes>
 
-      {showTaskForm && projects.current && (
-        <TaskForm
-          localPath={projects.current?.local_path ?? undefined}
-          workstreams={workstreams.active.map(w => ({ id: w.id, name: w.name }))}
+      {projects.current && (
+        <ProjectTaskDialogs
+          projectId={projects.current.id}
+          localPath={projects.current.local_path ?? undefined}
+          workstreams={workstreams.active}
+          members={members.members}
+          flows={aiFlows.flows}
+          customTypes={customTypes.types}
+          showCreate={showTaskForm}
           defaultWorkstreamId={taskFormWorkstream}
-          members={members.members.map(m => ({ id: m.id, name: m.name, initials: m.initials }))}
-          flows={aiFlows.flows}
-          customTypes={customTypes.types.map(t => ({ id: t.id, name: t.name, pipeline: t.pipeline }))}
-          onSaveCustomType={async (name, pipeline) => {
-            await customTypes.addType(name, pipeline);
-          }}
-          onSubmit={async (data) => {
+          editingTask={editingTask}
+          onSaveCustomType={customTypes.addType}
+          onCreateTask={async (data) => {
             await tasks.createTask({
-              project_id: projects.current!.id,
+              project_id: projects.current.id,
               title: data.title,
               description: data.description,
               type: data.type,
@@ -617,23 +429,8 @@ export default function App() {
               chaining: data.chaining,
             });
           }}
-          onClose={() => { setShowTaskForm(false); setTaskFormWorkstream(null); }}
-        />
-      )}
-
-      {editingTask && projects.current && (
-        <TaskForm
-          localPath={projects.current?.local_path ?? undefined}
-          workstreams={workstreams.active.map(w => ({ id: w.id, name: w.name }))}
-          members={members.members.map(m => ({ id: m.id, name: m.name, initials: m.initials }))}
-          flows={aiFlows.flows}
-          customTypes={customTypes.types.map(t => ({ id: t.id, name: t.name, pipeline: t.pipeline }))}
-          onSaveCustomType={async (name, pipeline) => {
-            await customTypes.addType(name, pipeline);
-          }}
-          editTask={editingTask}
-          onSubmit={async (data) => {
-            await tasks.updateTask(editingTask.id, {
+          onUpdateTask={async (taskId, data) => {
+            await tasks.updateTask(taskId, {
               title: data.title,
               description: data.description,
               type: data.type,
@@ -649,7 +446,8 @@ export default function App() {
               chaining: data.chaining,
             });
           }}
-          onClose={() => setEditingTask(null)}
+          onCloseCreate={() => { setShowTaskForm(false); setTaskFormWorkstream(null); }}
+          onCloseEdit={() => setEditingTask(null)}
         />
       )}
 
