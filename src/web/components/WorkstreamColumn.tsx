@@ -886,36 +886,24 @@ export function WorkstreamColumn({
       )}
 
       {wsStatus === 'done' && (
-        <div className={s.completeBanner}>
-          <span>PR open</span>
-          <div className={s.completeBannerActions}>
-            {renderReviewer()}
-            {workstream?.pr_url && (
-              <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
-                View PR
-              </a>
-            )}
+        <div className={`${s.completeBanner} ${s.doneBanner}`}>
+          <div className={s.doneHeader}>
+            <span className={s.doneLabel}>&#10003; Complete</span>
+            <div className={s.completeBannerActions}>
+              {renderReviewer()}
+              {workstream?.pr_url && (
+                <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
+                  View PR
+                </a>
+              )}
+            </div>
           </div>
           {workstream?.review_output && (
-            <div className={s.reviewPanel}>
-              <button className={s.reviewToggle} onClick={() => setExpandedIds(prev => {
-                const next = new Set(prev);
-                if (next.has('__review__')) next.delete('__review__'); else next.add('__review__');
-                return next;
-              })}>
-                <span className={s.sectionArrow} style={expandedIds.has('__review__') ? { transform: 'rotate(90deg)' } : undefined}>&#9654;</span>
-                Code Review
-              </button>
-              {expandedIds.has('__review__') && (
-                <div className={s.reviewContent}>
-                  <pre className={s.reviewOutput}>{workstream.review_output}</pre>
-                  <div className={s.reviewActions}>
-                    {onCreatePr && (
-                      <button className="btn btnWarning btnSm" onClick={onCreatePr}>Re-review &amp; Fix</button>
-                    )}
-                  </div>
-                </div>
-              )}
+            <pre className={s.reviewOutput}>{workstream.review_output}</pre>
+          )}
+          {onCreatePr && (
+            <div className={s.reviewActions}>
+              <button className="btn btnGhost btnSm" onClick={onCreatePr}>Re-review &amp; Fix</button>
             </div>
           )}
         </div>

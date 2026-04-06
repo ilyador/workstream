@@ -357,52 +357,41 @@
   background: none;
 }
 
-/* Code review panel */
-.reviewPanel {
-  width: 100%;
-  border-top: 1px solid var(--divider);
-  margin-top: 8px;
+/* Done banner layout */
+.doneBanner {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
 }
-.reviewToggle {
+.doneHeader {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  background: none;
-  border: none;
-  font-family: var(--font);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-3);
-  cursor: pointer;
-  padding: 8px 0;
-  text-align: left;
-  transition: color 0.1s;
-}
-.reviewToggle:hover { color: var(--text-2); }
-.reviewContent {
-  display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   gap: 8px;
-  padding-bottom: 4px;
 }
+.doneLabel {
+  font-weight: 600;
+  color: var(--green);
+}
+/* Review output */
 .reviewOutput {
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.55;
   color: var(--text-2);
   background: var(--bg-active);
   border-radius: 8px;
   padding: 10px 12px;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
-  margin: 0;
+  margin: 10px 0 0;
+  font-family: var(--font);
 }
 .reviewActions {
   display: flex;
   gap: 8px;
+  margin-top: 8px;
 }
 .sectionArrow {
   font-size: 9px;
