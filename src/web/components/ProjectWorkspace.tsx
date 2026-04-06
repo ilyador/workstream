@@ -1,15 +1,10 @@
 import type React from 'react';
-import { Routes, Route } from 'react-router-dom';
 import type { CustomTaskType, Flow, FlowStep, MemberRecord, NotificationRecord, TaskRecord, WorkstreamRecord } from '../lib/api';
 import { Header } from './Header';
-import { Board } from './Board';
-import { ArchivePage } from './ArchivePage';
-import { ProjectTaskDialogs } from './ProjectTaskDialogs';
 import type { EditTaskData, TaskFormData } from './TaskForm';
-import { AddProjectModal } from './AddProjectModal';
-import { MembersModal } from './MembersModal';
-import { FlowEditor } from './FlowEditor';
 import type { JobView } from './job-types';
+import { ProjectWorkspaceRoutes } from './ProjectWorkspaceRoutes';
+import { ProjectWorkspaceModals } from './ProjectWorkspaceModals';
 import appStyles from '../App.module.css';
 
 interface ProjectWorkspaceProps {
@@ -212,100 +207,71 @@ export function ProjectWorkspace({
         onUpdateLocalPath={onUpdateLocalPath}
       />
 
-      <Routes>
-        <Route path="/" element={
-          <Board
-            workstreams={activeWorkstreams}
-            tasks={tasks}
-            jobs={jobs}
-            memberMap={memberMap}
-            flowMap={flowMap}
-            typeFlowMap={typeFlowMap}
-            userRole={project.role || 'dev'}
-            projectId={project.id}
-            mentionedTaskIds={mentionedTaskIds}
-            commentCounts={commentCounts}
-            focusTaskId={focusTaskId}
-            focusWsId={focusWsId}
-            currentUserId={user.id}
-            onCreateWorkstream={onCreateWorkstream}
-            onUpdateWorkstream={onUpdateWorkstream}
-            onDeleteWorkstream={onDeleteWorkstream}
-            onSwapColumns={onSwapColumns}
-            onAddTask={onAddTask}
-            onRunWorkstream={onRunWorkstream}
-            onRunTask={onRunTask}
-            onEditTask={(task) => onEditTask(task.id)}
-            onDeleteTask={onDeleteTask}
-            onUpdateTask={onUpdateTask}
-            onMoveTask={onMoveTask}
-            onTerminate={onTerminate}
-            onReply={onReply}
-            onApprove={onApprove}
-            onReject={onReject}
-            onRework={onRework}
-            onDeleteJob={onDeleteJob}
-            onMoveToBacklog={onMoveToBacklog}
-            onContinue={onContinue}
-            onCreatePr={onCreatePr}
-          />
-        } />
-        <Route path="/archive" element={
-          <ArchivePage
-            workstreams={allWorkstreams.filter(workstream => workstream.status === 'archived')}
-            tasks={tasks}
-            jobs={jobs}
-            memberMap={memberMap}
-            projectId={project.id}
-            onRestore={onRestoreArchiveWorkstream}
-            onUpdateTask={onUpdateTask}
-          />
-        } />
-        <Route path="/flows" element={
-          <FlowEditor
-            flows={flows}
-            setFlows={setFlows}
-            projectId={project.id}
-            onSave={onSaveFlow}
-            onSaveSteps={onSaveFlowSteps}
-            onCreateFlow={onCreateFlow}
-            onDeleteFlow={onDeleteFlow}
-            onSwapColumns={onSwapFlows}
-          />
-        } />
-      </Routes>
+      <ProjectWorkspaceRoutes
+        project={project}
+        tasks={tasks}
+        jobs={jobs}
+        activeWorkstreams={activeWorkstreams}
+        allWorkstreams={allWorkstreams}
+        flows={flows}
+        setFlows={setFlows}
+        memberMap={memberMap}
+        flowMap={flowMap}
+        typeFlowMap={typeFlowMap}
+        mentionedTaskIds={mentionedTaskIds}
+        commentCounts={commentCounts}
+        focusTaskId={focusTaskId}
+        focusWsId={focusWsId}
+        userId={user.id}
+        onCreateWorkstream={onCreateWorkstream}
+        onUpdateWorkstream={onUpdateWorkstream}
+        onDeleteWorkstream={onDeleteWorkstream}
+        onSwapColumns={onSwapColumns}
+        onAddTask={onAddTask}
+        onRunWorkstream={onRunWorkstream}
+        onRunTask={onRunTask}
+        onEditTask={onEditTask}
+        onDeleteTask={onDeleteTask}
+        onUpdateTask={onUpdateTask}
+        onMoveTask={onMoveTask}
+        onTerminate={onTerminate}
+        onReply={onReply}
+        onApprove={onApprove}
+        onReject={onReject}
+        onRework={onRework}
+        onDeleteJob={onDeleteJob}
+        onMoveToBacklog={onMoveToBacklog}
+        onContinue={onContinue}
+        onCreatePr={onCreatePr}
+        onRestoreArchiveWorkstream={onRestoreArchiveWorkstream}
+        onSaveFlow={onSaveFlow}
+        onSaveFlowSteps={onSaveFlowSteps}
+        onCreateFlow={onCreateFlow}
+        onDeleteFlow={onDeleteFlow}
+        onSwapFlows={onSwapFlows}
+      />
 
-      <ProjectTaskDialogs
-        projectId={project.id}
-        localPath={project.local_path ?? undefined}
-        workstreams={activeWorkstreams}
+      <ProjectWorkspaceModals
+        project={project}
+        userId={user.id}
+        activeWorkstreams={activeWorkstreams}
         members={members}
         flows={flows}
         customTypes={customTypes}
-        showCreate={showTaskForm}
-        defaultWorkstreamId={taskFormWorkstream}
+        showTaskForm={showTaskForm}
+        taskFormWorkstream={taskFormWorkstream}
         editingTask={editingTask}
+        showAddProject={showAddProject}
+        showMembersModal={showMembersModal}
         onSaveCustomType={onSaveCustomType}
         onCreateTask={onCreateTask}
-        onUpdateTask={onUpdateTaskForm}
-        onCloseCreate={onCloseCreateTask}
-        onCloseEdit={onCloseEditTask}
+        onUpdateTaskForm={onUpdateTaskForm}
+        onCloseCreateTask={onCloseCreateTask}
+        onCloseEditTask={onCloseEditTask}
+        onCloseAddProject={onCloseAddProject}
+        onCreateProject={onCreateProject}
+        onCloseMembersModal={onCloseMembersModal}
       />
-
-      {showAddProject && (
-        <AddProjectModal
-          onClose={onCloseAddProject}
-          onCreate={onCreateProject}
-        />
-      )}
-
-      {showMembersModal && (
-        <MembersModal
-          projectId={project.id}
-          currentUserId={user.id}
-          onClose={onCloseMembersModal}
-        />
-      )}
     </>
   );
 }
