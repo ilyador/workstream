@@ -24,6 +24,7 @@ import { AddProjectModal } from './components/AddProjectModal';
 import { MembersModal } from './components/MembersModal';
 import { FlowEditor2 } from './components/FlowEditor2';
 import { useModal } from './hooks/modal-context';
+import appStyles from './App.module.css';
 import './styles/global.css';
 
 import { timeAgo } from './lib/time';
@@ -434,24 +435,18 @@ export default function App() {
   return (
     <>
       {webNotifs.showPrompt && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-          padding: '8px 20px', background: 'var(--blue-bg)', borderBottom: '1px solid var(--divider)',
-          fontSize: 13, color: 'var(--text-2)',
-        }}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+        <div className={appStyles.notificationPrompt}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={appStyles.notificationIcon}>
             <path d="M8 1.5C5.5 1.5 4 3.5 4 5.5V8L2.5 10.5V11.5H13.5V10.5L12 8V5.5C12 3.5 10.5 1.5 8 1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
             <path d="M6.5 12.5C6.5 13.3 7.2 14 8 14C8.8 14 9.5 13.3 9.5 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
           <span>Enable notifications to stay updated on task progress</span>
           <button
-            className="btn btnPrimary btnSm"
-            style={{ padding: '3px 12px', fontSize: 12 }}
+            className={`btn btnPrimary btnSm ${appStyles.notificationAction}`}
             onClick={webNotifs.requestPermission}
           >Enable</button>
           <button
-            className="btn btnGhost btnSm"
-            style={{ padding: '3px 8px', fontSize: 12 }}
+            className={`btn btnGhost btnSm ${appStyles.notificationDismiss}`}
             onClick={webNotifs.dismiss}
           >Dismiss</button>
         </div>
@@ -765,7 +760,7 @@ export default function App() {
 
 function Loading({ text }: { text: string }) {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', fontSize: 15 }}>
+    <div className={appStyles.loadingScreen}>
       {text}
     </div>
   );

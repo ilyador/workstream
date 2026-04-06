@@ -1,0 +1,34 @@
+.notificationPrompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 20px;
+  background: var(--blue-bg);
+  border-bottom: 1px solid var(--divider);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.notificationIcon {
+  flex-shrink: 0;
+}
+
+.notificationAction {
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+.notificationDismiss {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.loadingScreen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 15px;
+}

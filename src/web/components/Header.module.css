@@ -10,6 +10,32 @@
   top: 0;
   z-index: 50;
 }
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: dropFadeIn 0.15s ease;
+}
+
+.modalCard {
+  background: var(--bg);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  border: 2px solid transparent;
+  animation: dropScaleIn 0.15s ease;
+}
+
 .left, .right { display: flex; align-items: center; gap: 16px; }
 .headerNav {
   display: flex;
@@ -307,6 +333,15 @@
   align-items: flex-end;
   flex-shrink: 0;
 }
+.actionItemTag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  background: var(--bg-hover);
+  color: var(--text-3);
+}
 .actionItemPill {
   font-size: 11px;
   font-weight: 500;
@@ -484,6 +519,22 @@
   text-align: center;
   font-size: 13px;
   color: var(--text-4);
+}
+
+@keyframes dropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dropScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .avatarWrap {

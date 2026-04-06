@@ -136,6 +136,7 @@ export function TaskCard({
 
   return (
     <div
+      data-task-card="true"
       className={`${s.card} ${priorityBgClass} ${priorityBorderClass} ${statusClass} ${isDragging ? s.dragging : ''}`}
       onClick={onToggleExpand}
     >
@@ -328,7 +329,7 @@ export function TaskCard({
 
       {/* Done section -- no border separator */}
       {!isActive && isExpanded && taskDone && (jobStatus === 'done' || !job) && (
-        <div onClick={(e) => e.stopPropagation()} style={{ padding: '0 12px 10px' }}>
+        <div onClick={(e) => e.stopPropagation()} className={s.doneWrap}>
           <div className={s.doneSection}>
             {job && (
               <>
@@ -382,7 +383,7 @@ export function TaskCard({
                     <span key={p.name} className={s.phaseWrap}>
                       {i > 0 && <span className={s.arrow}>&rarr;</span>}
                       <span className={`${s.phase} ${s[`ph${cap(p.status)}`]} ${s[`pn${cap(p.name)}`] || ''}`}>
-                        {p.status === 'completed' && <span style={{ color: 'var(--green)', marginRight: 3 }}>&#10003;</span>}
+                        {p.status === 'completed' && <span className={s.phaseCheck}>&#10003;</span>}
                         {p.name}
                       </span>
                     </span>
@@ -506,7 +507,7 @@ function IdleDetail({
       <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
 
       {completionBlocked && (
-        <div style={{ padding: '8px 12px', background: 'var(--amber-bg)', borderLeft: '3px solid var(--amber)', borderRadius: 6, fontSize: 12, color: 'var(--amber)', fontWeight: 500 }}>
+        <div className={s.completionBlockedNotice}>
           {blockReason}
         </div>
       )}
@@ -529,8 +530,7 @@ function IdleDetail({
         <div className={s.actionsRight}>
           {isBacklog && onUpdateTask && (
             <button
-              className="btn btnGhost btnSm"
-              style={{ color: 'var(--green)' }}
+              className={`btn btnGhost btnSm ${s.completeAction}`}
               onClick={() => setShowComplete(v => !v)}
               disabled={completionBlocked}
               title={blockReason || 'Mark as complete'}
@@ -541,8 +541,7 @@ function IdleDetail({
           )}
           {onDelete && (
             <button
-              className="btn btnGhost btnSm"
-              style={{ color: 'var(--red)' }}
+              className={`btn btnGhost btnSm ${s.deleteAction}`}
               onClick={async () => { if (await modal.confirm('Delete task', 'Delete this task?', { label: 'Delete', danger: true })) onDelete(); }}
             >Delete</button>
           )}
@@ -550,13 +549,10 @@ function IdleDetail({
       </div>
 
       {showComplete && onUpdateTask && (
-        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+        <div className={s.completeComposer}>
           <input
             ref={completeInputRef}
-            style={{
-              flex: 1, padding: '4px 10px', background: 'var(--white)', border: '1.5px solid var(--divider)',
-              borderRadius: 6, fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', outline: 'none',
-            }}
+            className={s.completeInput}
             value={completeNote}
             onChange={e => setCompleteNote(e.target.value)}
             onKeyDown={e => {
@@ -571,8 +567,7 @@ function IdleDetail({
             placeholder="Completion status..."
           />
           <button
-            className="btn btnSuccess btnSm"
-            style={{ padding: '3px 10px', fontSize: 11 }}
+            className={`btn btnSuccess btnSm ${s.completeSubmit}`}
             disabled={!completeNote.trim()}
             onClick={() => {
               if (completeNote.trim()) commentsData.addComment(`Completed: ${completeNote.trim()}`);
@@ -633,7 +628,7 @@ function TaskAttachments({ taskId, projectId, legacyImages, readOnly }: { taskId
       {allFiles.length > 0 ? (
         <div className={s.attachList} {...(!readOnly ? { onDragOver: (e: React.DragEvent) => e.preventDefault(), onDrop: handleDrop } : {})}>
           {allFiles.map(a => (
-            <div key={a.id} className={s.attachItem} onClick={(e) => { e.stopPropagation(); preview(a); }} style={{ cursor: 'pointer' }}>
+            <div key={a.id} className={`${s.attachItem} ${s.attachItemClickable}`} onClick={(e) => { e.stopPropagation(); preview(a); }}>
               {a.mime_type.startsWith('image/') ? (
                 <img src={a.url} alt={a.filename} className={s.attachThumb} />
               ) : (
@@ -736,22 +731,19 @@ function CardComments({ data, projectId }: { data: ReturnType<typeof useComments
   };
 
   return (
-    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--divider)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)' }}>Comments</span>
+    <div className={s.commentsSection}>
+      <div className={s.commentsHeader}>
+        <span className={s.commentsTitle}>Comments</span>
         {comments.length === 0 && (
-          <span style={{ fontSize: 12, color: 'var(--text-4)' }}>No comments yet</span>
+          <span className={s.commentsEmpty}>No comments yet</span>
         )}
       </div>
       {comments.map(c => (
         <div key={c.id} className={s.comment}>
-          <span style={{
-            width: 22, height: 22, borderRadius: '50%', background: 'var(--bg-active)', color: 'var(--text-3)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, flexShrink: 0,
-          }}>{c.profiles?.initials || '??'}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.4, display: 'block', whiteSpace: 'pre-wrap' }}>{c.body}</span>
-            <span style={{ fontSize: 10, color: 'var(--text-4)' }}>{timeAgo(c.created_at)}</span>
+          <span className={s.commentAvatar}>{c.profiles?.initials || '??'}</span>
+          <div className={s.commentBody}>
+            <span className={s.commentText}>{c.body}</span>
+            <span className={s.commentTime}>{timeAgo(c.created_at)}</span>
           </div>
           <button
             className={s.commentDelete}
@@ -760,48 +752,33 @@ function CardComments({ data, projectId }: { data: ReturnType<typeof useComments
           >&times;</button>
         </div>
       ))}
-      <div style={{ position: 'relative' }}>
+      <div className={s.commentComposerWrap}>
         {mentionMatches.length > 0 && (
-          <div style={{
-            position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4,
-            background: 'var(--white)', border: '1px solid var(--divider)', borderRadius: 8,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden', zIndex: 10,
-          }}>
+          <div className={s.mentionMenu}>
             {mentionMatches.map((m, i) => (
               <div
                 key={m.id}
                 onMouseDown={(e) => { e.preventDefault(); insertMention(m.name); }}
-                style={{
-                  padding: '6px 10px', cursor: 'pointer', fontSize: 12,
-                  background: i === mentionIdx ? 'var(--bg-hover)' : 'transparent',
-                  color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6,
-                }}
+                className={`${s.mentionItem} ${i === mentionIdx ? s.mentionItemActive : ''}`}
               >
-                <span style={{
-                  width: 18, height: 18, borderRadius: '50%', background: 'var(--bg-active)', color: 'var(--text-3)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 600, flexShrink: 0,
-                }}>{m.initials}</span>
+                <span className={s.mentionAvatar}>{m.initials}</span>
                 {m.name}
               </div>
             ))}
           </div>
         )}
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div className={s.commentComposer}>
           <textarea
             ref={inputRef}
             rows={1}
-            style={{
-              flex: 1, padding: '4px 10px', background: 'var(--white)', border: '1.5px solid var(--divider)',
-              borderRadius: 6, fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', outline: 'none',
-              resize: 'none', minHeight: 28, maxHeight: 120, overflowY: 'auto',
-            }}
+            className={s.commentInput}
             value={text}
             onChange={e => handleChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Add a comment... (@mention)"
             disabled={sending}
           />
-          <button className="btn btnPrimary btnSm" style={{ padding: '3px 10px', fontSize: 11 }} onClick={handleSend} disabled={sending || !text.trim()}>
+          <button className={`btn btnPrimary btnSm ${s.commentSend}`} onClick={handleSend} disabled={sending || !text.trim()}>
             Send
           </button>
         </div>

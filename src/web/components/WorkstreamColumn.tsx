@@ -5,7 +5,6 @@ import { ArtifactConnector } from './ArtifactConnector';
 import type { JobView } from './job-types';
 import type { TaskView, WorkstreamView } from '../lib/task-view';
 import s from './WorkstreamColumn.module.css';
-import taskStyles from './TaskCard.module.css';
 
 const UNTOUCHED_STATUSES = new Set(['backlog', 'todo']);
 
@@ -306,10 +305,10 @@ export function WorkstreamColumn({
       const el = wraps[idx];
       if (!el) return;
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      const card = el.querySelector<HTMLElement>(`.${taskStyles.card}`);
+      const card = el.querySelector<HTMLElement>('[data-task-card="true"]');
       if (card) {
-        card.classList.add(taskStyles.highlight);
-        card.addEventListener('animationend', () => card.classList.remove(taskStyles.highlight), { once: true });
+        card.classList.add(s.cardHighlight);
+        card.addEventListener('animationend', () => card.classList.remove(s.cardHighlight), { once: true });
       }
     });
     return () => cancelAnimationFrame(rafId);
@@ -556,7 +555,7 @@ export function WorkstreamColumn({
               />
             ) : (
               <span
-                className={s.name}
+                className={`${s.name} ${!isBacklog && onColumnDragStart ? s.nameDraggable : ''}`}
                 draggable={!isBacklog && !!onColumnDragStart && !!workstream}
                 onDragStart={(e) => {
                   if (isBacklog || !workstream || !onColumnDragStart) return;
@@ -594,7 +593,6 @@ export function WorkstreamColumn({
                   }
                 }}
                 title={isBacklog ? undefined : 'Drag to reorder, double-click to rename'}
-                style={!isBacklog && onColumnDragStart ? { cursor: 'grab' } : undefined}
               >
                 {isBacklog ? 'Backlog' : workstream?.name}
               </span>

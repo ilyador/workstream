@@ -116,6 +116,15 @@
   border-radius: 10px;
 }
 
+.cardHighlight {
+  animation: highlightPulse 5s ease-out;
+}
+
+@keyframes highlightPulse {
+  0%, 60% { box-shadow: 0 0 0 3px var(--blue); }
+  100% { box-shadow: none; }
+}
+
 /* ─── Status pill: compact badge next to stream name ─── */
 .statusPill {
   font-size: 10px;
@@ -130,6 +139,10 @@
   background: var(--bg-hover);
 }
 .statusPill--in-progress { color: var(--blue); background: var(--blue-bg); }
+
+.nameDraggable {
+  cursor: grab;
+}
 .statusPill--pending-review { color: var(--amber); background: var(--amber-bg); }
 .statusPill--reviewing { color: #7850A0; background: rgba(120, 80, 160, 0.08); }
 .statusPill--review-failed { color: var(--red); background: var(--red-bg); }

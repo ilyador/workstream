@@ -7,9 +7,6 @@ import { useBoardDrag } from '../hooks/useBoardDrag';
 import { useModal } from '../hooks/modal-context';
 import { BUILT_IN_TYPES, ALL_TOOLS, ALL_CONTEXT_SOURCES, MODEL_OPTIONS, ON_MAX_RETRIES_OPTIONS } from '../lib/constants';
 import { FlowStepCard } from './FlowStepCard';
-import boardStyles from './Board.module.css';
-import colStyles from './WorkstreamColumn.module.css';
-import formStyles from './TaskForm.module.css';
 import s from './FlowEditor2.module.css';
 
 interface FlowEditor2Props {
@@ -90,9 +87,6 @@ function flowToWorkstream(flow: Flow): WorkstreamView {
   };
 }
 
-/* ─────────────────────────────────────────────────
-   Step edit/create modal — uses TaskForm CSS
-   ───────────────────────────────────────────────── */
 function StepModal({
   step, idx, allSteps, isNew,
   onUpdate, onToggleTool, onToggleContext, onSave, onDelete, onClose,
@@ -104,35 +98,35 @@ function StepModal({
   onSave: () => void; onDelete: () => void; onClose: () => void;
 }) {
   return (
-    <div className={formStyles.overlay} onClick={onClose}>
-      <div className={`${formStyles.modal} ${formStyles.modalBody}`} onClick={e => e.stopPropagation()}>
-        <h2 className={formStyles.heading}>{isNew ? 'New step' : (step.name ? `Edit: ${step.name}` : `Edit step ${idx + 1}`)}</h2>
-        <form onSubmit={e => e.preventDefault()} className={formStyles.form}>
-          <input className={formStyles.input} value={step.name}
+    <div className={s.modalOverlay} onClick={onClose}>
+      <div className={`${s.modalCard} ${s.modalBody}`} onClick={e => e.stopPropagation()}>
+        <h2 className={s.modalHeading}>{isNew ? 'New step' : (step.name ? `Edit: ${step.name}` : `Edit step ${idx + 1}`)}</h2>
+        <form onSubmit={e => e.preventDefault()} className={s.modalForm}>
+          <input className={s.textInput} value={step.name}
             onChange={e => onUpdate({ name: e.target.value })}
             placeholder={`Step ${idx + 1}`} autoFocus />
 
-          <div className={formStyles.field}>
-            <label className={formStyles.label}>Instructions</label>
+          <div className={s.field}>
+            <label className={s.label}>Instructions</label>
             <MdField value={step.instructions}
               onChange={val => onUpdate({ instructions: val })}
               placeholder="What should the AI do in this step..." />
           </div>
 
-          <div className={formStyles.field}>
-            <label className={formStyles.label}>Model</label>
-            <div className={formStyles.segmented}>
+          <div className={s.field}>
+            <label className={s.label}>Model</label>
+            <div className={s.segmented}>
               {MODEL_OPTIONS.map(m => (
                 <button key={m} type="button"
-                  className={`${formStyles.segmentedBtn} ${step.model === m ? formStyles.segmentedActive : ''}`}
+                  className={`${s.segmentedBtn} ${step.model === m ? s.segmentedActive : ''}`}
                   onClick={() => onUpdate({ model: m })}
                 >{m.charAt(0).toUpperCase() + m.slice(1)}</button>
               ))}
             </div>
           </div>
 
-          <div className={formStyles.field}>
-            <label className={formStyles.label}>Tools</label>
+          <div className={s.field}>
+            <label className={s.label}>Tools</label>
             <div className={s.checkboxGrid}>
               {ALL_TOOLS.map(tool => (
                 <label key={tool} className={s.checkboxLabel}>
@@ -143,8 +137,8 @@ function StepModal({
             </div>
           </div>
 
-          <div className={formStyles.field}>
-            <label className={formStyles.label}>Context Sources</label>
+          <div className={s.field}>
+            <label className={s.label}>Context Sources</label>
             <div className={s.chipGrid}>
               {ALL_CONTEXT_SOURCES.map(src => (
                 <button key={src} type="button"
@@ -155,7 +149,7 @@ function StepModal({
             </div>
           </div>
 
-          <label className={formStyles.checkboxRow}>
+          <label className={s.checkboxRow}>
             <input type="checkbox" checked={step.is_gate} onChange={e => onUpdate({ is_gate: e.target.checked })} />
             <span>Gate step (pass/fail verdict)</span>
           </label>
@@ -163,9 +157,9 @@ function StepModal({
           {step.is_gate && (
             <div className={s.gateSection}>
               <div className={s.gateRow}>
-                <div className={formStyles.field}>
-                  <label className={formStyles.label}>On fail jump to</label>
-                  <select className={formStyles.select} value={step.on_fail_jump_to ?? ''}
+                <div className={s.field}>
+                  <label className={s.label}>On fail jump to</label>
+                  <select className={s.select} value={step.on_fail_jump_to ?? ''}
                     onChange={e => { const v = e.target.value; onUpdate({ on_fail_jump_to: v === '' ? null : Number(v) }); }}>
                     <option value="">None</option>
                     {allSteps.map((_, i) => i !== idx && (
@@ -173,14 +167,14 @@ function StepModal({
                     ))}
                   </select>
                 </div>
-                <div className={formStyles.field}>
-                  <label className={formStyles.label}>Max retries</label>
-                  <input className={formStyles.input} type="number" min={0} max={10}
+                <div className={s.field}>
+                  <label className={s.label}>Max retries</label>
+                  <input className={s.textInput} type="number" min={0} max={10}
                     value={step.max_retries} onChange={e => onUpdate({ max_retries: Number(e.target.value) || 0 })} />
                 </div>
-                <div className={formStyles.field}>
-                  <label className={formStyles.label}>On max retries</label>
-                  <select className={formStyles.select} value={step.on_max_retries}
+                <div className={s.field}>
+                  <label className={s.label}>On max retries</label>
+                  <select className={s.select} value={step.on_max_retries}
                     onChange={e => onUpdate({ on_max_retries: e.target.value })}>
                     {ON_MAX_RETRIES_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
@@ -189,13 +183,13 @@ function StepModal({
             </div>
           )}
 
-          <div className={formStyles.actions}>
+          <div className={s.modalActions}>
             <button className="btn btnPrimary" type="button" onClick={onSave}>
               {isNew ? 'Create' : 'Save'}
             </button>
             <button className="btn btnSecondary" type="button" onClick={onClose}>Cancel</button>
             {!isNew && (
-              <button className="btn btnDanger btnSm" type="button" style={{ marginLeft: 'auto' }}
+              <button className={`btn btnDanger btnSm ${s.modalDangerAction}`} type="button"
                 onClick={onDelete}>Delete step</button>
             )}
           </div>
@@ -283,7 +277,7 @@ function FlowHeaderExtra({ flow, allFlows, onSave, taskTypes }: {
         return <option key={t} value={t} disabled={other}>{owned ? '\u2713 ' : ''}{t}{other ? ' (other flow)' : ''}</option>;
       })}
     </select>
-    <span className={colStyles.taskCount}>
+    <span className={s.stepCount}>
       {steps.length} {steps.length === 1 ? 'step' : 'steps'}
     </span>
   </>;
@@ -313,7 +307,7 @@ function AgentsMdSection({ flow, onSave }: { flow: Flow; onSave: FlowEditor2Prop
           {flowAgentsMd && !open && <span className={s.sectionHint}>(has content)</span>}
         </button>
         {dirty && (
-          <button className="btn btnPrimary btnSm" style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: 11 }}
+          <button className={`btn btnPrimary btnSm ${s.sectionSaveButton}`}
             onClick={async () => {
               setSaving(true);
               try {
@@ -418,7 +412,7 @@ export function FlowEditor2({ flows, setFlows, onSave, onSaveSteps, onCreateFlow
 
   return (
     <div
-      className={`${boardStyles.board} ${drag.isDragging ? boardStyles.boardDragging : ''}`}
+      className={`${s.flowBoard} ${drag.isDragging ? s.flowBoardDragging : ''}`}
       ref={drag.boardRef}
       data-board
       onDragOver={drag.handleBoardDragOver}
@@ -482,7 +476,7 @@ export function FlowEditor2({ flows, setFlows, onSave, onSaveSteps, onCreateFlow
         />
       ))}
 
-      <button className={boardStyles.addColumn} onClick={handleNewFlow} disabled={creating}>
+      <button className={s.addFlowButton} onClick={handleNewFlow} disabled={creating}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <path d="M12 5v14M5 12h14" />
         </svg>

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getSkills, type SkillInfo, type Flow } from '../lib/api';
 import { MdField } from './MdField';
-import mdStyles from './MdField.module.css';
 import { useSlashCommands } from '../hooks/useSlashCommands';
 import { computeSkillInsert } from '../lib/skill-insert';
 import { useArtifacts } from '../hooks/useArtifacts';
@@ -305,7 +304,7 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
                     textareaRef.current = el;
                     if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
                   }}
-                  className={mdStyles.textarea}
+                  className={s.descriptionTextarea}
                   placeholder={mode === 'ai' ? "Description (optional) -- type / to insert a skill" : "Description (optional)"}
                   value={description}
                   onChange={handleDescriptionChange}

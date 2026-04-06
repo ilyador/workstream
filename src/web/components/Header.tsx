@@ -3,8 +3,6 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { timeAgo } from '../lib/time';
 import { useTheme } from '../hooks/useTheme';
 import s from './Header.module.css';
-import taskStyles from './TaskCard.module.css';
-import formStyles from './TaskForm.module.css';
 
 interface Project {
   id: string;
@@ -195,8 +193,8 @@ export function Header({
 
       {/* To Do modal */}
       {todoOpen && (
-        <div className={formStyles.overlay} onClick={() => setTodoOpen(false)}>
-          <div className={`${formStyles.modal} ${s.actionModal}`} onClick={e => e.stopPropagation()}>
+        <div className={s.modalOverlay} onClick={() => setTodoOpen(false)}>
+          <div className={`${s.modalCard} ${s.actionModal}`} onClick={e => e.stopPropagation()}>
             <div className={s.actionModalHeader}>
               <span className={s.actionModalTitle}>To Do</span>
               {todoItems.length > 0 && <span className={`${s.actionCount} ${s.actionCountTodo}`}>{todoItems.length}</span>}
@@ -215,7 +213,7 @@ export function Header({
                   }}>
                     <span className={s.actionItemLabel}>{item.label}</span>
                     <span className={s.actionItemTags}>
-                      {item.tag && <span className={`${taskStyles.tag} ${taskStyles.tagType}`}>{item.tag}</span>}
+                      {item.tag && <span className={s.actionItemTag}>{item.tag}</span>}
                       {item.sublabel && <span className={s.actionItemPill}>{item.sublabel}</span>}
                     </span>
                   </button>
@@ -228,8 +226,8 @@ export function Header({
 
       {/* To Review modal */}
       {reviewOpen && (
-        <div className={formStyles.overlay} onClick={() => setReviewOpen(false)}>
-          <div className={`${formStyles.modal} ${s.actionModal}`} onClick={e => e.stopPropagation()}>
+        <div className={s.modalOverlay} onClick={() => setReviewOpen(false)}>
+          <div className={`${s.modalCard} ${s.actionModal}`} onClick={e => e.stopPropagation()}>
             <div className={s.actionModalHeader}>
               <span className={s.actionModalTitle}>To Review</span>
               {reviewItems.length > 0 && <span className={`${s.actionCount} ${s.actionCountReview}`}>{reviewItems.length}</span>}
@@ -249,7 +247,7 @@ export function Header({
                   }}>
                     <span className={s.actionItemLabel}>{item.label}</span>
                     <span className={s.actionItemTags}>
-                      {item.tag && <span className={`${taskStyles.tag} ${taskStyles.tagType}`}>{item.tag}</span>}
+                      {item.tag && <span className={s.actionItemTag}>{item.tag}</span>}
                       {item.sublabel && <span className={s.actionItemPill}>{item.sublabel}</span>}
                     </span>
                   </button>

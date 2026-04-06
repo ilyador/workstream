@@ -466,6 +466,9 @@
 .doneSection {
   padding: 10px 0 4px;
 }
+.doneWrap {
+  padding: 0 12px 10px;
+}
 .doneHeader {
   display: flex;
   align-items: center;
@@ -548,6 +551,45 @@
   display: flex;
   gap: 8px;
 }
+.completeAction {
+  color: var(--green);
+}
+.deleteAction {
+  color: var(--red);
+}
+.completionBlockedNotice {
+  padding: 8px 12px;
+  background: var(--amber-bg);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--amber);
+  font-weight: 500;
+}
+.completeComposer {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.completeInput {
+  flex: 1;
+  padding: 4px 10px;
+  background: var(--white);
+  border: 1.5px solid var(--divider);
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+}
+.completeInput:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-bg);
+}
+.completeSubmit {
+  padding: 3px 10px;
+  font-size: 11px;
+}
 .images {
   display: flex;
   flex-direction: column;
@@ -603,6 +645,139 @@
   background: var(--red-bg);
 }
 
+.commentsSection {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+}
+
+.commentsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.commentsTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.commentsEmpty {
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.commentAvatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-active);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.commentBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.commentText {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+  display: block;
+  white-space: pre-wrap;
+}
+
+.commentTime {
+  font-size: 10px;
+  color: var(--text-4);
+}
+
+.commentComposerWrap {
+  position: relative;
+}
+
+.mentionMenu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--white);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  overflow: hidden;
+  z-index: 10;
+}
+
+.mentionItem {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mentionItemActive {
+  background: var(--bg-hover);
+}
+
+.mentionAvatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-active);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.commentComposer {
+  display: flex;
+  gap: 6px;
+}
+
+.commentInput {
+  flex: 1;
+  padding: 4px 10px;
+  background: var(--white);
+  border: 1.5px solid var(--divider);
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+  resize: none;
+  min-height: 28px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.commentInput:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-bg);
+}
+
+.commentSend {
+  padding: 3px 10px;
+  font-size: 11px;
+}
+
 /* Attachments section */
 .attachments { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }
 .attachmentsHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--text-3); }
@@ -611,6 +786,7 @@
 .attachList { display: flex; flex-direction: column; gap: 4px; }
 .attachItem { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--divider); border-radius: 6px; background: var(--white); position: relative; }
 .attachItem:hover { background: var(--bg-hover); }
+.attachItemClickable { cursor: pointer; }
 .attachThumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
 .attachIcon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
 .attachInfo { flex: 1; min-width: 0; }
@@ -625,6 +801,10 @@
 .attachDelete:hover { color: var(--red); background: var(--red-bg); }
 .attachDropZone { border: 2px dashed var(--divider); border-radius: 8px; padding: 16px; text-align: center; font-size: 12px; color: var(--text-4); }
 .attachDropZone:hover { border-color: var(--text-4); }
+.phaseCheck {
+  color: var(--green);
+  margin-right: 3px;
+}
 
 /* Dark mode: bump phase pill opacities for readability */
 :global([data-theme="dark"]) .pnPlan {

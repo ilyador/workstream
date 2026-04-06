@@ -315,6 +315,25 @@
 .descriptionWrap {
   position: relative;
 }
+.descriptionTextarea {
+  padding: 8px 12px;
+  background: var(--white);
+  border: 1.5px solid var(--divider);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.55;
+  width: 100%;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+  overflow-y: auto;
+}
+.descriptionTextarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-bg);
+}
 .skillDropdown {
   position: absolute;
   top: 100%;

@@ -1,3 +1,198 @@
+.flowBoard {
+  display: flex;
+  gap: 20px;
+  padding: 20px 32px 20px;
+  height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: flex-start;
+  scroll-behavior: smooth;
+}
+
+.flowBoardDragging {
+  scroll-behavior: auto;
+}
+
+.addFlowButton {
+  flex: 0 0 260px;
+  min-width: 260px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed var(--divider);
+  border-radius: 14px;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-4);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.addFlowButton:hover {
+  color: var(--text-3);
+  border-color: var(--text-4);
+  background: var(--bg-hover);
+}
+
+.addFlowButton svg {
+  transition: transform 0.15s;
+}
+
+.addFlowButton:hover svg {
+  transform: scale(1.1);
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fadeIn 0.15s ease;
+}
+
+.modalCard {
+  background: var(--bg);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  border: 2px solid transparent;
+  animation: scaleIn 0.15s ease;
+}
+
+.modalBody {
+  padding: 32px;
+}
+
+.modalHeading {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 24px;
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+
+.textInput,
+.select {
+  padding: 10px 14px;
+  background: var(--white);
+  border: 1.5px solid var(--divider);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+  width: 100%;
+}
+
+.textInput:focus,
+.select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-bg);
+}
+
+.select {
+  appearance: none;
+  cursor: pointer;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.segmentedBtn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--divider);
+  background: var(--white);
+  color: var(--text-3);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.segmentedBtn:hover {
+  border-color: var(--text-4);
+  color: var(--text-2);
+}
+
+.segmentedActive {
+  background: var(--blue-bg);
+  border-color: rgba(37, 99, 235, 0.35);
+  color: var(--blue);
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.checkboxRow input[type="checkbox"] {
+  accent-color: var(--blue);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.modalDangerAction {
+  margin-left: auto;
+}
+
+.stepCount {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-4);
+  white-space: nowrap;
+  padding: 2px 8px;
+  background: var(--bg-hover);
+  border-radius: 10px;
+}
+
 /* Flow-specific type selector (no task equivalent) */
 .typeSelect {
   font-family: var(--font);
@@ -40,6 +235,11 @@
 .sectionArrowOpen { transform: rotate(90deg); }
 .sectionHint { font-weight: 400; color: var(--text-4); margin-left: 4px; }
 .agentsMdBody { padding: 6px 10px 10px; }
+.sectionSaveButton {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 11px;
+}
 
 /* Flow-specific: tool checkbox grid (no task equivalent) */
 .checkboxGrid { display: flex; flex-wrap: wrap; gap: 4px 14px; }
@@ -76,9 +276,45 @@
 
 /* Mobile */
 @media (max-width: 768px) {
+  .flowBoard {
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    gap: 12px;
+    padding: 10px 12px 0;
+    height: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding: 0 12px;
+  }
+  .addFlowButton {
+    flex: 0 0 calc(100vw - 24px);
+    min-width: calc(100vw - 24px);
+    scroll-snap-align: start;
+  }
+  .modalBody {
+    padding: 24px 20px;
+  }
   .checkboxGrid { gap: 4px 10px; }
   .checkboxLabel { font-size: 11px; }
   .chipGrid { gap: 4px; }
   .chip { font-size: 10px; padding: 2px 7px; }
   .gateRow { flex-direction: column; gap: 8px; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
