@@ -888,7 +888,7 @@ export function WorkstreamColumn({
       {wsStatus === 'done' && (
         <div className={`${s.completeBanner} ${s.doneBanner}`}>
           <div className={s.doneHeader}>
-            <span className={s.doneLabel}>{workstream?.pr_url ? 'PR open' : '&#10003; Complete'}</span>
+            <span className={s.doneLabel}>{workstream?.pr_url ? 'PR open' : '\u2713 Complete'}</span>
             <div className={s.completeBannerActions}>
               {workstream?.pr_url && renderReviewer()}
               {workstream?.pr_url && (
