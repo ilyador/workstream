@@ -353,6 +353,12 @@
   border-top-color: rgba(185, 28, 28, 0.12);
 }
 
+.failedDetail {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
 .mergedBanner {
   background: none;
 }
@@ -393,11 +399,7 @@
   gap: 8px;
   margin-top: 8px;
 }
-.sectionArrow {
-  font-size: 9px;
-  transition: transform 0.15s;
-  display: inline-block;
-}
+
 
 /* Shared banner pill button base */
 .bannerBtn {

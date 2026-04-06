@@ -77,8 +77,7 @@ interface WorkstreamColumnProps {
   onDeleteJob?: (jobId: string) => void;
   onMoveToBacklog?: (jobId: string) => void;
   onContinue?: (jobId: string) => void;
-  onCreatePr?: () => void;
-  onCreatePrOnly?: () => void;
+  onCreatePr?: (options?: { review?: boolean }) => void;
   onArchive?: () => void;
   currentUserId?: string;
   metaItems?: (taskId: string) => { label: string; value: string }[] | undefined;
@@ -126,7 +125,6 @@ export function WorkstreamColumn({
   onMoveToBacklog,
   onContinue,
   onCreatePr,
-  onCreatePrOnly,
   onArchive,
   currentUserId,
   metaItems,
@@ -859,7 +857,7 @@ export function WorkstreamColumn({
         <div className={s.completeBanner}>
           <span>&#10003; All tasks complete</span>
           {workstream?.has_code !== false && onCreatePr && (
-            <button className="btn btnPrimary btnSm" onClick={onCreatePr}>Review &amp; Create PR</button>
+            <button className="btn btnPrimary btnSm" onClick={() => onCreatePr?.({ review: true })}>Review &amp; Create PR</button>
           )}
         </div>
       )}
@@ -878,11 +876,11 @@ export function WorkstreamColumn({
           <div>
             <span>Review failed</span>
             {workstream?.review_output && (
-              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>{workstream.review_output}</div>
+              <div className={s.failedDetail}>{workstream.review_output}</div>
             )}
           </div>
           {onCreatePr && (
-            <button className="btn btnDanger btnSm" onClick={onCreatePr}>Retry</button>
+            <button className="btn btnDanger btnSm" onClick={() => onCreatePr?.({ review: true })}>Retry</button>
           )}
         </div>
       )}
@@ -903,14 +901,16 @@ export function WorkstreamColumn({
           {workstream?.review_output && (
             <pre className={s.reviewOutput}>{workstream.review_output}</pre>
           )}
-          <div className={s.reviewActions}>
-            {!workstream?.pr_url && onCreatePrOnly && (
-              <button className="btn btnPrimary btnSm" onClick={onCreatePrOnly}>Create PR</button>
-            )}
-            {workstream?.pr_url && !workstream?.review_output && onCreatePr && (
-              <button className="btn btnWarning btnSm" onClick={onCreatePr}>Review &amp; Fix</button>
-            )}
-          </div>
+          {onCreatePr && ((!workstream?.pr_url) || (workstream?.pr_url && !workstream?.review_output)) && (
+            <div className={s.reviewActions}>
+              {!workstream?.pr_url && (
+                <button className="btn btnPrimary btnSm" onClick={() => onCreatePr()}>Create PR</button>
+              )}
+              {workstream?.pr_url && !workstream?.review_output && (
+                <button className="btn btnWarning btnSm" onClick={() => onCreatePr({ review: true })}>Review &amp; Fix</button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
