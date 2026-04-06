@@ -907,8 +907,8 @@ export function WorkstreamColumn({
             {!workstream?.pr_url && onCreatePrOnly && (
               <button className="btn btnPrimary btnSm" onClick={onCreatePrOnly}>Create PR</button>
             )}
-            {workstream?.pr_url && onCreatePr && (
-              <button className="btn btnWarning btnSm" onClick={onCreatePr}>Re-review &amp; Fix</button>
+            {workstream?.pr_url && !workstream?.review_output && onCreatePr && (
+              <button className="btn btnWarning btnSm" onClick={onCreatePr}>Review &amp; Fix</button>
             )}
           </div>
         </div>
