@@ -1,11 +1,10 @@
 import type React from 'react';
 import type { CustomTaskType, Flow, FlowStep, MemberRecord, NotificationRecord, TaskRecord, WorkstreamRecord } from '../lib/api';
-import { Header } from './Header';
 import type { EditTaskData, TaskFormData } from './TaskForm';
 import type { JobView } from './job-types';
+import { ProjectWorkspaceHeader } from './ProjectWorkspaceHeader';
 import { ProjectWorkspaceRoutes } from './ProjectWorkspaceRoutes';
 import { ProjectWorkspaceModals } from './ProjectWorkspaceModals';
-import appStyles from '../App.module.css';
 
 interface ProjectWorkspaceProps {
   project: {
@@ -169,37 +168,15 @@ export function ProjectWorkspace({
 }: ProjectWorkspaceProps) {
   return (
     <>
-      {webNotifications.showPrompt && (
-        <div className={appStyles.notificationPrompt}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={appStyles.notificationIcon}>
-            <path d="M8 1.5C5.5 1.5 4 3.5 4 5.5V8L2.5 10.5V11.5H13.5V10.5L12 8V5.5C12 3.5 10.5 1.5 8 1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
-            <path d="M6.5 12.5C6.5 13.3 7.2 14 8 14C8.8 14 9.5 13.3 9.5 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-          <span>Enable notifications to stay updated on task progress</span>
-          <button
-            className={`btn btnPrimary btnSm ${appStyles.notificationAction}`}
-            onClick={webNotifications.requestPermission}
-          >Enable</button>
-          <button
-            className={`btn btnGhost btnSm ${appStyles.notificationDismiss}`}
-            onClick={webNotifications.dismiss}
-          >Dismiss</button>
-        </div>
-      )}
-
-      <Header
-        projectName={project.name}
-        localPath={project.local_path ?? undefined}
+      <ProjectWorkspaceHeader
+        project={project}
+        projects={projects}
+        user={user}
+        webNotifications={webNotifications}
+        notifications={notifications}
         milestone={milestone}
-        notifications={notifications.unreadCount}
-        notificationList={notifications.notifications}
-        onMarkRead={notifications.markRead}
-        onMarkAllRead={notifications.markAllRead}
         todoItems={todoItems}
         reviewItems={reviewItems}
-        userInitials={user.initials}
-        projects={projects}
-        currentProjectId={project.id}
         onSwitchProject={onSwitchProject}
         onNewProject={onNewProject}
         onSignOut={onSignOut}
