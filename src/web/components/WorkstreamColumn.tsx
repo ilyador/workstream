@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useModal } from '../hooks/modal-context';
+import { useWorkstreamColumnState } from '../hooks/useWorkstreamColumnState';
 import { TaskCard, type TaskCardProps } from './TaskCard';
 import { WorkstreamColumnHeader } from './WorkstreamColumnHeader';
 import { WorkstreamColumnStatusBanners } from './WorkstreamColumnStatusBanners';
@@ -7,8 +8,6 @@ import { WorkstreamTaskList } from './WorkstreamTaskList';
 import type { JobView } from './job-types';
 import type { TaskView, WorkstreamView } from '../lib/task-view';
 import s from './WorkstreamColumn.module.css';
-
-const UNTOUCHED_STATUSES = new Set(['backlog', 'todo']);
 
 interface WorkstreamColumnProps {
   workstream: WorkstreamView | null;
@@ -111,210 +110,54 @@ export function WorkstreamColumn({
   renderTaskCard,
 }: WorkstreamColumnProps) {
   const modal = useModal();
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState(workstream?.name || '');
   const [columnDropSide, setColumnDropSide] = useState<'left' | 'right' | null>(null);
-  const nameInputRef = useRef<HTMLInputElement>(null);
-  const tasksRef = useRef<HTMLDivElement>(null);
-  const columnRef = useRef<HTMLDivElement>(null);
   const dropIndexRef = useRef<string | null>(null);
   const dragCountRef = useRef(0); // track enter/leave balance to handle child elements
   const colDragCountRef = useRef(0);
   const columnScrollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Detect chains: consecutive tasks where prev produces and current accepts
-  const chainGroups = useMemo(() => {
-    const groups: Array<{ taskIds: string[]; startIndex: number }> = [];
-    let i = 0;
-    while (i < tasks.length) {
-      if (i > 0) {
-        const prev = tasks[i - 1];
-        const task = tasks[i];
-        const prevProduces = prev.chaining === 'produce' || prev.chaining === 'both';
-        const currentAccepts = task.chaining === 'accept' || task.chaining === 'both';
-        if (prevProduces && currentAccepts) {
-          const lastGroup = groups[groups.length - 1];
-          if (lastGroup && lastGroup.taskIds.includes(prev.id)) {
-            lastGroup.taskIds.push(task.id);
-          } else {
-            groups.push({ taskIds: [prev.id, task.id], startIndex: i - 1 });
-          }
-          i++;
-          continue;
-        }
-      }
-      i++;
-    }
-    return groups;
-  }, [tasks]);
-
-  // Helper: find which chain group a task belongs to
-  const getChainGroup = useCallback((taskId: string) => {
-    return chainGroups.find(g => g.taskIds.includes(taskId)) || null;
-  }, [chainGroups]);
-
-  // Freeze line: index of last task with a non-default status (touched tasks are locked)
-  const freezeIndex = useMemo(() => {
-    let lastTouched = -1;
-    for (let i = 0; i < tasks.length; i++) {
-      if (!UNTOUCHED_STATUSES.has(tasks[i].status || 'backlog')) lastTouched = i;
-    }
-    return lastTouched;
-  }, [tasks]);
-
-  // Detect broken chaining links (unmet produce/accept with no matching neighbor)
-  const brokenLinks = useMemo(() => {
-    if (isBacklog) return new Map<string, { up: boolean; down: boolean }>();
-    const map = new Map<string, { up: boolean; down: boolean }>();
-    for (let i = 0; i < tasks.length; i++) {
-      const task = tasks[i];
-      const accepts = task.chaining === 'accept' || task.chaining === 'both';
-      const produces = task.chaining === 'produce' || task.chaining === 'both';
-      if (!accepts && !produces) continue;
-      const prev = i > 0 ? tasks[i - 1] : null;
-      const next = i < tasks.length - 1 ? tasks[i + 1] : null;
-      const up = accepts && !(prev && (prev.chaining === 'produce' || prev.chaining === 'both'));
-      const down = produces && !(next && (next.chaining === 'accept' || next.chaining === 'both'));
-      if (up || down) map.set(task.id, { up, down });
-    }
-    return map;
-  }, [tasks, isBacklog]);
-
-  const hasBrokenLinks = brokenLinks.size > 0;
-
-  const wsId = workstream?.id || null;
-  const doneTasks = tasks.filter(t => t.status === 'done').length;
-  const totalTasks = tasks.length;
-  const allDone = totalTasks > 0 && doneTasks === totalTasks;
-  const progressPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
-
-  // Derive workstream status for display
-  const wsStatus = useMemo(() => {
-    if (isBacklog) return null;
-    const dbStatus = workstream?.status;
-    if (dbStatus === 'reviewing') return 'reviewing' as const;
-    if (dbStatus === 'review_failed') return 'review failed' as const;
-    if (dbStatus === 'complete') return 'done' as const;
-    if (dbStatus === 'merged' || dbStatus === 'archived') return 'merged' as const;
-    if (totalTasks === 0) return 'open' as const;
-    const hasRunningTask = tasks.some(t => {
-      const job = taskJobMap[t.id];
-      if (job && ['queued', 'running', 'paused'].includes(job.status)) return true;
-      if (t.mode === 'human' && t.status === 'in_progress') return true;
-      return false;
-    });
-    if (hasRunningTask) return 'in progress' as const;
-    const hasPendingApproval = tasks.some(t => {
-      const job = taskJobMap[t.id];
-      return job && job.status === 'review';
-    });
-    if (hasPendingApproval) return 'pending review' as const;
-    const hasFailedTask = tasks.some(t => {
-      const job = taskJobMap[t.id];
-      return job && job.status === 'failed';
-    });
-    if (hasFailedTask) return 'failed' as const;
-    if (allDone) return 'pending review' as const;
-    if (doneTasks > 0) return 'in progress' as const;
-    return 'open' as const;
-  }, [isBacklog, workstream?.status, totalTasks, doneTasks, allDone, tasks, taskJobMap]);
-
-  // Track active AI job (for drag locking) and active task including human (for auto-expand)
-  const activeAiJobId = useMemo(() => {
-    const t = tasks.find(t => {
-      const job = taskJobMap[t.id];
-      return job && ['queued', 'running', 'paused', 'review'].includes(job.status);
-    });
-    return t?.id ?? null;
-  }, [tasks, taskJobMap]);
-
-  const activeTaskId = useMemo(() => {
-    if (activeAiJobId) return activeAiJobId;
-    const human = tasks.find(t => t.mode === 'human' && t.status === 'in_progress' && !taskJobMap[t.id]);
-    return human?.id ?? null;
-  }, [tasks, taskJobMap, activeAiJobId]);
-
-  // Disable drag only when an AI job is actively running (not for human waiting)
-  const dragDisabledGlobal = !isBacklog && activeAiJobId !== null;
-
-  const prevActiveRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!activeTaskId || activeTaskId === prevActiveRef.current) return;
-    const frameId = requestAnimationFrame(() => {
-      setExpandedIds(prev => {
-        const next = new Set(prev);
-        next.add(activeTaskId);
-        return next;
-      });
-    });
-    prevActiveRef.current = activeTaskId;
-    return () => cancelAnimationFrame(frameId);
-  }, [activeTaskId]);
-
-  // Focus a task from ?task= URL param: expand, scroll into view, highlight
-  const focusedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!focusTaskId || focusedRef.current === focusTaskId) return;
-    const match = tasks.find(t => t.id === focusTaskId);
-    if (!match) return;
-    focusedRef.current = focusTaskId;
-    // Scroll into view and apply highlight after a tick (DOM needs to update)
-    const rafId = requestAnimationFrame(() => {
-      setExpandedIds(prev => {
-        const next = new Set(prev);
-        next.add(focusTaskId);
-        return next;
-      });
-      const container = tasksRef.current;
-      if (!container) return;
-      const wraps = Array.from(container.querySelectorAll<HTMLElement>(`.${s.cardWrap}`));
-      const idx = tasks.findIndex(t => t.id === focusTaskId);
-      const el = wraps[idx];
-      if (!el) return;
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      const card = el.querySelector<HTMLElement>('[data-task-card="true"]');
-      if (card) {
-        card.classList.add(s.cardHighlight);
-        card.addEventListener('animationend', () => card.classList.remove(s.cardHighlight), { once: true });
-      }
-    });
-    return () => cancelAnimationFrame(rafId);
-  }, [focusTaskId, tasks]);
-
-  // Focus workstream from ?ws= URL param: scroll into view, highlight column
-  const focusedWsRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!focusWsId || !workstream || workstream.id !== focusWsId || focusedWsRef.current === focusWsId) return;
-    focusedWsRef.current = focusWsId;
-    const col = columnRef.current;
-    if (!col) return;
-    col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    col.classList.add(s.columnHighlight);
-    col.addEventListener('animationend', () => col.classList.remove(s.columnHighlight), { once: true });
-  }, [focusWsId, workstream]);
+  const {
+    expandedIds,
+    setExpandedIds,
+    editing,
+    setEditing,
+    editName,
+    setEditName,
+    nameInputRef,
+    tasksRef,
+    columnRef,
+    chainGroups,
+    getChainGroup,
+    freezeIndex,
+    brokenLinks,
+    hasBrokenLinks,
+    wsId,
+    doneTasks,
+    totalTasks,
+    allDone,
+    progressPct,
+    wsStatus,
+    dragDisabledGlobal,
+    handleRename,
+  } = useWorkstreamColumnState({
+    workstream,
+    tasks,
+    taskJobMap,
+    isBacklog,
+    focusTaskId,
+    focusWsId,
+    onRenameWorkstream,
+    classes: {
+      cardWrap: s.cardWrap,
+      cardHighlight: s.cardHighlight,
+      columnHighlight: s.columnHighlight,
+    },
+  });
 
   // Clean up column scroll interval and group ghost on unmount
   useEffect(() => () => {
     if (columnScrollInterval.current) clearInterval(columnScrollInterval.current);
     document.getElementById('__drag-preview__')?.remove();
   }, []);
-
-  // Focus name input when editing
-  useEffect(() => {
-    if (editing && nameInputRef.current) {
-      nameInputRef.current.focus();
-      nameInputRef.current.select();
-    }
-  }, [editing]);
-
-  const handleRename = () => {
-    const trimmed = editName.trim();
-    if (trimmed && workstream && trimmed !== workstream.name) {
-      onRenameWorkstream?.(workstream.id, trimmed);
-    }
-    setEditing(false);
-  };
 
   const renderCard = (cardProps: TaskCardProps) => {
     if (renderTaskCard) return renderTaskCard(cardProps);
@@ -329,7 +172,7 @@ export function WorkstreamColumn({
     container.querySelectorAll(`.${s.dropBefore}, .${s.dropAfter}`).forEach(el => {
       el.classList.remove(s.dropBefore, s.dropAfter);
     });
-  }, []);
+  }, [tasksRef]);
 
   const updateDropIndicator = useCallback((clientY: number) => {
     const container = tasksRef.current;
@@ -396,7 +239,7 @@ export function WorkstreamColumn({
         last.element.classList.add(s.dropAfter);
       }
     }
-  }, [draggedTaskId, draggedGroupIds, clearDropIndicator]);
+  }, [draggedTaskId, draggedGroupIds, clearDropIndicator, tasksRef]);
 
   const clearColumnScroll = useCallback(() => {
     if (columnScrollInterval.current) {
@@ -413,7 +256,7 @@ export function WorkstreamColumn({
     const rect = col.getBoundingClientRect();
     const midX = rect.left + rect.width / 2;
     setColumnDropSide(e.clientX < midX ? 'left' : 'right');
-  }, [draggedWsId, workstream]);
+  }, [draggedWsId, workstream, columnRef]);
 
   const showDropLeft = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'left';
   const showDropRight = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'right';
