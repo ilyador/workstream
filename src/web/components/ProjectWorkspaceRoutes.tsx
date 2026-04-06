@@ -1,9 +1,9 @@
 import { Route, Routes } from 'react-router-dom';
 import type { Flow, FlowStep, TaskRecord, WorkstreamRecord } from '../lib/api';
-import { Board } from './Board';
-import { ArchivePage } from './ArchivePage';
-import { FlowEditor } from './FlowEditor';
 import type { JobView } from './job-types';
+import { ProjectArchiveRoute } from './ProjectArchiveRoute';
+import { ProjectBoardRoute } from './ProjectBoardRoute';
+import { ProjectFlowsRoute } from './ProjectFlowsRoute';
 
 export interface ProjectWorkspaceRoutesProps {
   project: {
@@ -100,20 +100,19 @@ export function ProjectWorkspaceRoutes({
       <Route
         path="/"
         element={(
-          <Board
-            workstreams={activeWorkstreams}
+          <ProjectBoardRoute
+            project={project}
             tasks={tasks}
             jobs={jobs}
+            activeWorkstreams={activeWorkstreams}
             memberMap={memberMap}
             flowMap={flowMap}
             typeFlowMap={typeFlowMap}
-            userRole={project.role || 'dev'}
-            projectId={project.id}
             mentionedTaskIds={mentionedTaskIds}
             commentCounts={commentCounts}
             focusTaskId={focusTaskId}
             focusWsId={focusWsId}
-            currentUserId={userId}
+            userId={userId}
             onCreateWorkstream={onCreateWorkstream}
             onUpdateWorkstream={onUpdateWorkstream}
             onDeleteWorkstream={onDeleteWorkstream}
@@ -121,7 +120,7 @@ export function ProjectWorkspaceRoutes({
             onAddTask={onAddTask}
             onRunWorkstream={onRunWorkstream}
             onRunTask={onRunTask}
-            onEditTask={(task) => onEditTask(task.id)}
+            onEditTask={onEditTask}
             onDeleteTask={onDeleteTask}
             onUpdateTask={onUpdateTask}
             onMoveTask={onMoveTask}
@@ -140,13 +139,13 @@ export function ProjectWorkspaceRoutes({
       <Route
         path="/archive"
         element={(
-          <ArchivePage
-            workstreams={allWorkstreams.filter(workstream => workstream.status === 'archived')}
+          <ProjectArchiveRoute
+            allWorkstreams={allWorkstreams}
             tasks={tasks}
             jobs={jobs}
             memberMap={memberMap}
-            projectId={project.id}
-            onRestore={onRestoreArchiveWorkstream}
+            project={project}
+            onRestoreArchiveWorkstream={onRestoreArchiveWorkstream}
             onUpdateTask={onUpdateTask}
           />
         )}
@@ -154,15 +153,15 @@ export function ProjectWorkspaceRoutes({
       <Route
         path="/flows"
         element={(
-          <FlowEditor
+          <ProjectFlowsRoute
             flows={flows}
             setFlows={setFlows}
-            projectId={project.id}
-            onSave={onSaveFlow}
-            onSaveSteps={onSaveFlowSteps}
+            project={project}
+            onSaveFlow={onSaveFlow}
+            onSaveFlowSteps={onSaveFlowSteps}
             onCreateFlow={onCreateFlow}
             onDeleteFlow={onDeleteFlow}
-            onSwapColumns={onSwapFlows}
+            onSwapFlows={onSwapFlows}
           />
         )}
       />
