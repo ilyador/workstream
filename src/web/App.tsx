@@ -543,19 +543,16 @@ export default function App() {
                 await modal.alert('Error', err.message || 'Failed to continue job');
               }
             }}
-            onCreatePr={async (workstreamId) => {
+            onCreatePr={async (workstreamId, opts) => {
               try {
-                await reviewAndCreatePr(workstreamId, projects.current?.local_path || '');
+                if (opts?.review) {
+                  await reviewAndCreatePr(workstreamId, projects.current?.local_path || '');
+                } else {
+                  const result = await createWorkstreamPr(workstreamId, projects.current?.local_path || '');
+                  if (result.prUrl) workstreams.reload();
+                }
               } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to start review');
-              }
-            }}
-            onCreatePrOnly={async (workstreamId) => {
-              try {
-                const result = await createWorkstreamPr(workstreamId, projects.current?.local_path || '');
-                if (result.prUrl) workstreams.reload();
-              } catch (err: any) {
-                await modal.alert('Error', err.message || 'Failed to create PR');
+                await modal.alert('Error', err.message || 'Failed');
               }
             }}
           />

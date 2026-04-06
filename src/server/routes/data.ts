@@ -1345,7 +1345,7 @@ function startPollingFallback() {
           .order('position'),
         supabase
           .from('jobs')
-          .select('*')
+          .select('id, status, current_phase, attempt, question, phases_completed, review_result, started_at, completed_at')
           .eq('project_id', projectId)
           .order('started_at', { ascending: false })
           .limit(10),
