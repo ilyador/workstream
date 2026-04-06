@@ -41,16 +41,21 @@ worker_is_busy() {
   if [[ -z "$pid" || "$pid" == "0" ]]; then
     return 1  # not running, not busy
   fi
-  # Base worker tree: node -> sh -> node -> node  (4 processes).
-  # Any additional descendant means a job is running.
-  local count
-  count="$(pstree -p "$pid" 2>/dev/null | grep -co '([0-9]*)' || echo 0)"
-  (( count > 4 ))
+  # Count real processes in the worker's session (excludes threads).
+  # Base: node -> sh -> node -> node + esbuild (tsx compiler) = 5 processes.
+  # Any additional process means a job is running (e.g. claude CLI).
+  local sid count
+  sid="$(ps -o sid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  [[ -z "$sid" ]] && return 1
+  count="$(ps -o pid --no-headers -s "$sid" 2>/dev/null | wc -l)"
+  (( count > 5 ))
 }
 
 restart_server() {
   echo "Restarting codesync-server..."
   /usr/bin/systemctl --user restart codesync-server.service
+  echo "Restarting codesync-web..."
+  /usr/bin/systemctl --user restart codesync-web.service
 }
 
 restart_worker() {
