@@ -1,47 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useModal } from '../hooks/modal-context';
-import { TaskCard } from './TaskCard';
+import { TaskCard, type TaskCardProps } from './TaskCard';
 import { ArtifactConnector } from './ArtifactConnector';
+import { WorkstreamColumnHeader } from './WorkstreamColumnHeader';
+import { WorkstreamColumnStatusBanners } from './WorkstreamColumnStatusBanners';
 import type { JobView } from './job-types';
 import type { TaskView, WorkstreamView } from '../lib/task-view';
 import s from './WorkstreamColumn.module.css';
 
 const UNTOUCHED_STATUSES = new Set(['backlog', 'todo']);
-
-export interface WorkstreamTaskCardProps {
-  task: TaskView;
-  job: JobView | null;
-  canRunAi: boolean;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
-  onRun?: (taskId: string) => void;
-  onEdit?: () => void;
-  onDelete?: () => void;
-  onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
-  onTerminate?: (jobId: string) => void;
-  onReply?: (jobId: string, answer: string) => void;
-  onApprove?: (jobId: string) => void;
-  onReject?: (jobId: string) => void;
-  onRework?: (jobId: string, note: string) => void;
-  onDeleteJob?: (jobId: string) => void;
-  onMoveToBacklog?: (jobId: string) => void;
-  onContinue?: (jobId: string) => void;
-  onDragStart?: (e?: React.DragEvent) => void;
-  onDragEnd?: () => void;
-  isDragging?: boolean;
-  dragDisabled?: boolean;
-  skipDragGhost?: boolean;
-  showPriority?: boolean;
-  isBacklog?: boolean;
-  projectId?: string;
-  hasUnreadMention?: boolean;
-  commentCount?: number;
-  brokenLink?: { up: boolean; down: boolean } | null;
-  metaItems?: { label: string; value: string }[];
-  hideComments?: boolean;
-  prevTaskId?: string | null;
-  mentionMembers?: Array<{ id: string; name: string; initials: string }>;
-}
 
 interface WorkstreamColumnProps {
   workstream: WorkstreamView | null;
@@ -93,7 +60,7 @@ interface WorkstreamColumnProps {
   hideComments?: boolean;
   listHeader?: React.ReactNode;
   headerExtra?: React.ReactNode;
-  renderTaskCard?: (props: WorkstreamTaskCardProps) => React.ReactNode;
+  renderTaskCard?: (props: TaskCardProps) => React.ReactNode;
 }
 
 export function WorkstreamColumn({
@@ -451,37 +418,6 @@ export function WorkstreamColumn({
   const showDropLeft = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'left';
   const showDropRight = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'right';
 
-  const renderReviewer = () => {
-    if (!workstream || !members || members.length === 0 || !onUpdateWorkstream) return null;
-    if (workstream.reviewer_id) {
-      const reviewer = members.find(m => m.id === workstream.reviewer_id);
-      return reviewer ? (
-        <span className={s.reviewerChip}>
-          <span className={s.reviewerAvatar}>{reviewer.initials}</span>
-          {reviewer.name}
-        </span>
-      ) : null;
-    }
-    return (
-      <select
-        className={s.reviewerSelect}
-        defaultValue=""
-        onChange={async e => {
-          if (e.target.value) {
-            try {
-              await onUpdateWorkstream(workstream.id, { reviewer_id: e.target.value });
-            } catch (err) {
-              console.error('Failed to assign reviewer:', err);
-            }
-          }
-        }}
-      >
-        <option value="">Assign reviewer</option>
-        {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-      </select>
-    );
-  };
-
   return (
     <div className={s.columnOuter}>
       {showDropLeft && <div className={s.columnDropLine} />}
@@ -538,130 +474,36 @@ export function WorkstreamColumn({
         }
       }}
     >
-      {/* Header */}
-      <div className={s.headerWrap}>
-        <div className={s.header}>
-          <div className={s.headerLeft}>
-            {editing && !isBacklog ? (
-              <input
-                ref={nameInputRef}
-                className={s.nameInput}
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onBlur={handleRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleRename();
-                  if (e.key === 'Escape') setEditing(false);
-                }}
-              />
-            ) : (
-              <span
-                className={`${s.name} ${!isBacklog && onColumnDragStart ? s.nameDraggable : ''}`}
-                draggable={!isBacklog && !!onColumnDragStart && !!workstream}
-                onDragStart={(e) => {
-                  if (isBacklog || !workstream || !onColumnDragStart) return;
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', workstream.id);
-                  const ghost = document.createElement('div');
-                  ghost.textContent = workstream.name;
-                  ghost.style.cssText = `
-                    padding: 8px 16px;
-                    background: var(--white, #fff);
-                    color: var(--text, #1a1a1a);
-                    font-family: 'Instrument Sans', system-ui, sans-serif;
-                    font-size: 13px;
-                    font-weight: 600;
-                    border-radius: 8px;
-                    border: 1.5px solid rgba(37, 99, 235, 0.3);
-                    box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-                    position: fixed; top: -999px; left: -999px;
-                    pointer-events: none;
-                    white-space: nowrap;
-                  `;
-                  ghost.id = '__column-drag-preview__';
-                  document.body.appendChild(ghost);
-                  e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 20);
-                  onColumnDragStart(workstream.id);
-                  e.stopPropagation();
-                }}
-                onDragEnd={() => {
-                  document.getElementById('__column-drag-preview__')?.remove();
-                }}
-                onDoubleClick={() => {
-                  if (!isBacklog && workstream) {
-                    setEditName(workstream.name);
-                    setEditing(true);
-                  }
-                }}
-                title={isBacklog ? undefined : 'Drag to reorder, double-click to rename'}
-              >
-                {isBacklog ? 'Backlog' : workstream?.name}
-              </span>
-            )}
-
-            {!isBacklog && totalTasks > 0 && wsStatus && wsStatus !== 'open' && (
-              <span className={`${s.statusPill} ${s[`statusPill--${wsStatus.replace(' ', '-')}`] || ''}`}>
-                {wsStatus}
-              </span>
-            )}
-
-            {headerExtra}
-          </div>
-
-          <div className={s.headerRight}>
-            {!isBacklog && canRunAi && onRunWorkstream && wsStatus === 'open' && totalTasks > 0 && !hasBrokenLinks && (
-              <button
-                className={s.runBtn}
-                onClick={onRunWorkstream}
-                title="Run workstream"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                Run
-              </button>
-            )}
-
-            <button
-              className={s.addBtn}
-              onClick={onAddTask}
-              title="Add task"
-            >
-              +
-            </button>
-
-            {!headerExtra && totalTasks > 0 && (
-              <span className={s.taskCount}>
-                {isBacklog ? totalTasks : `${doneTasks}/${totalTasks}`}
-              </span>
-            )}
-
-            {(isBacklog || wsStatus === 'open' || !wsStatus) && !isBacklog && workstream && onDeleteWorkstream && (
-              <button
-                className={`${s.actionBtn} ${s.actionBtnDanger}`}
-                onClick={async () => {
-                  if (await modal.confirm('Delete workstream', `Delete workstream "${workstream.name}"? Tasks will move to backlog.`, { label: 'Delete', danger: true })) {
-                    onDeleteWorkstream(workstream.id);
-                  }
-                }}
-                title="Delete workstream"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Progress line on the separator -- full width, colored by state (hidden when headerExtra) */}
-        {!headerExtra && !isBacklog && totalTasks > 0 && (
-          <div className={s.progressLine}>
-            <div
-              className={`${s.progressLineFill} ${wsStatus ? s[`progressLine--${wsStatus.replace(' ', '-')}`] : ''}`}
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-        )}
-      </div>
+      <WorkstreamColumnHeader
+        workstream={workstream}
+        isBacklog={isBacklog}
+        editing={editing}
+        editName={editName}
+        nameInputRef={nameInputRef}
+        onEditNameChange={setEditName}
+        onRename={handleRename}
+        onCancelEdit={() => setEditing(false)}
+        onStartEdit={() => {
+          if (!workstream) return;
+          setEditName(workstream.name);
+          setEditing(true);
+        }}
+        onColumnDragStart={onColumnDragStart}
+        canRunAi={canRunAi}
+        onRunWorkstream={onRunWorkstream}
+        wsStatus={wsStatus}
+        totalTasks={totalTasks}
+        doneTasks={doneTasks}
+        hasBrokenLinks={hasBrokenLinks}
+        headerExtra={headerExtra}
+        onAddTask={onAddTask}
+        onRequestDelete={workstream && onDeleteWorkstream ? async () => {
+          if (await modal.confirm('Delete workstream', `Delete workstream "${workstream.name}"? Tasks will move to backlog.`, { label: 'Delete', danger: true })) {
+            onDeleteWorkstream(workstream.id);
+          }
+        } : undefined}
+        progressPct={progressPct}
+      />
 
       {/* Task list */}
       <div
@@ -867,88 +709,17 @@ export function WorkstreamColumn({
         })()}
       </div>
 
-      {allDone && !isBacklog && wsStatus === 'pending review' && (
-        <div className={s.completeBanner}>
-          <span>&#10003; All tasks complete</span>
-          {workstream?.has_code !== false && onCreatePr && (
-            <button className="btn btnPrimary btnSm" onClick={() => onCreatePr?.({ review: true })}>Review &amp; Create PR</button>
-          )}
-        </div>
-      )}
-
-      {wsStatus === 'reviewing' && (
-        <div className={`${s.completeBanner} ${s.reviewingBanner}`}>
-          <span className={s.reviewingLabel}>
-            <span className={s.reviewingDot} />
-            Reviewing code...
-          </span>
-        </div>
-      )}
-
-      {wsStatus === 'review failed' && (
-        <div className={`${s.completeBanner} ${s.failedBanner}`}>
-          <div>
-            <span>Review failed</span>
-            {workstream?.review_output && (
-              <div className={s.failedDetail}>{workstream.review_output}</div>
-            )}
-          </div>
-          {onCreatePr && (
-            <button className="btn btnDanger btnSm" onClick={() => onCreatePr?.({ review: true })}>Retry</button>
-          )}
-        </div>
-      )}
-
-      {wsStatus === 'done' && (
-        <div className={`${s.completeBanner} ${s.doneBanner}`}>
-          <div className={s.doneHeader}>
-            <span className={s.doneLabel}>{workstream?.pr_url ? 'PR open' : '\u2713 Complete'}</span>
-            <div className={s.completeBannerActions}>
-              {workstream?.pr_url && renderReviewer()}
-              {workstream?.pr_url && (
-                <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
-                  View PR
-                </a>
-              )}
-            </div>
-          </div>
-          {workstream?.review_output && (
-            <pre className={s.reviewOutput}>{workstream.review_output}</pre>
-          )}
-          {onCreatePr && ((!workstream?.pr_url) || (workstream?.pr_url && !workstream?.review_output)) && (
-            <div className={s.reviewActions}>
-              {!workstream?.pr_url && (
-                <button className="btn btnPrimary btnSm" onClick={() => onCreatePr()}>Create PR</button>
-              )}
-              {workstream?.pr_url && !workstream?.review_output && (
-                <button className="btn btnWarning btnSm" onClick={() => onCreatePr({ review: true })}>Review &amp; Fix</button>
-              )}
-            </div>
-          )}
-          {onArchive && currentUserId && workstream?.reviewer_id === currentUserId && (
-            <button className={s.archiveBtn} onClick={onArchive}>Archive</button>
-          )}
-        </div>
-      )}
-
-      {wsStatus === 'merged' && (
-        <div className={`${s.completeBanner} ${s.mergedBanner}`}>
-          <span>&#10003; PR merged</span>
-          <div className={s.completeBannerActions}>
-            {renderReviewer()}
-            {workstream?.pr_url && (
-              <a href={workstream.pr_url} target="_blank" rel="noopener noreferrer" className={s.prLink}>
-                View PR
-              </a>
-            )}
-            {onArchive && currentUserId && workstream?.reviewer_id === currentUserId && (
-              <button className={s.archiveBtn} onClick={onArchive}>
-                Archive
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      <WorkstreamColumnStatusBanners
+        workstream={workstream}
+        wsStatus={wsStatus}
+        allDone={allDone}
+        isBacklog={isBacklog}
+        onCreatePr={onCreatePr}
+        onArchive={onArchive}
+        currentUserId={currentUserId}
+        members={members}
+        onUpdateWorkstream={onUpdateWorkstream}
+      />
     </div>
       {showDropRight && <div className={s.columnDropLine} />}
     </div>
