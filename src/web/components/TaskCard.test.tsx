@@ -104,7 +104,7 @@ describe('TaskCard review checks', () => {
     );
 
     expect(useCommentsMock).toHaveBeenCalled();
-    expect(screen.getByText(/Run/)).toBeTruthy();
+    expect(screen.getByText('Comments')).toBeTruthy();
   });
 
   it('shows the tests badge only when testsPassed is explicitly true', () => {
