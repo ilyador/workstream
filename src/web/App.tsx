@@ -11,17 +11,12 @@ import { useWebNotifications } from './hooks/useWebNotifications';
 import { useFlows } from './hooks/useFlows';
 import { useCustomTypes } from './hooks/useCustomTypes';
 import { signUp, signIn, signOut } from './lib/api';
-import { Routes, Route, useSearchParams } from 'react-router-dom';
+import { toTaskView } from './lib/task-view';
+import { useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
 import { NewProject } from './components/NewProject';
-import { Header } from './components/Header';
-import { Board } from './components/Board';
-import { ArchivePage } from './components/ArchivePage';
-import { ProjectTaskDialogs } from './components/ProjectTaskDialogs';
-import { AddProjectModal } from './components/AddProjectModal';
-import { MembersModal } from './components/MembersModal';
-import { FlowEditor2 } from './components/FlowEditor2';
+import { ProjectWorkspace } from './components/ProjectWorkspace';
 import { useModal } from './hooks/modal-context';
 import { useExecutionActions } from './hooks/useExecutionActions';
 import { useProjectOrderingMutations } from './hooks/useProjectOrderingMutations';
@@ -165,191 +160,120 @@ export default function App() {
   }
 
   return (
-    <>
-      {webNotifs.showPrompt && (
-        <div className={appStyles.notificationPrompt}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={appStyles.notificationIcon}>
-            <path d="M8 1.5C5.5 1.5 4 3.5 4 5.5V8L2.5 10.5V11.5H13.5V10.5L12 8V5.5C12 3.5 10.5 1.5 8 1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
-            <path d="M6.5 12.5C6.5 13.3 7.2 14 8 14C8.8 14 9.5 13.3 9.5 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-          <span>Enable notifications to stay updated on task progress</span>
-          <button
-            className={`btn btnPrimary btnSm ${appStyles.notificationAction}`}
-            onClick={webNotifs.requestPermission}
-          >Enable</button>
-          <button
-            className={`btn btnGhost btnSm ${appStyles.notificationDismiss}`}
-            onClick={webNotifs.dismiss}
-          >Dismiss</button>
-        </div>
-      )}
-
-      <Header
-        projectName={projects.current?.name || ''}
-        localPath={projects.current?.local_path ?? undefined}
-        milestone={wsProgress}
-        notifications={notifs.unreadCount}
-        notificationList={notifs.notifications}
-        onMarkRead={notifs.markRead}
-        onMarkAllRead={notifs.markAllRead}
-        todoItems={todoItems}
-        reviewItems={reviewItems}
-        userInitials={auth.profile.initials}
-        projects={projects.projects.map(p => ({ id: p.id, name: p.name }))}
-        currentProjectId={projects.current?.id || null}
-        onSwitchProject={projects.switchProject}
-        onNewProject={() => setShowAddProject(true)}
-        onSignOut={async () => { await signOut(); window.location.reload(); }}
-        onManageMembers={() => setShowMembersModal(true)}
-        onUpdateLocalPath={projects.current?.id ? (path) => projects.updateLocalPath(projects.current!.id, path) : undefined}
-      />
-
-      <Routes>
-        <Route path="/" element={
-          <Board
-            workstreams={workstreams.active}
-            tasks={tasks.tasks}
-            jobs={jobViews}
-            memberMap={memberMap}
-            flowMap={flowMap}
-            typeFlowMap={typeFlowMap}
-            userRole={projects.current?.role || 'dev'}
-            projectId={projects.current?.id || null}
-            mentionedTaskIds={mentionedTaskIds}
-            commentCounts={commentCounts.counts}
-            focusTaskId={focusTaskId}
-            focusWsId={focusWsId}
-            currentUserId={auth.profile?.id}
-            onCreateWorkstream={async (name, description, has_code) => {
-              await workstreams.createWorkstream(name, description, has_code);
-            }}
-            onUpdateWorkstream={async (id, data) => {
-              await workstreams.updateWorkstream(id, data);
-            }}
-            onDeleteWorkstream={executionActions.deleteWorkstreamAndReloadTasks}
-            onSwapColumns={handleSwapWorkstreams}
-            onAddTask={openCreateTask}
-            onRunWorkstream={executionActions.runWorkstream}
-            onRunTask={executionActions.runTask}
-            onEditTask={(task) => {
-              const rawTask = tasks.tasks.find(t => t.id === task.id);
-              startEditingTask(task, rawTask);
-            }}
-            onDeleteTask={async (taskId) => {
-              await tasks.deleteTask(taskId);
-            }}
-            onUpdateTask={async (taskId, data) => {
-              await tasks.updateTask(taskId, data);
-            }}
-            onMoveTask={handleMoveTask}
-            onTerminate={executionActions.terminate}
-            onReply={executionActions.reply}
-            onApprove={executionActions.approve}
-            onReject={executionActions.reject}
-            onRework={executionActions.rework}
-            onDeleteJob={executionActions.dismissJob}
-            onMoveToBacklog={executionActions.sendToBacklog}
-            onContinue={executionActions.continueExecution}
-            onCreatePr={executionActions.createPr}
-          />
-        } />
-        <Route path="/archive" element={
-          <ArchivePage
-            workstreams={workstreams.workstreams.filter(w => w.status === 'archived')}
-            tasks={tasks.tasks}
-            jobs={jobViews}
-            memberMap={memberMap}
-            projectId={projects.current?.id || null}
-            onRestore={async (wsId) => { await workstreams.updateWorkstream(wsId, { status: 'active' }); }}
-            onUpdateTask={async (taskId, data) => { await tasks.updateTask(taskId, data); }}
-          />
-        } />
-        <Route path="/flows" element={
-          projects.current ? (
-            <FlowEditor2
-              flows={aiFlows.flows}
-              setFlows={aiFlows.setFlows}
-              projectId={projects.current.id}
-              onSave={async (flowId, updates) => { await aiFlows.updateFlow(flowId, updates); await aiFlows.reload(); }}
-              onSaveSteps={async (flowId, steps) => { await aiFlows.updateFlowSteps(flowId, steps); await aiFlows.reload(); }}
-              onCreateFlow={async (data) => { return await aiFlows.createFlow(data); }}
-              onDeleteFlow={async (flowId) => { await aiFlows.deleteFlow(flowId); }}
-              onSwapColumns={handleSwapFlows}
-            />
-          ) : <div />
-        } />
-      </Routes>
-
-      {projects.current && (
-        <ProjectTaskDialogs
-          projectId={projects.current.id}
-          localPath={projects.current.local_path ?? undefined}
-          workstreams={workstreams.active}
-          members={members.members}
-          flows={aiFlows.flows}
-          customTypes={customTypes.types}
-          showCreate={showTaskForm}
-          defaultWorkstreamId={taskFormWorkstream}
-          editingTask={editingTask}
-          onSaveCustomType={customTypes.addType}
-          onCreateTask={async (data) => {
-            await tasks.createTask({
-              project_id: projects.current.id,
-              title: data.title,
-              description: data.description,
-              type: data.type,
-              mode: data.mode,
-              effort: data.effort,
-              multiagent: data.multiagent,
-              assignee: data.assignee,
-              flow_id: data.flow_id,
-              auto_continue: data.auto_continue,
-              images: data.images,
-              workstream_id: data.workstream_id,
-              priority: data.priority,
-              chaining: data.chaining,
-            });
-          }}
-          onUpdateTask={async (taskId, data) => {
-            await tasks.updateTask(taskId, {
-              title: data.title,
-              description: data.description,
-              type: data.type,
-              mode: data.mode,
-              effort: data.effort,
-              multiagent: data.multiagent,
-              assignee: data.assignee,
-              flow_id: data.flow_id,
-              auto_continue: data.auto_continue,
-              images: data.images,
-              workstream_id: data.workstream_id,
-              priority: data.priority,
-              chaining: data.chaining,
-            });
-          }}
-          onCloseCreate={closeCreateTask}
-          onCloseEdit={closeEditTask}
-        />
-      )}
-
-      {showAddProject && (
-        <AddProjectModal
-          onClose={() => setShowAddProject(false)}
-          onCreate={async (name, localPath) => {
-            await projects.createProject(name, undefined, localPath);
-          }}
-        />
-      )}
-
-      {showMembersModal && projects.current && (
-        <MembersModal
-          projectId={projects.current.id}
-          currentUserId={auth.profile.id}
-          onClose={() => setShowMembersModal(false)}
-        />
-      )}
-
-    </>
+    <ProjectWorkspace
+      project={{
+        id: projects.current.id,
+        name: projects.current.name,
+        local_path: projects.current.local_path ?? null,
+        role: projects.current.role || 'dev',
+      }}
+      projects={projects.projects.map(project => ({ id: project.id, name: project.name }))}
+      user={{ id: auth.profile.id, initials: auth.profile.initials }}
+      webNotifications={webNotifs}
+      notifications={notifs}
+      milestone={wsProgress}
+      todoItems={todoItems}
+      reviewItems={reviewItems}
+      tasks={tasks.tasks}
+      activeWorkstreams={workstreams.active}
+      allWorkstreams={workstreams.workstreams}
+      members={members.members}
+      flows={aiFlows.flows}
+      setFlows={aiFlows.setFlows}
+      customTypes={customTypes.types}
+      jobs={jobViews}
+      memberMap={memberMap}
+      flowMap={flowMap}
+      typeFlowMap={typeFlowMap}
+      mentionedTaskIds={mentionedTaskIds}
+      commentCounts={commentCounts.counts}
+      focusTaskId={focusTaskId}
+      focusWsId={focusWsId}
+      showTaskForm={showTaskForm}
+      taskFormWorkstream={taskFormWorkstream}
+      editingTask={editingTask}
+      showAddProject={showAddProject}
+      showMembersModal={showMembersModal}
+      onSwitchProject={projects.switchProject}
+      onNewProject={() => setShowAddProject(true)}
+      onSignOut={async () => { await signOut(); window.location.reload(); }}
+      onManageMembers={() => setShowMembersModal(true)}
+      onUpdateLocalPath={path => projects.updateLocalPath(projects.current.id, path)}
+      onCloseAddProject={() => setShowAddProject(false)}
+      onCreateProject={async (name, localPath) => {
+        await projects.createProject(name, undefined, localPath);
+      }}
+      onCloseMembersModal={() => setShowMembersModal(false)}
+      onSaveCustomType={customTypes.addType}
+      onCreateTask={async (data) => {
+        await tasks.createTask({
+          project_id: projects.current.id,
+          title: data.title,
+          description: data.description,
+          type: data.type,
+          mode: data.mode,
+          effort: data.effort,
+          multiagent: data.multiagent,
+          assignee: data.assignee,
+          flow_id: data.flow_id,
+          auto_continue: data.auto_continue,
+          images: data.images,
+          workstream_id: data.workstream_id,
+          priority: data.priority,
+          chaining: data.chaining,
+        });
+      }}
+      onUpdateTaskForm={async (taskId, data) => {
+        await tasks.updateTask(taskId, {
+          title: data.title,
+          description: data.description,
+          type: data.type,
+          mode: data.mode,
+          effort: data.effort,
+          multiagent: data.multiagent,
+          assignee: data.assignee,
+          flow_id: data.flow_id,
+          auto_continue: data.auto_continue,
+          images: data.images,
+          workstream_id: data.workstream_id,
+          priority: data.priority,
+          chaining: data.chaining,
+        });
+      }}
+      onCloseCreateTask={closeCreateTask}
+      onCloseEditTask={closeEditTask}
+      onCreateWorkstream={workstreams.createWorkstream}
+      onUpdateWorkstream={workstreams.updateWorkstream}
+      onDeleteWorkstream={executionActions.deleteWorkstreamAndReloadTasks}
+      onSwapColumns={handleSwapWorkstreams}
+      onAddTask={openCreateTask}
+      onRunWorkstream={executionActions.runWorkstream}
+      onRunTask={executionActions.runTask}
+      onEditTask={(taskId) => {
+        const rawTask = tasks.tasks.find(task => task.id === taskId);
+        if (!rawTask) return;
+        const flowName = rawTask.flow_id ? flowMap[rawTask.flow_id] : (typeFlowMap[rawTask.type] ? flowMap[typeFlowMap[rawTask.type]] : null);
+        startEditingTask(toTaskView(rawTask, memberMap, flowName), rawTask);
+      }}
+      onDeleteTask={tasks.deleteTask}
+      onUpdateTask={tasks.updateTask}
+      onMoveTask={handleMoveTask}
+      onTerminate={executionActions.terminate}
+      onReply={executionActions.reply}
+      onApprove={executionActions.approve}
+      onReject={executionActions.reject}
+      onRework={executionActions.rework}
+      onDeleteJob={executionActions.dismissJob}
+      onMoveToBacklog={executionActions.sendToBacklog}
+      onContinue={executionActions.continueExecution}
+      onCreatePr={executionActions.createPr}
+      onRestoreArchiveWorkstream={async (workstreamId) => { await workstreams.updateWorkstream(workstreamId, { status: 'active' }); }}
+      onSaveFlow={async (flowId, updates) => { await aiFlows.updateFlow(flowId, updates); await aiFlows.reload(); }}
+      onSaveFlowSteps={async (flowId, steps) => { await aiFlows.updateFlowSteps(flowId, steps); await aiFlows.reload(); }}
+      onCreateFlow={aiFlows.createFlow}
+      onDeleteFlow={aiFlows.deleteFlow}
+      onSwapFlows={handleSwapFlows}
+    />
   );
 }
 
