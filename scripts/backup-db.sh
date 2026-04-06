@@ -1,11 +1,11 @@
 #!/bin/bash
-# CodeSync database backup
+# Workstream database backup
 # Dumps the local Supabase Postgres DB and keeps 7 days of backups.
 
-BACKUP_DIR="$HOME/backups/codesync"
+BACKUP_DIR="$HOME/backups/workstream"
 CONTAINER="supabase_db_codesync"
 TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-BACKUP_FILE="$BACKUP_DIR/codesync_$TIMESTAMP.sql.gz"
+BACKUP_FILE="$BACKUP_DIR/workstream_$TIMESTAMP.sql.gz"
 RETENTION_DAYS=7
 
 mkdir -p "$BACKUP_DIR"
@@ -20,5 +20,5 @@ else
 fi
 
 # Prune old backups
-find "$BACKUP_DIR" -name "codesync_*.sql.gz" -mtime +$RETENTION_DAYS -delete
+find "$BACKUP_DIR" -name "workstream_*.sql.gz" -mtime +$RETENTION_DAYS -delete
 echo "[backup] Pruned backups older than ${RETENTION_DAYS} days"
