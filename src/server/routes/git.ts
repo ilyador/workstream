@@ -217,7 +217,7 @@ At the end, output a brief summary of what was reviewed and what was fixed (if a
 
   } catch (err: any) {
     // On failure, set review_failed so UI shows error + retry
-    await supabase.from('workstreams').update({ status: 'review_failed' }).eq('id', workstreamId);
+    await supabase.from('workstreams').update({ status: 'review_failed', review_output: `Error: ${err.message}` }).eq('id', workstreamId);
     console.error('[review-pr] Failed:', err.message);
   }
 });

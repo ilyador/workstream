@@ -873,7 +873,12 @@ export function WorkstreamColumn({
 
       {wsStatus === 'review failed' && (
         <div className={`${s.completeBanner} ${s.failedBanner}`}>
-          <span>Review failed</span>
+          <div>
+            <span>Review failed</span>
+            {workstream?.review_output && (
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>{workstream.review_output}</div>
+            )}
+          </div>
           {onCreatePr && (
             <button className="btn btnDanger btnSm" onClick={onCreatePr}>Retry</button>
           )}
