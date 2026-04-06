@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
-import type { CustomTaskType, Flow, MemberRecord, WorkstreamRecord } from '../lib/api';
+import type { Flow } from '../lib/api';
 import { TaskDescriptionField } from './TaskDescriptionField';
 import { TaskImagesSection } from './TaskImagesSection';
 import { TaskAttachmentsEditor } from './TaskAttachmentsEditor';
+import { TaskFormOptions } from './TaskFormOptions';
 import { useTaskImages } from '../hooks/useTaskImages';
+import { getPreferredFlowId, type CustomTypeOption, type MemberOption, type WorkstreamOption } from './task-form-shared';
 import s from './TaskForm.module.css';
-
-type WorkstreamOption = Pick<WorkstreamRecord, 'id' | 'name'>;
-type MemberOption = Pick<MemberRecord, 'id' | 'name' | 'initials'>;
-type CustomTypeOption = Pick<CustomTaskType, 'id' | 'name' | 'pipeline'>;
 
 export interface TaskFormData {
   title: string;
@@ -54,19 +52,6 @@ interface Props {
   editTask?: EditTaskData;
   onSubmit: (data: TaskFormData) => Promise<void>;
   onClose: () => void;
-}
-
-import { BUILT_IN_TYPES } from '../lib/constants';
-
-const PIPELINE_OPTIONS = [
-  { value: 'feature', label: 'feature (plan → implement → verify → review)' },
-  { value: 'bug-fix', label: 'bug-fix (plan → analyze → fix → verify → review)' },
-  { value: 'refactor', label: 'refactor (plan → analyze → refactor → verify → review)' },
-  { value: 'test', label: 'test (plan → write-tests → verify → review)' },
-];
-
-function getPreferredFlowId(flows: Flow[], taskType: string): string {
-  return flows.find(flow => (flow.default_types || []).includes(taskType))?.id || flows[0]?.id || '';
 }
 
 export function TaskForm({ workstreams, members, flows = [], customTypes = [], onSaveCustomType, localPath, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
@@ -185,168 +170,37 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
             onChange={setDescription}
             onImagePaste={handleImagePaste}
           />
-          <div className={s.row}>
-            <div className={s.field}>
-              <label className={s.label}>Type</label>
-              {isCustomType ? (
-                <div className={s.customTypeRow}>
-                  <input
-                    className={s.input}
-                    placeholder="e.g. docs, spike, deploy"
-                    value={customType}
-                    onChange={e => setCustomType(e.target.value)}
-                    autoFocus
-                  />
-                  <select
-                    className={s.select}
-                    value={customPipeline}
-                    onChange={e => setCustomPipeline(e.target.value)}
-                    aria-label="Custom type pipeline"
-                  >
-                    {PIPELINE_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className={s.customTypeCancel}
-                    onClick={() => { setIsCustomType(false); setCustomType(''); }}
-                    title="Use preset type"
-                  >&times;</button>
-                </div>
-              ) : (
-                <select aria-label="Type" className={s.select} value={type} onChange={e => {
-                  if (e.target.value === '__custom__') {
-                    setCustomPipeline(
-                      PIPELINE_OPTIONS.some(option => option.value === type) ? type : 'feature'
-                    );
-                    setIsCustomType(true);
-                  } else {
-                    const nextType = e.target.value;
-                    setType(nextType);
-                    const matchingFlowId = getPreferredFlowId(flows, nextType);
-                    if (matchingFlowId) {
-                      setFlowId(matchingFlowId);
-                    }
-                    setAssignee('');
-                    setMode('ai');
-                  }
-                }}>
-                  {BUILT_IN_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  {customTypes.filter(ct => !BUILT_IN_TYPES.includes(ct.name)).map(ct => (
-                    <option key={ct.id} value={ct.name}>{ct.name}</option>
-                  ))}
-                  <option value="__custom__">custom...</option>
-                </select>
-              )}
-            </div>
-            <div className={s.field}>
-              <label className={s.label}>Assignee</label>
-              <select aria-label="Assignee" className={s.select} value={assignee ? `human:${assignee}` : (flowId ? `flow:${flowId}` : '')} onChange={e => {
-                const val = e.target.value;
-                if (val.startsWith('flow:')) {
-                  setFlowId(val.slice(5));
-                  setAssignee('');
-                  setMode('ai');
-                } else if (val.startsWith('human:')) {
-                  setAssignee(val.slice(6));
-                  setFlowId('');
-                  setMode('human');
-                  setAutoContinue(false);
-                } else {
-                  setAssignee('');
-                  setFlowId('');
-                  setMode('ai');
-                }
-              }}>
-                {flows.length > 0 && (
-                  <optgroup label="AI Flows">
-                    {flows.map(f => <option key={f.id} value={`flow:${f.id}`}>{f.name}</option>)}
-                  </optgroup>
-                )}
-                {flows.length === 0 && <option value="">AI</option>}
-                {members.length > 0 && (
-                  <optgroup label="Team">
-                    {members.map(m => <option key={m.id} value={`human:${m.id}`}>{m.name}</option>)}
-                  </optgroup>
-                )}
-              </select>
-            </div>
-            {!assignee && (
-              <div className={s.field}>
-                <label className={s.label}>Effort</label>
-                <select className={s.select} value={effort} onChange={e => setEffort(e.target.value)}>
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                  <option value="max">max</option>
-                </select>
-              </div>
-            )}
-          </div>
-          <div className={s.row}>
-            {workstreams.length > 0 && (
-              <div className={s.field}>
-                <label className={s.label}>Workstream</label>
-                <select className={s.select} value={workstreamId} onChange={e => setWorkstreamId(e.target.value)}>
-                  <option value="">Backlog</option>
-                  {workstreams.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
-            )}
-            {!workstreamId && (
-              <div className={s.field}>
-                <label className={s.label}>Priority</label>
-                <div className={s.segmented}>
-                  {(['critical', 'upcoming', 'backlog'] as const).map(p => (
-                    <button
-                      key={p}
-                      type="button"
-                      className={`${s.segmentedBtn} ${priority === p ? s.segmentedActive : ''}`}
-                      onClick={() => setPriority(p)}
-                    >
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className={s.checkboxes}>
-            {!assignee && (
-              <label className={s.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={multiagent === 'yes'}
-                  onChange={e => setMultiagent(e.target.checked ? 'yes' : 'auto')}
-                />
-                <span>Use subagents</span>
-              </label>
-            )}
-            {!assignee && (
-              <label className={s.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={autoContinue}
-                  onChange={e => setAutoContinue(e.target.checked)}
-                />
-                <span>Continue automatically</span>
-              </label>
-            )}
-          </div>
-
-          <div className={s.field}>
-            <label className={s.label}>File chaining</label>
-            <select className={s.select} value={chaining} onChange={e => setChaining(e.target.value)}>
-              <option value="none">None</option>
-              <option value="accept">Accept files from previous task</option>
-              <option value="produce">Produce files for next task</option>
-              <option value="both">Accept and produce files</option>
-            </select>
-          </div>
+          <TaskFormOptions
+            workstreams={workstreams}
+            members={members}
+            flows={flows}
+            customTypes={customTypes}
+            type={type}
+            customType={customType}
+            customPipeline={customPipeline}
+            isCustomType={isCustomType}
+            assignee={assignee}
+            flowId={flowId}
+            effort={effort}
+            workstreamId={workstreamId}
+            priority={priority}
+            multiagent={multiagent}
+            autoContinue={autoContinue}
+            chaining={chaining}
+            setType={setType}
+            setCustomType={setCustomType}
+            setCustomPipeline={setCustomPipeline}
+            setIsCustomType={setIsCustomType}
+            setAssignee={setAssignee}
+            setFlowId={setFlowId}
+            setMode={setMode}
+            setEffort={setEffort}
+            setWorkstreamId={setWorkstreamId}
+            setPriority={setPriority}
+            setMultiagent={setMultiagent}
+            setAutoContinue={setAutoContinue}
+            setChaining={setChaining}
+          />
 
           <TaskImagesSection
             images={images}
