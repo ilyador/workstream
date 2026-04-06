@@ -10,7 +10,7 @@ import { useCommentCounts } from './hooks/useCommentCounts';
 import { useWebNotifications } from './hooks/useWebNotifications';
 import { useFlows } from './hooks/useFlows';
 import { useCustomTypes } from './hooks/useCustomTypes';
-import { signUp, signIn, signOut, updateTask, updateWorkstream as apiUpdateWorkstream, updateFlow as apiUpdateFlow } from './lib/api';
+import { signUp, signIn, signOut } from './lib/api';
 import { Routes, Route, useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
@@ -25,14 +25,10 @@ import { MembersModal } from './components/MembersModal';
 import { FlowEditor2 } from './components/FlowEditor2';
 import { useModal } from './hooks/modal-context';
 import { useExecutionActions } from './hooks/useExecutionActions';
+import { useProjectOrderingMutations } from './hooks/useProjectOrderingMutations';
 import { useProjectViewModels } from './hooks/useProjectViewModels';
 import appStyles from './App.module.css';
-import { applyPositionUpdates, applyTaskMove, replaceItemById } from './lib/optimistic-updates';
 import './styles/global.css';
-
-function getErrorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
-}
 
 export default function App() {
   const [envReady, setEnvReady] = useState(false);
@@ -94,6 +90,22 @@ export default function App() {
     flows: aiFlows.flows,
     notifications: notifs.notifications,
     currentUserId: auth.profile?.id,
+  });
+  const {
+    handleSwapWorkstreams,
+    handleMoveTask,
+    handleSwapFlows,
+  } = useProjectOrderingMutations({
+    modal,
+    workstreams: workstreams.workstreams,
+    setWorkstreams: workstreams.setWorkstreams,
+    reloadWorkstreams: workstreams.reload,
+    tasks: tasks.tasks,
+    setTasks: tasks.setTasks,
+    reloadTasks: tasks.reload,
+    flows: aiFlows.flows,
+    setFlows: aiFlows.setFlows,
+    reloadFlows: aiFlows.reload,
   });
 
   // Track previous job/task statuses for web push notifications
@@ -187,83 +199,6 @@ export default function App() {
   if (!projectReady) {
     return <Loading text="Loading project..." />;
   }
-
-  const handleSwapWorkstreams = (draggedId: string, targetId: string) => {
-    const dragged = workstreams.workstreams.find(w => w.id === draggedId);
-    const target = workstreams.workstreams.find(w => w.id === targetId);
-    if (!dragged || !target) return;
-
-    const draggedPosition = dragged.position;
-    const targetPosition = target.position;
-
-    workstreams.setWorkstreams(prev => applyPositionUpdates(prev, {
-      [draggedId]: targetPosition,
-      [targetId]: draggedPosition,
-    }));
-
-    void (async () => {
-      try {
-        await Promise.all([
-          apiUpdateWorkstream(draggedId, { position: targetPosition }),
-          apiUpdateWorkstream(targetId, { position: draggedPosition }),
-        ]);
-      } catch (err) {
-        workstreams.setWorkstreams(prev => applyPositionUpdates(prev, {
-          [draggedId]: draggedPosition,
-          [targetId]: targetPosition,
-        }));
-        await workstreams.reload();
-        await modal.alert('Error', getErrorMessage(err, 'Failed to reorder workstreams'));
-      }
-    })();
-  };
-
-  const handleMoveTask = (taskId: string, workstreamId: string | null, newPosition: number) => {
-    const originalTask = tasks.tasks.find(t => t.id === taskId);
-    if (!originalTask) return;
-
-    tasks.setTasks(prev => applyTaskMove(prev, taskId, workstreamId, newPosition));
-
-    void (async () => {
-      try {
-        await updateTask(taskId, { workstream_id: workstreamId, position: newPosition });
-      } catch (err) {
-        tasks.setTasks(prev => replaceItemById(prev, originalTask));
-        await tasks.reload();
-        await modal.alert('Error', getErrorMessage(err, 'Failed to move task'));
-      }
-    })();
-  };
-
-  const handleSwapFlows = (draggedId: string, targetId: string) => {
-    const dragged = aiFlows.flows.find(f => f.id === draggedId);
-    const target = aiFlows.flows.find(f => f.id === targetId);
-    if (!dragged || !target) return;
-
-    const draggedPosition = dragged.position;
-    const targetPosition = target.position;
-
-    aiFlows.setFlows(prev => applyPositionUpdates(prev, {
-      [draggedId]: targetPosition,
-      [targetId]: draggedPosition,
-    }, { sort: true }));
-
-    void (async () => {
-      try {
-        await Promise.all([
-          apiUpdateFlow(draggedId, { position: targetPosition }),
-          apiUpdateFlow(targetId, { position: draggedPosition }),
-        ]);
-      } catch (err) {
-        aiFlows.setFlows(prev => applyPositionUpdates(prev, {
-          [draggedId]: draggedPosition,
-          [targetId]: targetPosition,
-        }, { sort: true }));
-        await aiFlows.reload();
-        await modal.alert('Error', getErrorMessage(err, 'Failed to reorder flows'));
-      }
-    })();
-  };
 
   return (
     <>

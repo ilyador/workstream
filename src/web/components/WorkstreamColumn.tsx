@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React from 'react';
 import { useModal } from '../hooks/modal-context';
 import { useWorkstreamColumnState } from '../hooks/useWorkstreamColumnState';
+import { useWorkstreamColumnDrag } from '../hooks/useWorkstreamColumnDrag';
 import { TaskCard, type TaskCardProps } from './TaskCard';
 import { WorkstreamColumnHeader } from './WorkstreamColumnHeader';
 import { WorkstreamColumnStatusBanners } from './WorkstreamColumnStatusBanners';
@@ -110,11 +111,6 @@ export function WorkstreamColumn({
   renderTaskCard,
 }: WorkstreamColumnProps) {
   const modal = useModal();
-  const [columnDropSide, setColumnDropSide] = useState<'left' | 'right' | null>(null);
-  const dropIndexRef = useRef<string | null>(null);
-  const dragCountRef = useRef(0); // track enter/leave balance to handle child elements
-  const colDragCountRef = useRef(0);
-  const columnScrollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const {
     expandedIds,
     setExpandedIds,
@@ -152,114 +148,38 @@ export function WorkstreamColumn({
       columnHighlight: s.columnHighlight,
     },
   });
-
-  // Clean up column scroll interval and group ghost on unmount
-  useEffect(() => () => {
-    if (columnScrollInterval.current) clearInterval(columnScrollInterval.current);
-    document.getElementById('__drag-preview__')?.remove();
-  }, []);
+  const {
+    columnScrollIntervalRef,
+    updateDropIndicator,
+    clearColumnScroll,
+    handleDragEnter,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    showDropLeft,
+    showDropRight,
+  } = useWorkstreamColumnDrag({
+    tasksRef,
+    columnRef,
+    workstreamId: wsId,
+    draggedTaskId,
+    draggedGroupIds,
+    draggedWsId,
+    isBacklog,
+    onDropTask,
+    onColumnDrop,
+    classes: {
+      chainGroup: s.chainGroup,
+      cardWrap: s.cardWrap,
+      dropBefore: s.dropBefore,
+      dropAfter: s.dropAfter,
+    },
+  });
 
   const renderCard = (cardProps: TaskCardProps) => {
     if (renderTaskCard) return renderTaskCard(cardProps);
     return <TaskCard {...cardProps} />;
   };
-
-  // --- Drag indicator via DOM classes (no React state, no re-renders) ---
-
-  const clearDropIndicator = useCallback(() => {
-    const container = tasksRef.current;
-    if (!container) return;
-    container.querySelectorAll(`.${s.dropBefore}, .${s.dropAfter}`).forEach(el => {
-      el.classList.remove(s.dropBefore, s.dropAfter);
-    });
-  }, [tasksRef]);
-
-  const updateDropIndicator = useCallback((clientY: number) => {
-    const container = tasksRef.current;
-    if (!container || !draggedTaskId) return;
-    clearDropIndicator();
-
-    // IDs being dragged (single task or entire group)
-    const draggedIds = new Set(draggedGroupIds && draggedGroupIds.length > 0 ? draggedGroupIds : [draggedTaskId]);
-
-    // Build list of drop targets: each is either a single cardWrap or a chainGroup
-    const targets: Array<{ element: HTMLElement; taskId: string; isGroup: boolean }> = [];
-
-    // Collect chain groups (not being dragged)
-    const groupedTaskIds = new Set<string>();
-    const groups = container.querySelectorAll<HTMLElement>(`.${s.chainGroup}`);
-    groups.forEach(g => {
-      const ids = (g.dataset.groupIds || '').split(',');
-      if (ids.some(id => draggedIds.has(id))) return; // skip dragged group
-      ids.forEach(id => groupedTaskIds.add(id));
-      targets.push({ element: g, taskId: ids[0], isGroup: true });
-    });
-
-    // Collect individual cardWraps (not in a group, not being dragged)
-    const wraps = container.querySelectorAll<HTMLElement>(`.${s.cardWrap}`);
-    wraps.forEach(w => {
-      const tid = w.dataset.taskId || '';
-      if (draggedIds.has(tid) || groupedTaskIds.has(tid)) return;
-      targets.push({ element: w, taskId: tid, isGroup: false });
-    });
-
-    // Sort by DOM order (top position)
-    targets.sort((a, b) => a.element.getBoundingClientRect().top - b.element.getBoundingClientRect().top);
-
-    // Find drop target
-    let dropBeforeTaskId: string | null = null;
-    for (const target of targets) {
-      const rect = target.element.getBoundingClientRect();
-      if (clientY < rect.top + rect.height / 2) {
-        dropBeforeTaskId = target.taskId;
-        break;
-      }
-    }
-
-    dropIndexRef.current = dropBeforeTaskId;
-
-    // Show indicator
-    if (dropBeforeTaskId) {
-      const targetEl = targets.find(t => t.taskId === dropBeforeTaskId);
-      if (targetEl) {
-        if (targetEl.isGroup) {
-          // Show indicator above the first cardWrap inside the group
-          const firstWrap = targetEl.element.querySelector<HTMLElement>(`.${s.cardWrap}`);
-          firstWrap?.classList.add(s.dropBefore);
-        } else {
-          targetEl.element.classList.add(s.dropBefore);
-        }
-      }
-    } else if (targets.length > 0) {
-      const last = targets[targets.length - 1];
-      if (last.isGroup) {
-        const lastWraps = last.element.querySelectorAll<HTMLElement>(`.${s.cardWrap}`);
-        lastWraps[lastWraps.length - 1]?.classList.add(s.dropAfter);
-      } else {
-        last.element.classList.add(s.dropAfter);
-      }
-    }
-  }, [draggedTaskId, draggedGroupIds, clearDropIndicator, tasksRef]);
-
-  const clearColumnScroll = useCallback(() => {
-    if (columnScrollInterval.current) {
-      clearInterval(columnScrollInterval.current);
-      columnScrollInterval.current = null;
-    }
-  }, []);
-
-  // Column drag-over: detect which side the cursor is on for the drop indicator
-  const handleColumnDragOver = useCallback((e: React.DragEvent) => {
-    if (!draggedWsId || !workstream || draggedWsId === workstream.id) return;
-    const col = columnRef.current;
-    if (!col) return;
-    const rect = col.getBoundingClientRect();
-    const midX = rect.left + rect.width / 2;
-    setColumnDropSide(e.clientX < midX ? 'left' : 'right');
-  }, [draggedWsId, workstream, columnRef]);
-
-  const showDropLeft = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'left';
-  const showDropRight = !isBacklog && draggedWsId && workstream && draggedWsId !== workstream.id && columnDropSide === 'right';
 
   return (
     <div className={s.columnOuter}>
@@ -267,55 +187,10 @@ export function WorkstreamColumn({
     <div
       ref={columnRef}
       className={`${s.column} ${isBacklog ? s.backlog : ''}`}
-      onDragEnter={(e) => {
-        e.preventDefault();
-        if (draggedTaskId) {
-          dragCountRef.current++;
-        }
-        if (draggedWsId && workstream && draggedWsId !== workstream.id) {
-          colDragCountRef.current++;
-        }
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        if (draggedWsId) handleColumnDragOver(e);
-      }}
-      onDragLeave={() => {
-        if (draggedTaskId) {
-          dragCountRef.current--;
-          if (dragCountRef.current <= 0) {
-            dragCountRef.current = 0;
-            clearDropIndicator();
-            clearColumnScroll();
-            dropIndexRef.current = null;
-          }
-        }
-        if (draggedWsId && workstream) {
-          colDragCountRef.current--;
-          if (colDragCountRef.current <= 0) {
-            colDragCountRef.current = 0;
-            setColumnDropSide(null);
-          }
-        }
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        clearColumnScroll();
-        // Handle task drop (null = drop at end, which also handles empty columns)
-        if (draggedTaskId) {
-          clearDropIndicator();
-          dragCountRef.current = 0;
-          onDropTask(wsId, dropIndexRef.current);
-          dropIndexRef.current = null;
-        }
-        // Handle column drop
-        if (draggedWsId && workstream && onColumnDrop && draggedWsId !== workstream.id) {
-          colDragCountRef.current = 0;
-          setColumnDropSide(null);
-          onColumnDrop(workstream.id);
-        }
-      }}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       <WorkstreamColumnHeader
         workstream={workstream}
@@ -386,7 +261,7 @@ export function WorkstreamColumn({
         listHeader={listHeader}
         renderCard={renderCard}
         tasksRef={tasksRef}
-        columnScrollIntervalRef={columnScrollInterval}
+        columnScrollIntervalRef={columnScrollIntervalRef}
         updateDropIndicator={updateDropIndicator}
         clearColumnScroll={clearColumnScroll}
       />
