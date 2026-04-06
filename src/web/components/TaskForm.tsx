@@ -1,10 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { getSkills, type CustomTaskType, type Flow, type MemberRecord, type SkillInfo, type WorkstreamRecord } from '../lib/api';
-import { MdField } from './MdField';
-import { useSlashCommands } from '../hooks/useSlashCommands';
-import { computeSkillInsert } from '../lib/skill-insert';
-import { useArtifacts } from '../hooks/useArtifacts';
-import { AttachmentList } from './AttachmentList';
+import { useState, useEffect } from 'react';
+import type { CustomTaskType, Flow, MemberRecord, WorkstreamRecord } from '../lib/api';
+import { TaskDescriptionField } from './TaskDescriptionField';
+import { TaskImagesSection } from './TaskImagesSection';
+import { TaskAttachmentsEditor } from './TaskAttachmentsEditor';
+import { useTaskImages } from '../hooks/useTaskImages';
 import s from './TaskForm.module.css';
 
 type WorkstreamOption = Pick<WorkstreamRecord, 'id' | 'name'>;
@@ -111,121 +110,21 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
   const [autoContinue, setAutoContinue] = useState(editTask?.auto_continue ?? true);
   const [priority, setPriority] = useState(editTask?.priority || 'backlog');
   const [chaining, setChaining] = useState(editTask?.chaining || 'none');
-  const [images, setImages] = useState<string[]>(editTask?.images || []);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Skill autocomplete state
-  const [skills, setSkills] = useState<SkillInfo[]>([]);
-  const [skillsLoaded, setSkillsLoaded] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const slash = useSlashCommands(skills);
-
-  // Fetch skills on mount
-  useEffect(() => {
-    getSkills(localPath).then(data => {
-      setSkills(data);
-      setSkillsLoaded(true);
-    }).catch(() => {
-      setSkillsLoaded(true);
-    });
-  }, [localPath]);
-
-  // Validate skill references in the description (AI mode only)
-  const skillNames = new Set(skills.map(sk => sk.name));
-  const referencedSkills = mode === 'ai' && description
-    ? [...description.matchAll(/(?:^|[\s\n])\/([a-zA-Z0-9_][\w:-]*)/g)].map(m => m[1])
-    : [];
-  const invalidSkills = referencedSkills.filter(name => !skillNames.has(name));
-  const validSkills = referencedSkills.filter(name => skillNames.has(name));
-
-  // Detect `/` trigger in textarea
-  const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    const cursor = e.target.selectionStart;
-    setDescription(val);
-    // Auto-resize textarea to fit content
-    e.target.style.height = 'auto';
-    e.target.style.height = e.target.scrollHeight + 'px';
-    if (mode === 'ai') {
-      slash.handleTextChange(val, cursor);
-    }
-  }, [mode, slash]);
-
-  const insertSkill = useCallback((skillName: string) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const result = computeSkillInsert(description, ta.selectionStart, skillName);
-    if (!result) return;
-    setDescription(result.newText);
-    slash.dismiss();
-    requestAnimationFrame(() => {
-      ta.focus();
-      ta.selectionStart = ta.selectionEnd = result.newCursor;
-      ta.style.height = 'auto';
-      ta.style.height = ta.scrollHeight + 'px';
-    });
-  }, [description, slash]);
-
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
-
-  function handleImageDrop(e: React.DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-    for (const file of files) {
-      if (file.size > MAX_IMAGE_SIZE) {
-        setError(`Image too large (max 5MB)`);
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        setImages(prev => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
-    }
-  }
-
-  function handleImagePaste(e: React.ClipboardEvent) {
-    const items = Array.from(e.clipboardData.items).filter(i => i.type.startsWith('image/'));
-    for (const item of items) {
-      const file = item.getAsFile();
-      if (file) {
-        if (file.size > MAX_IMAGE_SIZE) {
-          setError(`Image too large (max 5MB)`);
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => setImages(prev => [...prev, reader.result as string]);
-        reader.readAsDataURL(file);
-      }
-    }
-  }
-
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
-    for (const file of files) {
-      if (file.size > MAX_IMAGE_SIZE) {
-        setError(`Image too large (max 5MB)`);
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => setImages(prev => [...prev, reader.result as string]);
-      reader.readAsDataURL(file);
-    }
-  }
-
-  function removeImage(index: number) {
-    setImages(prev => prev.filter((_, i) => i !== index));
-  }
-
-  const handleDescriptionKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (mode === 'ai') {
-      slash.handleKeyDown(e, insertSkill);
-    }
-  }, [mode, slash, insertSkill]);
+  const {
+    images,
+    dragOver,
+    fileInputRef,
+    setDragOver,
+    handleImageDrop,
+    handleImagePaste,
+    handleFileSelect,
+    removeImage,
+  } = useTaskImages({
+    initialImages: editTask?.images,
+    onError: setError,
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -279,69 +178,13 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
             required
             autoFocus
           />
-          <div className={s.descriptionWrap}>
-            <MdField
-              value={description}
-              onChange={setDescription}
-              placeholder={mode === 'ai' ? "Description (optional) -- type / to insert a skill" : "Description (optional)"}
-              minHeight={72}
-              renderTextarea={(stopEditing) => (
-                <textarea
-                  ref={el => {
-                    textareaRef.current = el;
-                    if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
-                  }}
-                  className={s.descriptionTextarea}
-                  placeholder={mode === 'ai' ? "Description (optional) -- type / to insert a skill" : "Description (optional)"}
-                  value={description}
-                  onChange={handleDescriptionChange}
-                  onKeyDown={handleDescriptionKeyDown}
-                  onBlur={(e) => {
-                    // Don't switch to preview if clicking a button -- layout shift steals the click
-                    const related = e.relatedTarget as HTMLElement | null;
-                    if (!related?.tagName?.match(/^BUTTON$/i) && !related?.closest('button')) {
-                      stopEditing();
-                    }
-                    setTimeout(() => slash.dismiss(), 150);
-                  }}
-                  onPaste={e => {
-                    const hasImage = Array.from(e.clipboardData.items).some(i => i.type.startsWith('image/'));
-                    if (hasImage) {
-                      e.preventDefault();
-                      handleImagePaste(e);
-                    }
-                  }}
-                  autoFocus
-                />
-              )}
-            />
-            {mode === 'ai' && slash.matches.length > 0 && (
-              <div className={s.skillDropdown}>
-                {slash.matches.map((sk, i) => (
-                  <div
-                    key={sk.name}
-                    className={`${s.skillItem} ${i === slash.selectedIdx ? s.skillItemActive : ''}`}
-                    onMouseDown={(e) => { e.preventDefault(); insertSkill(sk.name); }}
-                    onMouseEnter={() => {/* selection handled by hook */}}
-                  >
-                    <span className={s.skillName}>/{sk.name}</span>
-                    {sk.description && <span className={s.skillDesc}>{sk.description}</span>}
-                    <span className={s.skillSource}>{sk.source}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {mode === 'ai' && referencedSkills.length > 0 && slash.matches.length === 0 && skillsLoaded && (
-              <div className={s.skillBadges}>
-                {validSkills.map(name => (
-                  <span key={name} className={s.skillBadgeValid}>/{name}</span>
-                ))}
-                {invalidSkills.map(name => (
-                  <span key={name} className={s.skillBadgeInvalid} title="Skill not found - will be ignored">/{name}</span>
-                ))}
-              </div>
-            )}
-          </div>
+          <TaskDescriptionField
+            mode={mode}
+            value={description}
+            localPath={localPath}
+            onChange={setDescription}
+            onImagePaste={handleImagePaste}
+          />
           <div className={s.row}>
             <div className={s.field}>
               <label className={s.label}>Type</label>
@@ -505,33 +348,23 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
             </select>
           </div>
 
-          <div className={s.imagesSection}>
-            <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFileSelect} />
-            {images.length > 0 && (
-              <div className={s.imageGrid}>
-                {images.map((url, i) => (
-                  <div key={i} className={s.imageThumb}>
-                    <img src={url} alt="" />
-                    <button type="button" className={s.imageRemove} onClick={() => removeImage(i)}>&times;</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button type="button" className="btn btnGhost btnSm" onClick={() => fileInputRef.current?.click()}>
-              + Add images
-            </button>
-            {dragOver && <div className={s.dragHint}>Drop images anywhere on this form</div>}
-          </div>
+          <TaskImagesSection
+            images={images}
+            dragOver={dragOver}
+            fileInputRef={fileInputRef}
+            onFileSelect={handleFileSelect}
+            onRemoveImage={removeImage}
+          />
 
           {isEdit && editTask?.id && (
             <div>
               <label className={s.label}>Attachments</label>
               {(chaining === 'produce' || chaining === 'both') && (
-                <div className={s.attachmentNotice}>
-                  This task requires a file attachment before it can be completed
-                </div>
-              )}
-              <TaskAttachmentsEdit taskId={editTask.id} />
+              <div className={s.attachmentNotice}>
+                This task requires a file attachment before it can be completed
+              </div>
+            )}
+              <TaskAttachmentsEditor taskId={editTask.id} />
             </div>
           )}
 
@@ -546,26 +379,5 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
         </form>
       </div>
     </div>
-  );
-}
-
-/** Inline attachments editor for the edit modal */
-function TaskAttachmentsEdit({ taskId }: { taskId: string }) {
-  const { artifacts, upload, remove } = useArtifacts(taskId);
-
-  return (
-    <AttachmentList
-      className={s.attachmentsEditor}
-      items={artifacts}
-      onAddFiles={(files) => {
-        for (const file of files) upload(file);
-      }}
-      onRemoveItem={remove}
-      onOpenItem={(item) => {
-        window.open(item.url, '_blank', 'noopener,noreferrer');
-      }}
-      emptyMessage="Drop files here or click + Add"
-      extraDropHint="Drop more files here"
-    />
   );
 }
