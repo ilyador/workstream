@@ -13,7 +13,7 @@ const MIME_MAP: Record<string, string> = {
 };
 
 /** Scan .artifacts/ directory, upload to storage, insert records, then clean up. */
-async function scanAndUploadArtifacts(
+export async function scanAndUploadArtifacts(
   localPath: string,
   taskId: string,
   jobId: string,
@@ -166,7 +166,7 @@ function formatRagResults(results: any[]): string {
 }
 
 /** Build prompt for a single flow step, including only the requested context sources. */
-async function buildStepPrompt(
+export async function buildStepPrompt(
   step: FlowStepConfig,
   flow: FlowConfig,
   task: any,
