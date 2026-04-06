@@ -2,9 +2,9 @@ import React from 'react';
 import type { TaskCardProps } from './TaskCard';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
-import { WorkstreamTaskChainGroup } from './WorkstreamTaskChainGroup';
-import { WorkstreamTaskListItem } from './WorkstreamTaskListItem';
 import type { BuildTaskCardProps, ChainGroup } from './workstream-task-list-types';
+import { WorkstreamTaskListContent } from './WorkstreamTaskListContent';
+import { useWorkstreamTaskListSurface } from '../hooks/useWorkstreamTaskListSurface';
 import s from './WorkstreamColumn.module.css';
 
 interface WorkstreamTaskListProps {
@@ -146,42 +146,20 @@ export function WorkstreamTaskList({
     metaItems: metaItems?.(task.id),
     hideComments,
   });
+  const { handleDragOver, handleDragLeave } = useWorkstreamTaskListSurface({
+    tasksRef,
+    columnScrollIntervalRef,
+    draggedTaskId,
+    updateDropIndicator,
+    clearColumnScroll,
+  });
 
   return (
     <div
       className={s.tasks}
       ref={tasksRef}
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (!draggedTaskId) return;
-
-        updateDropIndicator(e.clientY);
-        const container = tasksRef.current;
-        if (!container) return;
-        const rect = container.getBoundingClientRect();
-        const edgeZone = 50;
-        const scrollSpeed = 8;
-        if (e.clientY < rect.top + edgeZone) {
-          if (!columnScrollIntervalRef.current) {
-            columnScrollIntervalRef.current = setInterval(() => {
-              container.scrollTop -= scrollSpeed;
-            }, 16);
-          }
-          return;
-        }
-        if (e.clientY > rect.bottom - edgeZone) {
-          if (!columnScrollIntervalRef.current) {
-            columnScrollIntervalRef.current = setInterval(() => {
-              container.scrollTop += scrollSpeed;
-            }, 16);
-          }
-          return;
-        }
-        clearColumnScroll();
-      }}
-      onDragLeave={() => {
-        clearColumnScroll();
-      }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
     >
       {listHeader}
       {tasks.length === 0 && draggedTaskId && (
@@ -192,64 +170,21 @@ export function WorkstreamTaskList({
           {isBacklog ? 'No tasks in backlog' : 'Drop tasks here'}
         </div>
       )}
-      {(() => {
-        const rendered = new Set<string>();
-        return tasks.map((task, index) => {
-          if (rendered.has(task.id)) return null;
-
-          const group = getChainGroup(task.id);
-          if (group && index === group.startIndex) {
-            const groupTasks = group.taskIds.map(id => tasks.find(t => t.id === id)!);
-            const isGroupDragging = draggedGroupIds ? group.taskIds.some(id => draggedGroupIds.includes(id)) : false;
-            group.taskIds.forEach(id => rendered.add(id));
-
-            return (
-              <WorkstreamTaskChainGroup
-                key={`chain-${group.taskIds[0]}`}
-                group={group}
-                groupTasks={groupTasks}
-                index={index}
-                previousTaskId={index > 0 ? tasks[index - 1]?.id || null : null}
-                projectId={projectId || undefined}
-                isDragging={isGroupDragging}
-                dragDisabled={dragDisabledGlobal || index <= freezeIndex}
-                buildCardProps={buildCardProps}
-                renderCard={renderCard}
-                onDragGroupStart={onDragGroupStart}
-                onDragTaskEnd={onDragTaskEnd}
-              />
-            );
-          }
-
-          if (group) return null;
-
-          const prevTask = index > 0 ? tasks[index - 1] : null;
-          const showConnector = !!(
-            prevTask &&
-            prevTask.status === 'done' &&
-            task.chaining &&
-            ['accept', 'both'].includes(task.chaining) &&
-            !chainGroups.some(chainGroup => chainGroup.taskIds.includes(task.id))
-          );
-
-          return (
-            <WorkstreamTaskListItem
-              key={task.id}
-              task={task}
-              index={index}
-              prevTask={prevTask}
-              projectId={projectId || undefined}
-              draggedTaskId={draggedTaskId}
-              dragDisabled={dragDisabledGlobal || index <= freezeIndex}
-              showConnector={showConnector}
-              buildCardProps={buildCardProps}
-              renderCard={renderCard}
-              onDragTaskStart={onDragTaskStart}
-              onDragTaskEnd={onDragTaskEnd}
-            />
-          );
-        });
-      })()}
+      <WorkstreamTaskListContent
+        tasks={tasks}
+        chainGroups={chainGroups}
+        getChainGroup={getChainGroup}
+        draggedTaskId={draggedTaskId}
+        draggedGroupIds={draggedGroupIds}
+        projectId={projectId || undefined}
+        freezeIndex={freezeIndex}
+        dragDisabledGlobal={dragDisabledGlobal}
+        buildCardProps={buildCardProps}
+        renderCard={renderCard}
+        onDragTaskStart={onDragTaskStart}
+        onDragGroupStart={onDragGroupStart}
+        onDragTaskEnd={onDragTaskEnd}
+      />
     </div>
   );
 }
