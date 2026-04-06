@@ -11,12 +11,11 @@ import { useWebNotifications } from './hooks/useWebNotifications';
 import { useFlows } from './hooks/useFlows';
 import { useCustomTypes } from './hooks/useCustomTypes';
 import { signUp, signIn, signOut } from './lib/api';
-import { toTaskView } from './lib/task-view';
 import { useSearchParams } from 'react-router-dom';
 import { OnboardingCheck } from './components/OnboardingCheck';
 import { AuthGate } from './components/AuthGate';
 import { NewProject } from './components/NewProject';
-import { ProjectWorkspace } from './components/ProjectWorkspace';
+import { CurrentProjectWorkspace } from './components/CurrentProjectWorkspace';
 import { useModal } from './hooks/modal-context';
 import { useExecutionActions } from './hooks/useExecutionActions';
 import { useProjectOrderingMutations } from './hooks/useProjectOrderingMutations';
@@ -160,7 +159,7 @@ export default function App() {
   }
 
   return (
-    <ProjectWorkspace
+    <CurrentProjectWorkspace
       project={{
         id: projects.current.id,
         name: projects.current.name,
@@ -168,7 +167,7 @@ export default function App() {
         role: projects.current.role || 'dev',
       }}
       projects={projects.projects.map(project => ({ id: project.id, name: project.name }))}
-      user={{ id: auth.profile.id, initials: auth.profile.initials }}
+      profile={{ id: auth.profile.id, initials: auth.profile.initials }}
       webNotifications={webNotifs}
       notifications={notifs}
       milestone={wsProgress}
@@ -195,9 +194,9 @@ export default function App() {
       showAddProject={showAddProject}
       showMembersModal={showMembersModal}
       onSwitchProject={projects.switchProject}
-      onNewProject={() => setShowAddProject(true)}
+      onOpenAddProject={() => setShowAddProject(true)}
       onSignOut={async () => { await signOut(); window.location.reload(); }}
-      onManageMembers={() => setShowMembersModal(true)}
+      onOpenMembersModal={() => setShowMembersModal(true)}
       onUpdateLocalPath={path => projects.updateLocalPath(projects.current.id, path)}
       onCloseAddProject={() => setShowAddProject(false)}
       onCreateProject={async (name, localPath) => {
@@ -242,6 +241,7 @@ export default function App() {
       }}
       onCloseCreateTask={closeCreateTask}
       onCloseEditTask={closeEditTask}
+      onStartEditingTask={startEditingTask}
       onCreateWorkstream={workstreams.createWorkstream}
       onUpdateWorkstream={workstreams.updateWorkstream}
       onDeleteWorkstream={executionActions.deleteWorkstreamAndReloadTasks}
@@ -249,12 +249,6 @@ export default function App() {
       onAddTask={openCreateTask}
       onRunWorkstream={executionActions.runWorkstream}
       onRunTask={executionActions.runTask}
-      onEditTask={(taskId) => {
-        const rawTask = tasks.tasks.find(task => task.id === taskId);
-        if (!rawTask) return;
-        const flowName = rawTask.flow_id ? flowMap[rawTask.flow_id] : (typeFlowMap[rawTask.type] ? flowMap[typeFlowMap[rawTask.type]] : null);
-        startEditingTask(toTaskView(rawTask, memberMap, flowName), rawTask);
-      }}
       onDeleteTask={tasks.deleteTask}
       onUpdateTask={tasks.updateTask}
       onMoveTask={handleMoveTask}
