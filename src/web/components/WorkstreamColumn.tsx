@@ -911,6 +911,9 @@ export function WorkstreamColumn({
               )}
             </div>
           )}
+          {onArchive && currentUserId && workstream?.reviewer_id === currentUserId && (
+            <button className={s.archiveBtn} onClick={onArchive}>Archive</button>
+          )}
         </div>
       )}
 
