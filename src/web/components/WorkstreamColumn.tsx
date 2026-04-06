@@ -1,8 +1,9 @@
 import React from 'react';
 import { useModal } from '../hooks/modal-context';
+import { useWorkstreamColumnActions } from '../hooks/useWorkstreamColumnActions';
 import { useWorkstreamColumnState } from '../hooks/useWorkstreamColumnState';
 import { useWorkstreamColumnDrag } from '../hooks/useWorkstreamColumnDrag';
-import { TaskCard, type TaskCardProps } from './TaskCard';
+import type { TaskCardProps } from './TaskCard';
 import { WorkstreamColumnHeader } from './WorkstreamColumnHeader';
 import { WorkstreamColumnStatusBanners } from './WorkstreamColumnStatusBanners';
 import { WorkstreamTaskList } from './WorkstreamTaskList';
@@ -175,11 +176,14 @@ export function WorkstreamColumn({
       dropAfter: s.dropAfter,
     },
   });
-
-  const renderCard = (cardProps: TaskCardProps) => {
-    if (renderTaskCard) return renderTaskCard(cardProps);
-    return <TaskCard {...cardProps} />;
-  };
+  const { handleStartEdit, handleRequestDelete, renderCard } = useWorkstreamColumnActions({
+    workstream,
+    onDeleteWorkstream,
+    confirm: modal.confirm,
+    setEditName,
+    setEditing,
+    renderTaskCard,
+  });
 
   return (
     <div className={s.columnOuter}>
@@ -201,11 +205,7 @@ export function WorkstreamColumn({
         onEditNameChange={setEditName}
         onRename={handleRename}
         onCancelEdit={() => setEditing(false)}
-        onStartEdit={() => {
-          if (!workstream) return;
-          setEditName(workstream.name);
-          setEditing(true);
-        }}
+        onStartEdit={handleStartEdit}
         onColumnDragStart={onColumnDragStart}
         canRunAi={canRunAi}
         onRunWorkstream={onRunWorkstream}
@@ -215,11 +215,7 @@ export function WorkstreamColumn({
         hasBrokenLinks={hasBrokenLinks}
         headerExtra={headerExtra}
         onAddTask={onAddTask}
-        onRequestDelete={workstream && onDeleteWorkstream ? async () => {
-          if (await modal.confirm('Delete workstream', `Delete workstream "${workstream.name}"? Tasks will move to backlog.`, { label: 'Delete', danger: true })) {
-            onDeleteWorkstream(workstream.id);
-          }
-        } : undefined}
+        onRequestDelete={workstream && onDeleteWorkstream ? handleRequestDelete : undefined}
         progressPct={progressPct}
       />
 
