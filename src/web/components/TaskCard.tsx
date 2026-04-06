@@ -1,7 +1,9 @@
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { TaskCardActiveDetail, TaskCardFailedDetail } from './TaskCardStateDetails';
-import { DoneDetail, FlowStepDetail, IdleDetail } from './TaskCardDetails';
+import { TaskDoneDetail } from './TaskDoneDetail';
+import { TaskFlowStepDetail } from './TaskFlowStepDetail';
+import { TaskIdleDetail } from './TaskIdleDetail';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
 import type { MentionMember, TaskCardMetaItem } from './task-card-types';
@@ -233,7 +235,7 @@ export function TaskCardView({
 
       {/* Done section -- no border separator */}
       {!isActive && isExpanded && taskDone && (jobStatus === 'done' || !job) && (
-        <DoneDetail
+        <TaskDoneDetail
           task={task}
           job={job}
           projectId={projectId}
@@ -249,7 +251,7 @@ export function TaskCardView({
       {!isActive && isExpanded && !taskDone && (
         <div className={s.detail} onClick={(e) => e.stopPropagation()}>
           {isFlowStep && (
-            <FlowStepDetail
+            <TaskFlowStepDetail
               task={task}
               metaItems={metaItems}
               onEdit={onEdit}
@@ -271,7 +273,7 @@ export function TaskCardView({
 
           {/* IDLE — no active job, task in backlog/todo */}
           {!isFlowStep && !isActive && !taskDone && jobStatus !== 'failed' && (
-            <IdleDetail
+            <TaskIdleDetail
               task={task}
               canRunAi={canRunAi}
               isBacklog={isBacklog}
