@@ -23,6 +23,13 @@ const { useCommentsMock, useArtifactsMock } = vi.hoisted(() => ({
   })),
 }));
 
+vi.mock('../hooks/modal-context', () => ({
+  useModal: () => ({
+    confirm: vi.fn(async () => true),
+    alert: vi.fn(async () => {}),
+  }),
+}));
+
 vi.mock('../hooks/useComments', () => ({
   useComments: useCommentsMock,
 }));
@@ -79,6 +86,25 @@ describe('TaskCard review checks', () => {
 
     expect(useCommentsMock).not.toHaveBeenCalled();
     expect(useArtifactsMock).not.toHaveBeenCalled();
+  });
+
+  it('renders an expanded idle card without referencing removed local comment state', () => {
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'backlog',
+          mode: 'ai',
+        }}
+        job={null}
+        canRunAi
+        isExpanded
+        onToggleExpand={() => {}}
+      />,
+    );
+
+    expect(useCommentsMock).toHaveBeenCalled();
+    expect(screen.getByText(/Run/)).toBeTruthy();
   });
 
   it('shows the tests badge only when testsPassed is explicitly true', () => {

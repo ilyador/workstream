@@ -1,10 +1,6 @@
-import { useState, useEffect } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { elapsed } from '../lib/time';
-import { LiveLogs } from './LiveLogs';
-import { ReplyInput } from './ReplyInput';
-import { TaskAttachments } from './TaskAttachments';
+import { TaskCardActiveDetail, TaskCardFailedDetail } from './TaskCardStateDetails';
 import { DoneDetail, FlowStepDetail, IdleDetail } from './TaskCardDetails';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
@@ -130,17 +126,6 @@ export function TaskCardView({
   const tagStatusClass = jobStatus
     ? s[`tag${cap(jobStatus)}`] : '';
 
-  // Local elapsed timer — only ticks when this card's job is running
-  const [, setElapsedTick] = useState(0);
-  useEffect(() => {
-    if (jobStatus !== 'running' || !job?.startedAt) return;
-    const interval = setInterval(() => setElapsedTick(tick => tick + 1), 1000);
-    return () => clearInterval(interval);
-  }, [jobStatus, job?.startedAt]);
-  const elapsedText = jobStatus === 'running' && job?.startedAt ? elapsed(job.startedAt) : '';
-
-  const [showRework, setShowRework] = useState(false);
-
   return (
     <div
       data-task-card="true"
@@ -225,104 +210,16 @@ export function TaskCardView({
 
       {/* Active job detail — ALWAYS visible for running/paused/review */}
       {isActive && job && (
-        <div className={s.detail} onClick={(e) => e.stopPropagation()}>
-          {/* Description (read-only) */}
-          {task.description && (
-            <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>
-          )}
-
-          {/* QUEUED */}
-          {jobStatus === 'queued' && (
-            <div className={s.runMeta}>
-              <span>Queued — waiting for worker to pick up...</span>
-            </div>
-          )}
-
-          {/* RUNNING */}
-          {jobStatus === 'running' && (
-            <>
-              {job.phases && job.phases.length > 0 && (
-                <div className={s.phases}>
-                  {job.phases.map((p, i) => (
-                    <span key={p.name} className={s.phaseWrap}>
-                      {i > 0 && <span className={s.arrow}>&rarr;</span>}
-                      <span className={`${s.phase} ${s[`ph${cap(p.status)}`]} ${s[`pn${cap(p.name)}`] || ''}`}>
-                        {p.name}
-                      </span>
-                    </span>
-                  ))}
-                  <span className={s.runStats}>
-                    <span>attempt {job.attempt || 1}/{job.maxAttempts || 3}</span>
-                    {elapsedText && <span className={s.elapsed}>{elapsedText}</span>}
-                  </span>
-                </div>
-              )}
-              {job.phases?.some(p => p.status === 'completed' && p.summary) && (
-                <div className={s.stepSummaries}>
-                  {job.phases
-                    .filter(p => p.status === 'completed' && p.summary)
-                    .map(p => (
-                    <div key={p.name} className={s.stepSummary}>
-                      <span className={s.stepName}>{p.name}</span> {p.summary}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {job.question && (
-                <div className={s.retryBanner}>{job.question}</div>
-              )}
-              <LiveLogs jobId={job.id} footer={
-                onTerminate && (
-                  <button className="btn btnDanger btnSm" onClick={() => onTerminate(job.id)}>Terminate</button>
-                )
-              } />
-            </>
-          )}
-
-          {/* PAUSED */}
-          {jobStatus === 'paused' && (
-            <>
-              {job.question && <div className={s.question}>{job.question}</div>}
-              {onReply && (
-                <ReplyInput onReply={(answer) => onReply(job.id, answer)} />
-              )}
-            </>
-          )}
-
-          {/* REVIEW */}
-          {jobStatus === 'review' && (
-            <div className={s.reviewSection}>
-              <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
-              {job.review?.changedFiles && (
-                <div className={s.files}>
-                  <span className={s.filesLabel}>Changed files</span>
-                  {job.review.changedFiles.map(f => (
-                    <code key={f} className={s.file}>{f}</code>
-                  ))}
-                </div>
-              )}
-              {job.review?.testsPassed === true && (
-                <div className={s.checks}>
-                  <span className={s.checkOk}>&#10003; Tests pass</span>
-                </div>
-              )}
-              <div className={s.reviewActions}>
-                {onApprove && (
-                  <button className="btn btnSuccess btnSm" onClick={() => onApprove(job.id)}>Approve</button>
-                )}
-                {onRework && (
-                  <button className="btn btnWarning btnSm" onClick={() => setShowRework(v => !v)} title="Give feedback and re-run the task">Rework</button>
-                )}
-                {onReject && (
-                  <button className="btn btnDanger btnSm" onClick={() => onReject(job.id)} title="Undo all changes and reset the task">Reject</button>
-                )}
-              </div>
-              {showRework && onRework && (
-                <ReplyInput onReply={(answer) => { onRework(job.id, answer); setShowRework(false); }} placeholder="What should change?" />
-              )}
-            </div>
-          )}
-        </div>
+        <TaskCardActiveDetail
+          task={task}
+          job={job}
+          projectId={projectId}
+          onTerminate={onTerminate}
+          onReply={onReply}
+          onApprove={onApprove}
+          onReject={onReject}
+          onRework={onRework}
+        />
       )}
 
       {/* Preview: description only (visible when collapsed and NOT active) */}
@@ -362,46 +259,18 @@ export function TaskCardView({
 
           {/* FAILED */}
           {!isFlowStep && jobStatus === 'failed' && job && (
-            <div className={s.failedSection}>
-              {job.phases && job.phases.length > 0 && (
-                <div className={s.phases}>
-                  {job.phases.map((p, i) => (
-                    <span key={p.name} className={s.phaseWrap}>
-                      {i > 0 && <span className={s.arrow}>&rarr;</span>}
-                      <span className={`${s.phase} ${s[`ph${cap(p.status)}`]} ${s[`pn${cap(p.name)}`] || ''}`}>
-                        {p.status === 'completed' && <span className={s.phaseCheck}>&#10003;</span>}
-                        {p.name}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              )}
-              {job.question && <div className={s.errorMsg}>{job.question}</div>}
-              <div className={s.failActions}>
-                {onContinue && job.phases?.some(p => p.status === 'completed') && (() => {
-                  const nextPhase = job.phases?.find(p => p.status !== 'completed');
-                  return (
-                    <button className="btn btnPrimary btnSm" onClick={() => onContinue(job.id)}>
-                      Retry {nextPhase?.name || 'next step'}
-                    </button>
-                  );
-                })()}
-                {canRunAi && onRun && (!task.assignee || task.assignee.type === 'ai') && (
-                  <button className="btn btnDanger btnSm" onClick={() => onRun(task.id)}>
-                    Restart
-                  </button>
-                )}
-                {onDeleteJob && (
-                  <button className="btn btnGhost btnSm" onClick={() => onDeleteJob(job.id)}>
-                    Dismiss
-                  </button>
-                )}
-              </div>
-            </div>
+            <TaskCardFailedDetail
+              task={task}
+              job={job}
+              canRunAi={canRunAi}
+              onRun={onRun}
+              onContinue={onContinue}
+              onDeleteJob={onDeleteJob}
+            />
           )}
 
           {/* IDLE — no active job, task in backlog/todo */}
-          {!isFlowStep && !isActive && !taskDone && jobStatus !== 'failed' && commentsData && (
+          {!isFlowStep && !isActive && !taskDone && jobStatus !== 'failed' && (
             <IdleDetail
               task={task}
               canRunAi={canRunAi}
