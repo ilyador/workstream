@@ -4,6 +4,7 @@ import { useBoardDrag } from '../hooks/useBoardDrag';
 import type { JobView } from './job-types';
 import type { TaskRecord } from '../lib/api';
 import { compareByPosition, toTaskView, type TaskView, type WorkstreamView } from '../lib/task-view';
+import { mapPrimaryJobsByTask } from '../lib/job-selection';
 import s from './Board.module.css';
 
 interface BoardProps {
@@ -100,15 +101,7 @@ export function Board({
   const [newWsHasCode, setNewWsHasCode] = useState(true);
 
   const taskJobMap = useMemo(() => {
-    const priority: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
-    const map: Record<string, JobView> = {};
-    for (const job of jobs) {
-      const existing = map[job.taskId];
-      if (!existing || (priority[job.status] ?? 5) < (priority[existing.status] ?? 5)) {
-        map[job.taskId] = job;
-      }
-    }
-    return map;
+    return mapPrimaryJobsByTask(jobs);
   }, [jobs]);
 
   const tasksByWorkstream = useMemo(() => {
@@ -221,6 +214,7 @@ export function Board({
         isBacklog
         canRunAi={userRole !== 'manager'}
         projectId={projectId}
+        members={members}
         mentionedTaskIds={mentionedTaskIds}
         commentCounts={commentCounts}
         focusTaskId={focusTaskId}

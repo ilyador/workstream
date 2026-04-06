@@ -3,6 +3,7 @@ import { WorkstreamColumn } from './WorkstreamColumn';
 import type { JobView } from './job-types';
 import type { TaskRecord } from '../lib/api';
 import { compareByPosition, toTaskView, type TaskView, type WorkstreamView } from '../lib/task-view';
+import { mapPrimaryJobsByTask } from '../lib/job-selection';
 import s from './ArchivePage.module.css';
 
 interface ArchivePageProps {
@@ -26,16 +27,13 @@ function mapArchiveTask(
 }
 
 export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, onRestore, onUpdateTask }: ArchivePageProps) {
+  const members = useMemo(
+    () => Object.entries(memberMap).map(([id, m]) => ({ id, name: m.name, initials: m.initials })),
+    [memberMap],
+  );
+
   const taskJobMap = useMemo(() => {
-    const priority: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
-    const map: Record<string, JobView> = {};
-    for (const job of jobs) {
-      const existing = map[job.taskId];
-      if (!existing || (priority[job.status] ?? 5) < (priority[existing.status] ?? 5)) {
-        map[job.taskId] = job;
-      }
-    }
-    return map;
+    return mapPrimaryJobsByTask(jobs);
   }, [jobs]);
 
   const completedBacklogTasks = useMemo(() => {
@@ -64,6 +62,7 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
             isBacklog
             canRunAi={false}
             projectId={projectId}
+            members={members}
             mentionedTaskIds={emptySet}
             focusTaskId={null}
             draggedTaskId={null}
@@ -93,6 +92,7 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
               isBacklog={false}
               canRunAi={false}
               projectId={projectId}
+              members={members}
               mentionedTaskIds={emptySet}
               focusTaskId={null}
               draggedTaskId={null}

@@ -63,5 +63,6 @@ export type JobView = {
     changedFiles?: string[];
   };
   completedAgo?: string;
+  completedAt?: string;
   flow_snapshot?: FlowSnapshotRecord | null;
 };

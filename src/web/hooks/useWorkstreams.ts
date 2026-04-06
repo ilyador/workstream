@@ -1,35 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { getWorkstreams, createWorkstream as apiCreate, updateWorkstream as apiUpdate, deleteWorkstream as apiDelete } from '../lib/api';
 import { subscribeProjectEvents } from './useProjectEvents';
-
-interface Workstream {
-  id: string;
-  project_id: string;
-  name: string;
-  description: string;
-  has_code: boolean;
-  status: string;
-  position: number;
-  pr_url: string | null;
-  reviewer_id: string | null;
-  created_at: string;
-}
+import { useProjectResource } from './useProjectResource';
 
 export function useWorkstreams(projectId: string | null) {
-  const [workstreams, setWorkstreams] = useState<Workstream[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    if (!projectId) { setLoading(false); return; }
-    const data = await getWorkstreams(projectId);
-    setWorkstreams(data);
-    setLoading(false);
-  }, [projectId]);
+  const {
+    data: workstreams,
+    setData: setWorkstreams,
+    loading,
+    error,
+    ready,
+    reload: load,
+  } = useProjectResource(projectId, getWorkstreams, {
+    createInitialValue: () => [],
+    getErrorMessage: (err) => err instanceof Error ? err.message : 'Failed to load workstreams',
+  });
 
   useEffect(() => {
-    queueMicrotask(() => {
-      void load();
-    });
+    void load();
     if (!projectId) return;
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if (event.type === 'workstream_changed' && event.workstream) {
@@ -43,11 +31,11 @@ export function useWorkstreams(projectId: string | null) {
           return [...prev, event.workstream].sort((a, b) => a.position - b.position);
         });
       } else if (event.type === 'full_sync') {
-        load();
+        void load();
       }
     });
     return unsub;
-  }, [projectId, load]);
+  }, [projectId, load, setWorkstreams]);
 
   async function createWs(name: string, description?: string, has_code?: boolean) {
     if (!projectId) return;
@@ -67,5 +55,5 @@ export function useWorkstreams(projectId: string | null) {
 
   const active = workstreams.filter(w => w.status !== 'archived');
 
-  return { workstreams, setWorkstreams, active, loading, createWorkstream: createWs, updateWorkstream: updateWs, deleteWorkstream: deleteWs, reload: load };
+  return { workstreams, setWorkstreams, active, loading, error, ready, createWorkstream: createWs, updateWorkstream: updateWs, deleteWorkstream: deleteWs, reload: load };
 }

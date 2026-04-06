@@ -1,25 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { getJobs } from '../lib/api';
-import type { JobRecord } from '../components/job-types';
 import { subscribeProjectEvents } from './useProjectEvents';
+import { useProjectResource } from './useProjectResource';
 
 export function useJobs(projectId: string | null) {
-  const [jobs, setJobs] = useState<JobRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    if (!projectId) { setLoading(false); return; }
-    try {
-      const data = await getJobs(projectId);
-      setJobs(data);
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, [projectId]);
+  const {
+    data: jobs,
+    setData: setJobs,
+    loading,
+    error,
+    ready,
+    reload: load,
+  } = useProjectResource(projectId, getJobs, {
+    createInitialValue: () => [],
+    getErrorMessage: () => 'Failed to load jobs',
+  });
 
   useEffect(() => {
-    queueMicrotask(() => {
-      void load();
-    });
+    void load();
     if (!projectId) return;
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if (event.type === 'job_changed' && event.job) {
@@ -35,17 +33,17 @@ export function useJobs(projectId: string | null) {
       } else if (event.type === 'job_deleted' && event.job) {
         setJobs(prev => prev.filter(j => j.id !== event.job.id));
       } else if (event.type === 'full_sync') {
-        load();
+        void load();
       }
       // Ignore other event types (task_changed, workstream_changed, etc.)
     });
     return unsub;
-  }, [projectId, load]);
+  }, [projectId, load, setJobs]);
 
   const running = jobs.filter(j => j.status === 'running');
   const paused = jobs.filter(j => j.status === 'paused');
   const review = jobs.filter(j => j.status === 'review');
   const done = jobs.filter(j => j.status === 'done').slice(0, 5);
 
-  return { jobs, running, paused, review, done, loading, reload: load };
+  return { jobs, running, paused, review, done, loading, error, ready, reload: load };
 }
