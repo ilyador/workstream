@@ -6,7 +6,7 @@ import { WorkstreamColumn } from './WorkstreamColumn';
 import { useBoardDrag } from '../hooks/useBoardDrag';
 import { useModal } from '../hooks/modal-context';
 import { BUILT_IN_TYPES, ALL_TOOLS, ALL_CONTEXT_SOURCES, MODEL_OPTIONS, ON_MAX_RETRIES_OPTIONS } from '../lib/constants';
-import { FlowStepCard } from './FlowStepCard';
+import { TaskCardView } from './TaskCard';
 import s from './FlowEditor2.module.css';
 
 interface FlowEditor2Props {
@@ -471,7 +471,7 @@ export function FlowEditor2({ flows, setFlows, onSave, onSaveSteps, onCreateFlow
             ];
           }}
           renderTaskCard={(cardProps) => (
-            <FlowStepCard {...cardProps} />
+            <TaskCardView {...cardProps} viewMode="flow-step" />
           )}
         />
       ))}
