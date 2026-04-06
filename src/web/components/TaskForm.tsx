@@ -107,6 +107,14 @@ export function TaskForm({ workstreams, members, existingTasks, flows = [], cust
   const [flowId, setFlowId] = useState(isEdit ? (editTask?.flow_id ?? '') : (
     flows.find(f => (f.default_types || []).includes('feature'))?.id || (flows.length > 0 ? flows[0].id : '')
   ));
+  // When flows load after mount (new task), sync flowId with current type
+  useEffect(() => {
+    if (isEdit || flows.length === 0) return;
+    if (!flowId) {
+      const match = flows.find(f => (f.default_types || []).includes(type));
+      if (match) setFlowId(match.id);
+    }
+  }, [flows]); // eslint-disable-line react-hooks/exhaustive-deps
   const [multiagent, setMultiagent] = useState(editTask?.multiagent || 'auto');
   const [autoContinue, setAutoContinue] = useState(editTask?.auto_continue ?? true);
   const [priority, setPriority] = useState(editTask?.priority || 'backlog');
