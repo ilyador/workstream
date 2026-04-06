@@ -1,16 +1,15 @@
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { TaskCardActiveDetail, TaskCardFailedDetail } from './TaskCardStateDetails';
+import { TaskCardActiveDetail } from './TaskCardActiveDetail';
+import { TaskCardCompact } from './TaskCardCompact';
+import { TaskCardFailedDetail } from './TaskCardFailedDetail';
+import { TaskCardPreview } from './TaskCardPreview';
 import { TaskDoneDetail } from './TaskDoneDetail';
 import { TaskFlowStepDetail } from './TaskFlowStepDetail';
 import { TaskIdleDetail } from './TaskIdleDetail';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
 import type { MentionMember, TaskCardMetaItem } from './task-card-types';
-import { clearDragPreview, setClonedDragPreview } from '../lib/drag-preview';
+import { capTaskCardToken } from './task-card-status';
 import s from './TaskCard.module.css';
-
-function cap(str: string) { return str.charAt(0).toUpperCase() + str.slice(1); }
 
 export interface TaskCardProps {
   task: TaskView;
@@ -50,15 +49,6 @@ export interface TaskCardProps {
 interface TaskCardViewProps extends TaskCardProps {
   viewMode?: 'task' | 'flow-step';
 }
-
-const STATUS_LABELS: Record<string, string> = {
-  queued: 'Queued',
-  running: 'Running',
-  paused: 'Waiting',
-  review: 'Review',
-  done: 'Done',
-  failed: 'Failed',
-};
 
 export function TaskCard({
   ...props
@@ -108,7 +98,7 @@ export function TaskCardView({
   const isFlowStep = viewMode === 'flow-step';
 
   const statusClass = jobStatus
-    ? s[`status${cap(jobStatus)}`]
+    ? s[`status${capTaskCardToken(jobStatus)}`]
     : isHumanWaiting ? s.statusPaused
     : taskDone ? s.statusDone : '';
 
@@ -122,82 +112,24 @@ export function TaskCardView({
     : priorityVisible && task.priority === 'upcoming' ? s.priorityUpcomingBorder
     : '';
 
-  const dotClass = jobStatus
-    ? s[`dot${cap(jobStatus)}`]
-    : taskDone ? s.dotDone : s.dotIdle;
-
-  const tagStatusClass = jobStatus
-    ? s[`tag${cap(jobStatus)}`] : '';
-
   return (
     <div
       data-task-card="true"
       className={`${s.card} ${priorityBgClass} ${priorityBorderClass} ${statusClass} ${isDragging ? s.dragging : ''}`}
       onClick={onToggleExpand}
     >
-      {/* Compact view — always visible */}
-      <div className={s.compact}>
-        {!dragDisabled && (
-          <span
-            className={s.handle}
-            draggable
-            onDragStart={(e) => {
-              e.stopPropagation();
-              if (!skipDragGhost) {
-                const card = (e.target as HTMLElement).closest(`.${s.card}`) as HTMLElement;
-                if (card) {
-                  setClonedDragPreview(card, e.dataTransfer);
-                }
-              }
-              onDragStart?.(e);
-              e.dataTransfer.effectAllowed = 'move';
-            }}
-            onDragEnd={(e) => {
-              e.stopPropagation();
-              clearDragPreview();
-              onDragEnd?.();
-            }}
-            onClick={(e) => e.stopPropagation()}
-            title="Drag to reorder"
-          >&#8942;&#8942;</span>
-        )}
-
-        {(jobStatus || taskDone) && <span className={`${s.statusDot} ${dotClass}`} />}
-
-        <span className={s.title}>{task.title}</span>
-
-        <div className={s.tags}>
-          {brokenLink && (
-            <span className={s.brokenLink} title={
-              brokenLink.up && brokenLink.down ? 'Missing input and output connection'
-              : brokenLink.up ? 'No previous task produces files'
-              : 'No next task accepts files'
-            }>
-              {brokenLink.up && '\u2191'}{'\u26A0'}{brokenLink.down && '\u2193'}
-            </span>
-          )}
-          {!task.auto_continue && (!task.assignee || task.assignee.type === 'ai') && (
-            <span className={s.chain} title="Manual review required">&#9646;&#9646;</span>
-          )}
-          {jobStatus && jobStatus !== 'done' && (
-            <span className={`${s.tag} ${s.tagStatus} ${tagStatusClass}`}>
-              {STATUS_LABELS[jobStatus]}
-            </span>
-          )}
-          {commentCount > 0 && (
-            <span className={`${s.commentBadge} ${hasUnreadMention ? s.commentBadgeMention : ''}`} title={hasUnreadMention ? 'You were mentioned' : `${commentCount} comment${commentCount > 1 ? 's' : ''}`}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-              </svg>
-              {commentCount}
-            </span>
-          )}
-          {task.assignee && task.assignee.type !== 'ai' && (
-            <span className={`${s.tag} ${s.tagHuman}`}>{task.assignee.initials || task.assignee.name || 'human'}</span>
-          )}
-          <span className={`${s.tag} ${s.tagType}`}>{task.type}</span>
-        </div>
-      </div>
+      <TaskCardCompact
+        task={task}
+        jobStatus={jobStatus}
+        taskDone={taskDone}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        dragDisabled={dragDisabled}
+        skipDragGhost={skipDragGhost}
+        commentCount={commentCount}
+        hasUnreadMention={hasUnreadMention}
+        brokenLink={brokenLink}
+      />
 
       {/* Active job detail — ALWAYS visible for running/paused/review */}
       {isActive && job && (
@@ -214,13 +146,7 @@ export function TaskCardView({
       )}
 
       {/* Preview: description only (visible when collapsed and NOT active) */}
-      {!isActive && (!isExpanded || taskDone) && task.description && (
-        <div className={s.preview}>
-          <div className={s.previewDesc}>
-            <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown>
-          </div>
-        </div>
-      )}
+      {!isActive && (!isExpanded || taskDone) && <TaskCardPreview task={task} />}
 
       {/* Done section -- no border separator */}
       {!isActive && isExpanded && taskDone && (jobStatus === 'done' || !job) && (
