@@ -13,7 +13,7 @@ const MIME_MAP: Record<string, string> = {
 };
 
 /** Scan .artifacts/ directory, upload to storage, insert records, then clean up. */
-async function scanAndUploadArtifacts(
+export async function scanAndUploadArtifacts(
   localPath: string,
   taskId: string,
   jobId: string,
@@ -166,7 +166,7 @@ function formatRagResults(results: any[]): string {
 }
 
 /** Build prompt for a single flow step, including only the requested context sources. */
-async function buildStepPrompt(
+export async function buildStepPrompt(
   step: FlowStepConfig,
   flow: FlowConfig,
   task: any,
@@ -413,6 +413,9 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
   const steps = flow.steps;
 
+  // Track cumulative attempts per step so jump-back retries don't reset the counter
+  const stepAttemptOffsets: Record<string, number> = {};
+
   let i = 0;
   while (i < steps.length) {
     const step = steps[i];
@@ -424,13 +427,15 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
     }
 
     const maxAttempts = step.max_retries + 1;
+    const attemptOffset = stepAttemptOffsets[step.name] || 0;
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      onPhaseStart(step.name, attempt);
+    for (let attempt = 1; attempt <= maxAttempts - attemptOffset; attempt++) {
+      const displayAttempt = attemptOffset + attempt;
+      onPhaseStart(step.name, displayAttempt);
 
       await supabase.from('jobs').update({
         current_phase: step.name,
-        attempt,
+        attempt: displayAttempt,
         question: null,
       }).eq('id', jobId);
 
@@ -447,14 +452,14 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
       if (step.model) args.push('--model', step.model);
       if (task.effort) args.push('--effort', task.effort);
 
-      onLog(`\n--- Step: ${step.name} (attempt ${attempt}/${maxAttempts}) ---\n`);
+      onLog(`\n--- Step: ${step.name} (attempt ${displayAttempt}/${maxAttempts}) ---\n`);
 
       try {
         const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
 
         const phaseOutput = {
           phase: step.name,
-          attempt,
+          attempt: displayAttempt,
           output: output.substring(0, 10000),
           summary: extractPhaseSummary(output),
         };
@@ -488,11 +493,11 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
           const failed = verdict ? !verdict.passed : (isReview ? legacyReviewCheck(output) : legacyVerifyCheck(output));
           const reason = verdict?.reason || `${step.name} failed (see output)`;
 
-          if (failed && attempt < maxAttempts) {
+          if (failed && displayAttempt < maxAttempts) {
             if (step.on_fail_jump_to != null) {
               const jumpIndex = steps.findIndex(s => s.position === step.on_fail_jump_to);
               if (jumpIndex >= 0 && jumpIndex < i) {
-                const retryMsg = `${step.name} failed (attempt ${attempt}/${maxAttempts}): ${reason}. Retrying from '${steps[jumpIndex].name}'...`;
+                const retryMsg = `${step.name} failed (attempt ${displayAttempt}/${maxAttempts}): ${reason}. Retrying from '${steps[jumpIndex].name}'...`;
                 onLog(`\n${retryMsg}\n`);
                 await supabase.from('jobs').update({ question: retryMsg }).eq('id', jobId);
                 await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
@@ -510,17 +515,18 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
                 if (failedOutput) {
                   task._gateFeedback = `${step.name} failed: ${reason}\n\nFull output:\n${failedOutput.substring(0, 3000)}`;
                 }
+                stepAttemptOffsets[step.name] = displayAttempt;
                 i = jumpIndex;
                 break;
               }
             }
-            const retryMsg = `${step.name} failed (attempt ${attempt}/${maxAttempts}): ${reason}. Retrying...`;
+            const retryMsg = `${step.name} failed (attempt ${displayAttempt}/${maxAttempts}): ${reason}. Retrying...`;
             onLog(`\n${retryMsg}\n`);
             await supabase.from('jobs').update({ question: retryMsg }).eq('id', jobId);
             await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
             continue;
           }
-          if (failed && attempt >= maxAttempts) {
+          if (failed && displayAttempt >= maxAttempts) {
             if (step.on_max_retries === 'pause') {
               const pauseMsg = `${step.name} still failing after ${maxAttempts} attempts: ${reason}`;
               await supabase.from('jobs').update({
@@ -540,7 +546,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
                 completed_at: new Date().toISOString(),
                 question: failMsg,
               }).eq('id', jobId);
-              await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
+              await supabase.from('tasks').update({ status: 'failed' }).eq('id', task.id);
               onFail(failMsg);
               return;
             }
@@ -553,8 +559,11 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         break;
 
       } catch (err: any) {
+        // If the job was canceled, the cancellation loop handles cleanup — just bail out.
+        if (err.message === 'Job canceled') return;
+
         onLog(`\nError in step ${step.name}: ${err.message}\n`);
-        if (attempt >= maxAttempts) {
+        if (displayAttempt >= maxAttempts) {
           let failMessage = `Step '${step.name}' failed: ${err.message}`;
           try {
             const { revertToCheckpoint } = await import('./checkpoint.js');
@@ -1154,6 +1163,9 @@ export async function runJob(ctx: JobContext): Promise<void> {
   // Run through phases
   const allPhases = [...taskType.phases, taskType.final];
 
+  // Track cumulative attempts per phase so jump-back retries don't reset the counter
+  const phaseAttemptOffsets: Record<string, number> = {};
+
   let i = 0;
   while (i < allPhases.length) {
     const phase = allPhases[i];
@@ -1174,14 +1186,16 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
     const maxAttempts = phase === 'verify' ? taskType.verify_retries + 1 :
                         phase === taskType.final ? taskType.review_retries + 1 : 1;
+    const attemptOffset = phaseAttemptOffsets[phase] || 0;
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      onPhaseStart(phase, attempt);
+    for (let attempt = 1; attempt <= maxAttempts - attemptOffset; attempt++) {
+      const displayAttempt = attemptOffset + attempt;
+      onPhaseStart(phase, displayAttempt);
 
       // Update job in DB
       await supabase.from('jobs').update({
         current_phase: phase,
-        attempt,
+        attempt: displayAttempt,
       }).eq('id', jobId);
 
       const prompt = await buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
@@ -1208,14 +1222,14 @@ export async function runJob(ctx: JobContext): Promise<void> {
         args.push('--effort', task.effort);
       }
 
-      onLog(`\n--- Phase: ${phase} (attempt ${attempt}/${maxAttempts}) ---\n`);
+      onLog(`\n--- Phase: ${phase} (attempt ${displayAttempt}/${maxAttempts}) ---\n`);
 
       try {
         const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
 
         const phaseOutput = {
           phase,
-          attempt,
+          attempt: displayAttempt,
           output: output.substring(0, 10000), // Cap output size
           summary: extractPhaseSummary(output),
         };
@@ -1242,7 +1256,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
           if (!verdict) console.warn(`[runner] Job ${jobId}: verify phase returned no structured verdict, using legacy heuristics`);
           const failed = verdict ? !verdict.passed : legacyVerifyCheck(output);
           const reason = verdict?.reason || 'verification failed (see output)';
-          if (failed && attempt < maxAttempts) {
+          if (failed && displayAttempt < maxAttempts) {
             const jumpTarget = taskType.on_verify_fail;
             const jumpIndex = allPhases.indexOf(jumpTarget);
             if (jumpIndex >= 0 && jumpIndex < i) {
@@ -1252,6 +1266,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
               for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
                 if (phasesCompleted[pi].phase === jumpTarget) { phasesCompleted.splice(pi, 1); break; }
               }
+              phaseAttemptOffsets[phase] = displayAttempt;
               i = jumpIndex;
               break;
             } else {
@@ -1259,7 +1274,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
               continue;
             }
           }
-          if (failed && attempt >= maxAttempts) {
+          if (failed && displayAttempt >= maxAttempts) {
             if (taskType.on_max_retries === 'pause') {
               const pauseMsg = `Tests still failing after ${maxAttempts} attempts: ${reason}`;
               await supabase.from('jobs').update({
@@ -1280,7 +1295,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
           if (!verdict) console.warn(`[runner] Job ${jobId}: review phase returned no structured verdict, using legacy heuristics`);
           const failed = verdict ? !verdict.passed : legacyReviewCheck(output);
           const reason = verdict?.reason || 'review found issues (see output)';
-          if (failed && attempt < maxAttempts) {
+          if (failed && displayAttempt < maxAttempts) {
             const jumpTarget = taskType.on_review_fail;
             const jumpIndex = allPhases.indexOf(jumpTarget);
             if (jumpIndex >= 0 && jumpIndex < i) {
@@ -1290,6 +1305,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
               for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
                 if (phasesCompleted[pi].phase === jumpTarget) { phasesCompleted.splice(pi, 1); break; }
               }
+              phaseAttemptOffsets[phase] = displayAttempt;
               i = jumpIndex;
               break;
             } else {
@@ -1297,7 +1313,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
               continue;
             }
           }
-          if (failed && attempt >= maxAttempts) {
+          if (failed && displayAttempt >= maxAttempts) {
             if (taskType.on_max_retries === 'pause') {
               const pauseMsg = `Review still failing after ${maxAttempts} attempts: ${reason}`;
               await supabase.from('jobs').update({
@@ -1317,8 +1333,11 @@ export async function runJob(ctx: JobContext): Promise<void> {
         break;
 
       } catch (err: any) {
+        // If the job was canceled, the cancellation loop handles cleanup — just bail out.
+        if (err.message === 'Job canceled') return;
+
         onLog(`\nError in phase ${phase}: ${err.message}\n`);
-        if (attempt >= maxAttempts) {
+        if (displayAttempt >= maxAttempts) {
           let failMessage = `Phase '${phase}' failed: ${err.message}`;
           let revertSucceeded = false;
           try {
@@ -1539,7 +1558,14 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
           fullOutput += lineBuffer;
         }
       }
+      // If cancelJob() already removed this jobId from activeProcesses, the
+      // process was killed intentionally — reject so the runner stops.
+      const wasCanceled = !activeProcesses.has(jobId);
       activeProcesses.delete(jobId);
+      if (wasCanceled) {
+        reject(new Error('Job canceled'));
+        return;
+      }
       // If claude streamed a result event but exited non-zero, treat as success.
       // The CLI sometimes exits 1 after completing successfully (e.g. max turns reached).
       const hasResult = fullOutput.includes('[done] Phase complete');

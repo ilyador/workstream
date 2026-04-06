@@ -122,7 +122,7 @@ export async function getProjects() {
 }
 
 export type SupabaseConfig = {
-  mode: 'local' | 'cloud';
+  mode: 'local' | 'cloud' | 'custom';
   url?: string;
   serviceRoleKey?: string;
 };
@@ -345,6 +345,13 @@ export async function uploadArtifact(taskId: string, file: File): Promise<Artifa
 
 export async function deleteArtifact(id: string) {
   return apiFetch(`/api/artifacts/${id}`, { method: 'DELETE' });
+}
+
+export async function updateArtifactContent(id: string, content: string): Promise<{ ok: boolean; size_bytes: number }> {
+  return apiFetch(`/api/artifacts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ content }),
+  });
 }
 
 // --- Notifications ---

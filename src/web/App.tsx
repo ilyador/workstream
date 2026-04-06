@@ -185,6 +185,17 @@ export default function App() {
     return map;
   }, [aiFlows.flows]);
 
+  // Build task-type -> flow id lookup (for AI assignee display when flow_id not set)
+  const typeFlowMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const f of aiFlows.flows) {
+      for (const t of f.default_types || []) {
+        if (!map[t]) map[t] = f.id;
+      }
+    }
+    return map;
+  }, [aiFlows.flows]);
+
   // Map API jobs to JobView shape
   const jobViews: JobView[] = useMemo(() => {
     const order: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
@@ -377,6 +388,7 @@ export default function App() {
             jobs={jobViews}
             memberMap={memberMap}
             flowMap={flowMap}
+            typeFlowMap={typeFlowMap}
             userRole={projects.current?.role || 'dev'}
             projectId={projects.current?.id || null}
             mentionedTaskIds={mentionedTaskIds}

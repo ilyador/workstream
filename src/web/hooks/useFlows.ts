@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getFlows, createFlow as apiCreate, updateFlow as apiUpdate, deleteFlow as apiDelete, updateFlowSteps as apiUpdateSteps, type Flow } from '../lib/api';
+import { subscribeProjectEvents } from './useProjectEvents';
 
 export function useFlows(projectId: string | null) {
   const [flows, setFlows] = useState<Flow[]>([]);
@@ -17,7 +18,28 @@ export function useFlows(projectId: string | null) {
     }
   }, [projectId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    if (!projectId) return;
+    const unsub = subscribeProjectEvents(projectId, (event) => {
+      if (event.type === 'flow_changed' && event.flow) {
+        setFlows(prev => {
+          const idx = prev.findIndex(f => f.id === event.flow.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...prev[idx], ...event.flow };
+            return next;
+          }
+          return [...prev, event.flow].sort((a, b) => a.position - b.position);
+        });
+      } else if (event.type === 'flow_deleted' && event.flow_id) {
+        setFlows(prev => prev.filter(f => f.id !== event.flow_id));
+      } else if (event.type === 'full_sync') {
+        load();
+      }
+    });
+    return unsub;
+  }, [projectId, load]);
 
   const createFlow = useCallback(async (data: { project_id: string; name: string; description?: string; steps?: any[] }): Promise<Flow> => {
     const created = await apiCreate(data);

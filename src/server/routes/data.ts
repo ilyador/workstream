@@ -37,10 +37,10 @@ function persistSupabaseConfig(config: { mode: string; url?: string; serviceRole
   if (config.mode === 'local') {
     envContent = setEnvVar(envContent, 'SUPABASE_URL', 'http://127.0.0.1:54321');
     envContent = setEnvVar(envContent, 'SUPABASE_MODE', 'local');
-  } else if (config.mode === 'cloud' && config.url && config.serviceRoleKey) {
+  } else if ((config.mode === 'cloud' || config.mode === 'custom') && config.url && config.serviceRoleKey) {
     envContent = setEnvVar(envContent, 'SUPABASE_URL', config.url);
     envContent = setEnvVar(envContent, 'SUPABASE_SERVICE_ROLE_KEY', config.serviceRoleKey);
-    envContent = setEnvVar(envContent, 'SUPABASE_MODE', 'cloud');
+    envContent = setEnvVar(envContent, 'SUPABASE_MODE', config.mode);
   }
 
   writeFileSync(envPath, envContent, 'utf-8');
@@ -462,7 +462,7 @@ dataRouter.post('/api/comments', requireAuth, async (req, res) => {
 dataRouter.delete('/api/comments/:id', requireAuth, async (req, res) => {
   const userId = (req as any).userId;
   // Only allow deleting your own comments
-  const { data: comment } = await supabase.from('comments').select('user_id').eq('id', req.params.id).single();
+  const { data: comment } = await supabase.from('comments').select('user_id, task_id').eq('id', req.params.id).single();
   if (!comment) return res.status(404).json({ error: 'Comment not found' });
   if (comment.user_id !== userId) return res.status(403).json({ error: 'Can only delete your own comments' });
   const { error } = await supabase.from('comments').delete().eq('id', req.params.id);
@@ -553,6 +553,26 @@ dataRouter.delete('/api/artifacts/:id', requireAuth, async (req, res) => {
   const { error } = await supabase.from('task_artifacts').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ error: error.message });
   res.json({ ok: true });
+});
+
+dataRouter.patch('/api/artifacts/:id', requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const { content } = req.body;
+  if (typeof content !== 'string') return res.status(400).json({ error: 'content (string) is required' });
+
+  const { data: artifact } = await supabase.from('task_artifacts').select('*').eq('id', req.params.id).single();
+  if (!artifact) return res.status(404).json({ error: 'Artifact not found' });
+  const access = await verifyTaskAccess(userId, artifact.task_id);
+  if (!access) return res.status(403).json({ error: 'Not authorized' });
+
+  const buffer = Buffer.from(content, 'utf-8');
+  const { error: uploadErr } = await supabase.storage
+    .from('task-artifacts')
+    .upload(artifact.storage_path, buffer, { contentType: artifact.mime_type, upsert: true });
+  if (uploadErr) return res.status(500).json({ error: `Storage upload failed: ${uploadErr.message}` });
+
+  await supabase.from('task_artifacts').update({ size_bytes: buffer.length }).eq('id', req.params.id);
+  res.json({ ok: true, size_bytes: buffer.length });
 });
 
 // --- Notifications ---
@@ -727,12 +747,15 @@ dataRouter.post('/api/custom-types', requireAuth, async (req, res) => {
     .select()
     .single();
   if (error) return res.status(400).json({ error: error.message });
+  broadcast(project_id, { type: 'custom_type_changed', custom_type: data });
   res.json(data);
 });
 
 dataRouter.delete('/api/custom-types/:id', requireAuth, async (req, res) => {
+  const { data: ct } = await supabase.from('custom_task_types').select('project_id').eq('id', req.params.id).single();
   const { error } = await supabase.from('custom_task_types').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ error: error.message });
+  if (ct?.project_id) broadcast(ct.project_id, { type: 'custom_type_changed' });
   res.json({ ok: true });
 });
 
@@ -953,6 +976,7 @@ dataRouter.post('/api/flows', requireAuth, async (req, res) => {
     .select('*, flow_steps(*)')
     .eq('id', flow.id)
     .single();
+  broadcast(project_id, { type: 'flow_changed', flow: full });
   res.json(full);
 });
 
@@ -977,6 +1001,7 @@ dataRouter.patch('/api/flows/:id', requireAuth, async (req, res) => {
     .select('*, flow_steps(*)')
     .single();
   if (error) return res.status(400).json({ error: error.message });
+  broadcast(flow.project_id, { type: 'flow_changed', flow: data });
   res.json(data);
 });
 
@@ -990,6 +1015,7 @@ dataRouter.delete('/api/flows/:id', requireAuth, async (req, res) => {
 
   const { error } = await supabase.from('flows').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ error: error.message });
+  broadcast(flow.project_id, { type: 'flow_deleted', flow_id: req.params.id });
   res.json({ ok: true });
 });
 
@@ -1033,6 +1059,7 @@ dataRouter.put('/api/flows/:id/steps', requireAuth, async (req, res) => {
     .select('*, flow_steps(*)')
     .eq('id', flowId)
     .single();
+  broadcast(flow.project_id, { type: 'flow_changed', flow: data });
   res.json(data);
 });
 
@@ -1182,6 +1209,7 @@ dataRouter.post('/api/projects/:id/invite', requireAuth, async (req, res) => {
       .single();
     if (error) return res.status(400).json({ error: error.message });
 
+    broadcast(projectId as string, { type: 'member_changed' });
     res.json({ ok: true, member: { ...member, name: profile.name, email: profile.email, initials: profile.initials } });
   } else {
     // User doesn't have an account yet — store as pending invite
@@ -1201,6 +1229,7 @@ dataRouter.post('/api/projects/:id/invite', requireAuth, async (req, res) => {
     if (error) return res.status(400).json({ error: error.message });
 
     const { initials } = deriveNameFromEmail(email);
+    broadcast(projectId as string, { type: 'member_changed' });
     res.json({ ok: true, member: { id: invite.id, name: email, email, initials, role, pending: true } });
   }
 });
@@ -1244,6 +1273,7 @@ dataRouter.delete('/api/projects/:id/members/:userId', requireAuth, async (req, 
     if (invErr) return res.status(400).json({ error: invErr.message });
   }
 
+  broadcast(projectId as string, { type: 'member_changed' });
   res.json({ ok: true });
 });
 
@@ -1319,9 +1349,29 @@ supabase.channel('db-changes')
       workstream: record,
     });
   })
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, async (payload) => {
+    const record = (payload.new as any) || (payload.old as any);
+    if (!record?.task_id) return;
+    const { data: task } = await supabase.from('tasks').select('project_id').eq('id', record.task_id).single();
+    if (!task?.project_id) return;
+    broadcast(task.project_id, {
+      type: payload.eventType === 'DELETE' ? 'comment_deleted' : 'comment_changed',
+      task_id: record.task_id,
+    });
+  })
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'task_artifacts' }, async (payload) => {
+    const record = (payload.new as any) || (payload.old as any);
+    if (!record?.task_id) return;
+    const { data: task } = await supabase.from('tasks').select('project_id').eq('id', record.task_id).single();
+    if (!task?.project_id) return;
+    broadcast(task.project_id, {
+      type: payload.eventType === 'DELETE' ? 'artifact_deleted' : 'artifact_changed',
+      task_id: record.task_id,
+    });
+  })
   .subscribe((status) => {
     if (status === 'SUBSCRIBED') {
-      console.log('[realtime] Subscribed to tasks + jobs changes');
+      console.log('[realtime] Subscribed to tasks + jobs + comments + artifacts changes');
     } else if (status === 'CHANNEL_ERROR') {
       console.error('[realtime] Channel error — falling back to polling');
       startPollingFallback();

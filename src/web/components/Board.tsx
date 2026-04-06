@@ -39,6 +39,7 @@ interface BoardProps {
   jobs: JobView[];
   memberMap: Record<string, { name: string; initials: string }>;
   flowMap: Record<string, string>;
+  typeFlowMap: Record<string, string>;
   userRole: string;
   projectId: string | null;
   mentionedTaskIds: Set<string>;
@@ -77,6 +78,7 @@ export function Board({
   jobs,
   memberMap,
   flowMap,
+  typeFlowMap,
   userRole,
   projectId,
   mentionedTaskIds,
@@ -132,7 +134,8 @@ export function Board({
       const key = task.workstream_id || '__backlog__';
       if (!groups[key]) groups[key] = [];
       const member = task.assignee ? memberMap[task.assignee] : null;
-      const flowName = task.flow_id ? flowMap[task.flow_id] : null;
+      const resolvedFlowId = task.flow_id || typeFlowMap[task.type];
+      const flowName = resolvedFlowId ? flowMap[resolvedFlowId] : null;
       groups[key].push({
         ...task,
         assignee: member
@@ -149,7 +152,7 @@ export function Board({
       groups[key].sort((a: any, b: any) => a.position - b.position);
     }
     return groups;
-  }, [tasks, workstreams, memberMap, flowMap]);
+  }, [tasks, workstreams, memberMap, flowMap, typeFlowMap]);
 
   const sortedWs = useMemo(
     () => [...workstreams].sort((a, b) => a.position - b.position),

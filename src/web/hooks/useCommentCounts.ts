@@ -18,7 +18,7 @@ export function useCommentCounts(projectId: string | null) {
     if (!projectId) return;
     // Reload when tasks change (comments might have been added)
     const unsub = subscribeProjectEvents(projectId, (event) => {
-      if (event.type === 'task_changed' || event.type === 'full_sync') load();
+      if (event.type === 'task_changed' || event.type === 'comment_changed' || event.type === 'comment_deleted' || event.type === 'full_sync') load();
     });
     return unsub;
   }, [projectId, load]);

@@ -7,7 +7,7 @@ interface Props {
   onCreate: (name: string, supabaseConfig: SupabaseConfig, localPath: string) => Promise<void>;
 }
 
-type SetupMode = 'local' | 'cloud' | null;
+type SetupMode = 'local' | 'cloud' | 'custom' | null;
 type HealthStatus = 'idle' | 'checking' | 'ok' | 'error';
 
 export function NewProject({ onCreate }: Props) {
@@ -24,6 +24,10 @@ export function NewProject({ onCreate }: Props) {
   const [cloudUrl, setCloudUrl] = useState('');
   const [cloudKey, setCloudKey] = useState('');
 
+  // Custom mode state
+  const [customUrl, setCustomUrl] = useState('');
+  const [customKey, setCustomKey] = useState('');
+
   async function handleCheckConnection() {
     setHealthStatus('checking');
     try {
@@ -36,12 +40,14 @@ export function NewProject({ onCreate }: Props) {
 
   function handleContinue() {
     if (mode === 'cloud' && (!cloudUrl.trim() || !cloudKey.trim())) return;
+    if (mode === 'custom' && (!customUrl.trim() || !customKey.trim())) return;
     setStep('name');
   }
 
   function canContinue(): boolean {
     if (!mode) return false;
     if (mode === 'cloud') return cloudUrl.trim() !== '' && cloudKey.trim() !== '';
+    if (mode === 'custom') return customUrl.trim() !== '' && customKey.trim() !== '';
     return true;
   }
 
@@ -56,6 +62,7 @@ export function NewProject({ onCreate }: Props) {
       const config: SupabaseConfig = {
         mode,
         ...(mode === 'cloud' ? { url: cloudUrl.trim(), serviceRoleKey: cloudKey.trim() } : {}),
+        ...(mode === 'custom' ? { url: customUrl.trim(), serviceRoleKey: customKey.trim() } : {}),
         ...(mode === 'local' ? { url: 'http://127.0.0.1:54321' } : {}),
       };
       await onCreate(name.trim(), config, localPath.trim());
@@ -95,6 +102,18 @@ export function NewProject({ onCreate }: Props) {
             </span>
             <span className={s.cardTitle}>Supabase Cloud</span>
             <span className={s.cardDesc}>Connect to a hosted Supabase project. Good for teams.</span>
+          </button>
+
+          <button
+            className={`${s.card} ${mode === 'custom' ? s.cardSelected : ''}`}
+            onClick={() => setMode('custom')}
+            type="button"
+          >
+            <span className={s.cardIcon}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2v4M10 14v4M2 10h4M14 10h4M4.93 4.93l2.83 2.83M12.24 12.24l2.83 2.83M15.07 4.93l-2.83 2.83M7.76 12.24l-2.83 2.83" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            </span>
+            <span className={s.cardTitle}>Custom Connection</span>
+            <span className={s.cardDesc}>Connect to a self-hosted Supabase on another machine or custom URL.</span>
           </button>
         </div>
 
@@ -139,6 +158,29 @@ export function NewProject({ onCreate }: Props) {
           </div>
         )}
 
+        {mode === 'custom' && (
+          <div className={s.detail}>
+            <p className={s.detailLabel}>Connect to a Supabase instance running on a specific machine or network.</p>
+            <label className={s.fieldLabel}>Supabase URL</label>
+            <input
+              className={s.input}
+              type="url"
+              placeholder="http://192.168.1.100:54321"
+              value={customUrl}
+              onChange={e => setCustomUrl(e.target.value)}
+              autoFocus
+            />
+            <label className={s.fieldLabel}>Service Role Key</label>
+            <input
+              className={s.input}
+              type="password"
+              placeholder="eyJhbGciOiJIUzI1NiIs..."
+              value={customKey}
+              onChange={e => setCustomKey(e.target.value)}
+            />
+          </div>
+        )}
+
         {mode && (
           <button
             className={`btn btnPrimary ${s.submitWrap}`}
@@ -162,7 +204,7 @@ export function NewProject({ onCreate }: Props) {
       <h1 className={s.title}>Set up your project</h1>
       <p className={s.subtitle}>
         A project maps to a codebase on your machine.
-        {mode === 'local' ? ' Using local Supabase.' : ` Using ${cloudUrl}.`}
+        {mode === 'local' ? ' Using local Supabase.' : mode === 'custom' ? ` Using ${customUrl}.` : ` Using ${cloudUrl}.`}
       </p>
       {error && <div style={{ color: 'var(--red)', background: 'var(--red-bg)', padding: '12px 16px', borderRadius: 8, fontSize: 14, marginBottom: 16, maxWidth: 360, width: '100%' }}>{error}</div>}
       <form className={s.form} onSubmit={handleSubmit}>

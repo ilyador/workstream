@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMembers } from '../lib/api';
+import { subscribeProjectEvents } from './useProjectEvents';
 
 export interface Member {
   id: string;
@@ -26,7 +27,16 @@ export function useMembers(projectId: string | null) {
     }
   }, [projectId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    if (!projectId) return;
+    const unsub = subscribeProjectEvents(projectId, (event) => {
+      if (event.type === 'member_changed' || event.type === 'full_sync') {
+        load();
+      }
+    });
+    return unsub;
+  }, [projectId, load]);
 
   return { members, loading, reload: load };
 }

@@ -55,6 +55,7 @@ interface TaskCardProps {
   dragDisabled?: boolean;
   skipDragGhost?: boolean;
   showPriority?: boolean;
+  isBacklog?: boolean;
   projectId?: string;
   hasUnreadMention?: boolean;
   commentCount?: number;
@@ -97,6 +98,7 @@ export function TaskCard({
   dragDisabled,
   skipDragGhost,
   showPriority,
+  isBacklog,
   projectId,
   hasUnreadMention,
   commentCount = 0,
@@ -150,7 +152,7 @@ export function TaskCard({
   const [showDoneReject, setShowDoneReject] = useState(false);
 
   // Eagerly fetch comments so data is ready before expansion
-  const commentsData = useComments(task.id);
+  const commentsData = useComments(task.id, projectId);
 
   return (
     <div
@@ -300,7 +302,7 @@ export function TaskCard({
           {/* REVIEW */}
           {jobStatus === 'review' && (
             <div className={s.reviewSection}>
-              <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
+              <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
               {job.review?.changedFiles && (
                 <div className={s.files}>
                   <span className={s.filesLabel}>Changed files</span>
@@ -369,7 +371,7 @@ export function TaskCard({
             {job.review?.summary && (
               <div className={s.doneSummary}>{job.review.summary}</div>
             )}
-            <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
+            <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
             <CardComments data={commentsData} projectId={projectId} />
           </div>
         </div>
@@ -423,6 +425,7 @@ export function TaskCard({
             <IdleDetail
               task={task}
               canRunAi={canRunAi}
+              isBacklog={isBacklog}
               projectId={projectId}
               onRun={onRun}
               onEdit={onEdit}
@@ -444,6 +447,7 @@ export function TaskCard({
 function IdleDetail({
   task,
   canRunAi,
+  isBacklog,
   projectId,
   onRun,
   onEdit,
@@ -456,6 +460,7 @@ function IdleDetail({
 }: {
   task: TaskCardProps['task'];
   canRunAi: boolean;
+  isBacklog?: boolean;
   projectId?: string;
   onRun?: (taskId: string) => void;
   onEdit?: () => void;
@@ -467,8 +472,15 @@ function IdleDetail({
   prevTaskId?: string | null;
 }) {
   const modal = useModal();
-  const ownArtifacts = useArtifacts(task.id);
-  const prevArtifacts = useArtifacts(prevTaskId || null);
+  const ownArtifacts = useArtifacts(task.id, projectId);
+  const prevArtifacts = useArtifacts(prevTaskId || null, projectId);
+  const [showComplete, setShowComplete] = useState(false);
+  const [completeNote, setCompleteNote] = useState('');
+  const completeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showComplete) completeInputRef.current?.focus();
+  }, [showComplete]);
 
   // Chaining completion rules
   const chaining = task.chaining || 'none';
@@ -498,7 +510,7 @@ function IdleDetail({
         )}
       </div>
 
-      <TaskAttachments taskId={task.id} legacyImages={task.images} readOnly />
+      <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
 
       {completionBlocked && (
         <div style={{ padding: '8px 12px', background: 'var(--amber-bg)', borderLeft: '3px solid var(--amber)', borderRadius: 6, fontSize: 12, color: 'var(--amber)', fontWeight: 500 }}>
@@ -522,6 +534,15 @@ function IdleDetail({
           )}
         </div>
         <div className={s.actionsRight}>
+          {isBacklog && onUpdateTask && (
+            <button
+              className="btn btnGhost btnSm"
+              style={{ color: 'var(--green)' }}
+              onClick={() => setShowComplete(v => !v)}
+              disabled={completionBlocked}
+              title={blockReason || 'Mark as complete'}
+            >Complete</button>
+          )}
           {onEdit && (
             <button className="btn btnGhost btnSm" onClick={onEdit}>Edit</button>
           )}
@@ -535,14 +556,49 @@ function IdleDetail({
         </div>
       </div>
 
+      {showComplete && onUpdateTask && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <input
+            ref={completeInputRef}
+            style={{
+              flex: 1, padding: '4px 10px', background: 'var(--white)', border: '1.5px solid var(--divider)',
+              borderRadius: 6, fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', outline: 'none',
+            }}
+            value={completeNote}
+            onChange={e => setCompleteNote(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && completeNote.trim()) {
+                if (completeNote.trim()) commentsData.addComment(`Completed: ${completeNote.trim()}`);
+                onUpdateTask(task.id, { status: 'done' });
+                setShowComplete(false);
+                setCompleteNote('');
+              }
+              if (e.key === 'Escape') { setShowComplete(false); setCompleteNote(''); }
+            }}
+            placeholder="Completion status..."
+          />
+          <button
+            className="btn btnSuccess btnSm"
+            style={{ padding: '3px 10px', fontSize: 11 }}
+            disabled={!completeNote.trim()}
+            onClick={() => {
+              if (completeNote.trim()) commentsData.addComment(`Completed: ${completeNote.trim()}`);
+              onUpdateTask(task.id, { status: 'done' });
+              setShowComplete(false);
+              setCompleteNote('');
+            }}
+          >Submit</button>
+        </div>
+      )}
+
       {!hideComments && <CardComments data={commentsData} projectId={projectId} />}
     </>
   );
 }
 
 /** Attachments section using artifacts API */
-function TaskAttachments({ taskId, legacyImages, readOnly }: { taskId: string; legacyImages?: string[]; readOnly?: boolean }) {
-  const { artifacts, loaded, upload, remove } = useArtifacts(taskId);
+function TaskAttachments({ taskId, projectId, legacyImages, readOnly }: { taskId: string; projectId?: string; legacyImages?: string[]; readOnly?: boolean }) {
+  const { artifacts, loaded, upload, remove } = useArtifacts(taskId, projectId);
   const { preview } = useFilePreview();
   // Include legacy task.images as read-only artifacts for backward compat
   const legacyArtifacts = (legacyImages || []).map((url, i) => ({
