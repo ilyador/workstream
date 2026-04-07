@@ -199,7 +199,6 @@
 /* Markdown */
 .previewMarkdown {
   width: 100%;
-  max-width: 800px;
   padding: 32px 32px 80px;
   color: var(--text);
   font-size: 14px;
@@ -286,7 +285,6 @@
 /* Markdown artifact editor */
 .markdownEditorShell {
   width: 100%;
-  max-width: 800px;
   min-height: 100%;
   margin: 0;
   padding: 24px 24px 80px;
@@ -294,6 +292,32 @@
 }
 
 .markdownEditor {
+  --basePageBg: var(--white) !important;
+  --baseBase: var(--white) !important;
+  --baseBgSubtle: var(--surface) !important;
+  --baseBg: var(--bg-hover) !important;
+  --baseBgHover: var(--bg-active) !important;
+  --baseBgActive: var(--bg-active) !important;
+  --baseLine: var(--divider) !important;
+  --baseBorder: var(--divider) !important;
+  --baseBorderHover: color-mix(in srgb, var(--divider) 70%, var(--text-4)) !important;
+  --baseSolid: var(--text-4) !important;
+  --baseSolidHover: var(--text-3) !important;
+  --baseText: var(--text-2) !important;
+  --baseTextContrast: var(--text) !important;
+  --accentBase: var(--blue-bg) !important;
+  --accentBgSubtle: var(--blue-bg) !important;
+  --accentBg: color-mix(in srgb, var(--blue-bg) 82%, var(--white)) !important;
+  --accentBgHover: color-mix(in srgb, var(--blue-bg) 70%, var(--white)) !important;
+  --accentBgActive: color-mix(in srgb, var(--blue-bg) 60%, var(--white)) !important;
+  --accentLine: color-mix(in srgb, var(--blue) 32%, var(--divider)) !important;
+  --accentBorder: color-mix(in srgb, var(--blue) 48%, var(--divider)) !important;
+  --accentBorderHover: var(--blue) !important;
+  --accentSolid: var(--blue) !important;
+  --accentSolidHover: var(--blue-soft) !important;
+  --accentText: var(--blue) !important;
+  --accentTextContrast: var(--text) !important;
+  width: 100%;
   min-height: calc(100dvh - 180px);
   background: var(--white);
   border: 1px solid var(--divider);
@@ -303,12 +327,51 @@
   overflow: hidden;
 }
 
-.markdownEditor :global(.mdxeditor-toolbar) {
+.markdownEditor,
+.markdownEditor:global(.mdxeditor),
+.markdownEditor :global(.mdxeditor) {
+  background: var(--white);
+  color: var(--text);
+}
+
+.markdownEditor :global(.mdxeditor-toolbar),
+.markdownEditor :global([class*="_toolbarRoot"]) {
   position: sticky;
   top: 0;
   z-index: 2;
   background: color-mix(in srgb, var(--white) 92%, var(--bg));
   border-bottom: 1px solid var(--divider);
+}
+
+.markdownEditor :global(.mdxeditor-popup-container),
+.markdownEditor :global(.cm-editor),
+.markdownEditor :global([class*="_dialogContent"]),
+.markdownEditor :global([class*="_popoverContent"]),
+.markdownEditor :global([class*="_toolbarButtonDropdownContainer"]),
+.markdownEditor :global([class*="_toolbarCodeBlockLanguageSelectContent"]),
+.markdownEditor :global([class*="_selectContainer"]) {
+  color: var(--text);
+  background: var(--white);
+}
+
+.markdownEditor :global(.cm-scroller),
+.markdownEditor :global(.cm-gutters) {
+  background: var(--white);
+  color: var(--text-2);
+}
+
+.markdownEditor :global(.cm-gutters) {
+  border-right-color: var(--divider);
+}
+
+.markdownEditor :global(.cm-activeLine),
+.markdownEditor :global(.cm-activeLineGutter) {
+  background: var(--bg-hover);
+}
+
+.markdownEditor :global(.cm-line),
+.markdownEditor :global(.cm-content) {
+  color: var(--text);
 }
 
 .markdownEditorContent {
@@ -317,6 +380,22 @@
   color: var(--text);
   font-size: 14px;
   line-height: 1.7;
+}
+
+.markdownEditorContent :global(table),
+.markdownEditorContent :global(th),
+.markdownEditorContent :global(td) {
+  border-color: var(--divider);
+}
+
+.markdownEditorContent :global(th) {
+  background: var(--bg-hover);
+}
+
+.markdownEditorContent :global(code),
+.markdownEditorContent :global(pre) {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .markdownEditorContent :global(pre) {
