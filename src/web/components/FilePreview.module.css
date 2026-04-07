@@ -283,22 +283,44 @@
   padding: 4px 12px;
 }
 
-/* Markdown editor textarea */
-.mdEditor {
+/* Markdown artifact editor */
+.markdownEditorShell {
   width: 100%;
   max-width: 800px;
   min-height: 100%;
-  padding: 32px;
   margin: 0;
-  border: none;
-  outline: none;
+  padding: 24px 24px 80px;
+  box-sizing: border-box;
+}
+
+.markdownEditor {
+  min-height: calc(100dvh - 180px);
   background: var(--white);
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  color: var(--text);
+  box-shadow: 0 12px 30px rgba(20, 20, 18, 0.08);
+  overflow: hidden;
+}
+
+.markdownEditor :global(.mdxeditor-toolbar) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--white) 92%, var(--bg));
+  border-bottom: 1px solid var(--divider);
+}
+
+.markdownEditorContent {
+  min-height: calc(100dvh - 250px);
+  padding: 28px 32px 64px;
   color: var(--text);
   font-size: 14px;
   line-height: 1.7;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  resize: none;
-  box-sizing: border-box;
+}
+
+.markdownEditorContent :global(pre) {
+  border-radius: 10px;
 }
 
 /* Code / text */
@@ -338,6 +360,12 @@
   .overlay { padding: 8px; }
   .modal { height: calc(100dvh - 16px); max-width: 100%; border-radius: 10px; }
   .previewMarkdown { padding: 16px; }
+  .markdownEditorShell { padding: 12px 12px 56px; }
+  .markdownEditor { min-height: calc(100dvh - 120px); }
+  .markdownEditorContent {
+    min-height: calc(100dvh - 200px);
+    padding: 18px 16px 48px;
+  }
   .previewCode { padding: 16px; }
 }
 

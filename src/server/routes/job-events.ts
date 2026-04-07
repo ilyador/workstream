@@ -19,6 +19,7 @@ jobEventsRouter.get('/api/jobs/:id/events', requireAuth, async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.flushHeaders?.();
+  res.write(':ok\n\n');
 
   let lastId = lastEventId(req.headers['last-event-id']) || numericField(access.record, 'log_offset') || 0;
   let closed = false;

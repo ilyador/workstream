@@ -60,9 +60,10 @@ if (typeof document !== 'undefined') {
         sub.unsub();
       }
     } else {
-      // Reconnect all active subscriptions
+      // Reconnect all active subscriptions and catch up on missed events
       for (const [projectId, sub] of subscriptions) {
         sub.unsub = connectProject(projectId, sub.callbacks);
+        for (const fn of sub.callbacks) fn({ type: 'full_sync' });
       }
     }
   });
