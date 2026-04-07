@@ -17,6 +17,7 @@ interface TaskDoneDetailProps {
   hideComments?: boolean;
   commentCount?: number;
   mentionMembers?: MentionMember[];
+  collapsing?: boolean;
 }
 
 export function TaskDoneDetail({
@@ -29,11 +30,12 @@ export function TaskDoneDetail({
   hideComments,
   commentCount = 0,
   mentionMembers,
+  collapsing,
 }: TaskDoneDetailProps) {
   const [showDoneReject, setShowDoneReject] = useState(false);
 
   return (
-    <div onClick={(e) => e.stopPropagation()} className={s.doneWrap}>
+    <div onClick={(e) => e.stopPropagation()} className={`${s.doneWrap} ${collapsing ? s.detailClosing : ''}`}>
       <div className={s.doneSection}>
         {job && (
           <>

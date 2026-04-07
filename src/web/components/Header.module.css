@@ -37,6 +37,12 @@
   border: 2px solid transparent;
   animation: dropScaleIn 0.15s ease;
 }
+.modalOverlayClosing {
+  animation: dropFadeOut 0.14s ease forwards;
+}
+.modalCardClosing {
+  animation: dropScaleOut 0.14s cubic-bezier(0.32, 0, 0.2, 1) forwards;
+}
 
 .left, .right { display: flex; align-items: center; gap: 16px; }
 .headerNav {
@@ -397,6 +403,12 @@
     box-shadow: none;
     animation: none;
   }
+  .modalOverlayClosing {
+    animation: dropFadeOut 0.14s ease forwards;
+  }
+  .modalCardClosing {
+    animation: mobileSheetOut 0.14s cubic-bezier(0.32, 0, 0.2, 1) forwards;
+  }
   .actionModal {
     display: flex;
     flex-direction: column;
@@ -554,6 +566,10 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+@keyframes dropFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
 
 @keyframes dropScaleIn {
   from {
@@ -563,6 +579,26 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+@keyframes dropScaleOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+@keyframes mobileSheetOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px);
   }
 }
 
@@ -615,4 +651,23 @@
 }
 .avatarOption:hover {
   background: var(--bg-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modalOverlay,
+  .modalCard,
+  .modalOverlayClosing,
+  .modalCardClosing,
+  .dropdown,
+  .avatarDropdown,
+  .actionCount {
+    animation: none;
+  }
+  .navLink,
+  .navLinkActive,
+  .actionBtn,
+  .avatar,
+  .avatarOption {
+    transition: none;
+  }
 }

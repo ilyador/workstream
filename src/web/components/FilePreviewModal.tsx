@@ -1,4 +1,5 @@
 import { formatFileSize } from '../lib/file-utils';
+import { useExitAnimation } from '../hooks/useExitAnimation';
 import type { PreviewFile } from './filePreviewContext';
 import { FilePreviewContent } from './FilePreviewContent';
 import { isMdFile, isPreviewable } from './file-preview-utils';
@@ -31,11 +32,12 @@ export function FilePreviewModal({
   onCancelEdit,
   onTextChange,
 }: FilePreviewModalProps) {
+  const { closing, closeWithAnimation } = useExitAnimation(onClose);
   const canEdit = isMdFile(file.mime_type, file.filename) && !!file.id;
 
   return (
-    <div className={s.overlay} onClick={onClose}>
-      <div className={s.modal} onClick={event => event.stopPropagation()}>
+    <div className={`${s.overlay} ${closing ? s.overlayClosing : ''}`} onClick={closeWithAnimation}>
+      <div className={`${s.modal} ${closing ? s.modalClosing : ''}`} onClick={event => event.stopPropagation()}>
         <FilePreviewHeader
           file={file}
           canEdit={canEdit}
@@ -45,7 +47,7 @@ export function FilePreviewModal({
           onStartEdit={onStartEdit}
           onSave={onSave}
           onCancelEdit={onCancelEdit}
-          onClose={onClose}
+          onClose={closeWithAnimation}
         />
         <div className={s.body}>
           {error && <div className={s.error}>{error}</div>}

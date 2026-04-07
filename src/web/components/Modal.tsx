@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useExitAnimation } from '../hooks/useExitAnimation';
 import s from './Modal.module.css';
 
 export interface ModalProps {
@@ -20,37 +21,41 @@ export function Modal({
   confirmLabel = 'Confirm',
   confirmDanger = false,
 }: ModalProps) {
+  const { closing, closeWithAnimation } = useExitAnimation(onClose);
+  const { closing: confirming, closeWithAnimation: confirmWithAnimation } = useExitAnimation(onConfirm ?? onClose);
+  const isClosing = closing || confirming;
+
   useEffect(() => {
     if (!open) return;
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeWithAnimation();
     }
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [open, onClose]);
+  }, [closeWithAnimation, open]);
 
   if (!open) return null;
 
   const isConfirm = typeof onConfirm === 'function';
 
   return (
-    <div className={s.overlay} onClick={onClose}>
-      <div className={s.modal} onClick={(e) => e.stopPropagation()}>
+    <div className={`${s.overlay} ${isClosing ? s.overlayClosing : ''}`} onClick={closeWithAnimation}>
+      <div className={`${s.modal} ${isClosing ? s.modalClosing : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className={s.title}>{title}</div>
         <div className={s.message}>{message}</div>
         <div className={s.buttons}>
           {isConfirm ? (
             <>
-              <button className="btn btnGhost btnSm" onClick={onClose}>Cancel</button>
+              <button className="btn btnGhost btnSm" onClick={closeWithAnimation}>Cancel</button>
               <button
                 className={`btn btnSm ${confirmDanger ? 'btnDanger' : 'btnPrimary'}`}
-                onClick={onConfirm}
+                onClick={confirmWithAnimation}
               >
                 {confirmLabel}
               </button>
             </>
           ) : (
-            <button className="btn btnPrimary btnSm" onClick={onClose}>OK</button>
+            <button className="btn btnPrimary btnSm" onClick={closeWithAnimation}>OK</button>
           )}
         </div>
       </div>

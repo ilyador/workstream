@@ -6,6 +6,7 @@
   align-items: center;
   justify-content: center;
   z-index: 200;
+  animation: modalFadeIn 0.16s ease-out;
 }
 .modal {
   background: var(--white);
@@ -14,6 +15,13 @@
   width: 100%;
   max-width: 460px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+  animation: modalSettle 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+.overlayClosing {
+  animation: modalFadeOut 0.14s ease forwards;
+}
+.modalClosing {
+  animation: modalDismiss 0.14s cubic-bezier(0.32, 0, 0.2, 1) forwards;
 }
 .title {
   font-size: 20px;
@@ -136,4 +144,43 @@
 .actions {
   display: flex;
   justify-content: flex-end;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modalFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes modalSettle {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes modalDismiss {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .modal,
+  .overlayClosing,
+  .modalClosing {
+    animation: none;
+  }
 }

@@ -22,10 +22,20 @@
   border: 2px solid transparent;
   animation: scaleIn 0.15s ease;
 }
+.overlayClosing {
+  animation: fadeOut 0.14s ease forwards;
+}
+.modalClosing {
+  animation: scaleOut 0.14s cubic-bezier(0.32, 0, 0.2, 1) forwards;
+}
 
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 @keyframes scaleIn {
@@ -36,6 +46,26 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+@keyframes scaleOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .modal,
+  .overlayClosing,
+  .modalClosing {
+    animation: none;
+    transition: none;
   }
 }
 .modalBody { padding: 32px; }

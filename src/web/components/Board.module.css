@@ -42,8 +42,13 @@
     scroll-snap-align: start;
   }
   .addForm {
+    flex: 0 0 calc(100vw - 24px);
     min-width: calc(100vw - 24px);
     scroll-snap-align: start;
+  }
+  .completeSeparator {
+    flex-basis: 42px;
+    min-width: 42px;
   }
 }
 
@@ -105,17 +110,46 @@
 
 /* New workstream inline form */
 .addForm {
-  flex: 0 0 auto;
+  flex: 0 0 260px;
   min-width: 260px;
   display: flex;
-  gap: 8px;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  padding: 14px;
+  border: 1.5px dashed color-mix(in srgb, var(--divider) 74%, var(--text-4));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--white) 56%, transparent);
+  transform-origin: top center;
+  animation: composerOpen 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+.addFormClosing {
+  pointer-events: none;
+  animation: composerClose 0.16s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+.addFormHeader {
+  display: grid;
+  gap: 2px;
+  color: var(--text);
+}
+.addFormHeader strong {
+  font-size: 15px;
+  line-height: 1.2;
+}
+.addFormKicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-4);
 }
 .addInput {
-  flex: 1;
-  padding: 8px 14px;
-  border: 1.5px solid var(--divider);
-  border-radius: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
   font-family: var(--font);
   font-size: 14px;
   color: var(--text);
@@ -132,9 +166,146 @@
 }
 .addCheckboxLabel {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--blue-bg) 38%, var(--white));
   font-size: 13px;
   color: var(--text-2);
   cursor: pointer;
+}
+.addCheckboxLabel input {
+  margin-top: 2px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+.addCheckboxLabel span {
+  display: grid;
+  gap: 2px;
+}
+.addCheckboxLabel strong {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 650;
+}
+.addCheckboxLabel small {
+  color: var(--text-4);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.addActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.completeSeparator {
+  flex: 0 0 52px;
+  min-width: 52px;
+  align-self: stretch;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 42px;
+  color: var(--text-4);
+  animation: separatorFadeIn 0.24s ease-out;
+}
+.completeSeparator::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 18px;
+  left: 50%;
+  width: 1px;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--divider) 74%, transparent) 12%,
+    color-mix(in srgb, var(--divider) 82%, transparent) 88%,
+    transparent
+  );
+}
+.completeSeparatorLabel {
+  position: relative;
+  z-index: 1;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--text-4);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transform: rotate(90deg);
+  white-space: nowrap;
+}
+
+@keyframes composerOpen {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes composerClose {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+@keyframes separatorFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .addColumn {
+    flex: 0 0 calc(100vw - 24px);
+    min-width: calc(100vw - 24px);
+    height: 70px;
+    scroll-snap-align: start;
+  }
+  .addForm {
+    flex: 0 0 calc(100vw - 24px);
+    min-width: calc(100vw - 24px);
+    scroll-snap-align: start;
+  }
+  .completeSeparator {
+    flex: 0 0 42px;
+    min-width: 42px;
+    padding-top: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .addColumn,
+  .addColumn svg,
+  .addForm,
+  .addFormClosing,
+  .completeSeparator {
+    animation: none;
+    transition: none;
+  }
+  .addColumn:hover {
+    transform: none;
+  }
 }

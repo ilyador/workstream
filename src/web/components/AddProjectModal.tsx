@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useExitAnimation } from '../hooks/useExitAnimation';
 import s from './AddProjectModal.module.css';
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function AddProjectModal({ onClose, onCreate }: Props) {
+  const { closing, closeWithAnimation } = useExitAnimation(onClose);
   const [name, setName] = useState('');
   const [localPath, setLocalPath] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,14 +22,14 @@ export function AddProjectModal({ onClose, onCreate }: Props) {
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeWithAnimation();
     }
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
+  }, [closeWithAnimation]);
 
   function handleOverlayClick(e: React.MouseEvent) {
-    if (e.target === overlayRef.current) onClose();
+    if (e.target === overlayRef.current) closeWithAnimation();
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -37,7 +39,7 @@ export function AddProjectModal({ onClose, onCreate }: Props) {
     setLoading(true);
     try {
       await onCreate(name.trim(), localPath.trim());
-      onClose();
+      closeWithAnimation();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create project');
     } finally {
@@ -46,8 +48,8 @@ export function AddProjectModal({ onClose, onCreate }: Props) {
   }
 
   return (
-    <div className={s.overlay} ref={overlayRef} onClick={handleOverlayClick}>
-      <div className={s.modal}>
+    <div className={`${s.overlay} ${closing ? s.overlayClosing : ''}`} ref={overlayRef} onClick={handleOverlayClick}>
+      <div className={`${s.modal} ${closing ? s.modalClosing : ''}`}>
         <h2 className={s.title}>New Project</h2>
         <p className={s.subtitle}>Add another project to WorkStream.</p>
         {error && <div className={s.error}>{error}</div>}
@@ -73,7 +75,7 @@ export function AddProjectModal({ onClose, onCreate }: Props) {
           />
           <p className={s.hint}>The absolute path to your project's root folder on this machine.</p>
           <div className={s.actions}>
-            <button className="btn btnSecondary" type="button" onClick={onClose}>
+            <button className="btn btnSecondary" type="button" onClick={closeWithAnimation}>
               Cancel
             </button>
             <button className="btn btnPrimary" type="submit" disabled={loading || !name.trim() || !localPath.trim()}>

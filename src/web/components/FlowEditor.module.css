@@ -94,6 +94,12 @@
   border: 2px solid transparent;
   animation: scaleIn 0.15s ease;
 }
+.modalOverlayClosing {
+  animation: fadeOut 0.14s ease forwards;
+}
+.modalCardClosing {
+  animation: scaleOut 0.14s cubic-bezier(0.32, 0, 0.2, 1) forwards;
+}
 
 .modalBody {
   padding: 32px;
@@ -330,6 +336,10 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
 
 @keyframes scaleIn {
   from {
@@ -339,5 +349,34 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+@keyframes scaleOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .addFlowButton,
+  .addFlowButton svg,
+  .modalOverlay,
+  .modalCard,
+  .modalOverlayClosing,
+  .modalCardClosing,
+  .sectionArrow,
+  .chip,
+  .error {
+    animation: none;
+    transition: none;
+  }
+  .addFlowButton:hover,
+  .addFlowButton:hover svg {
+    transform: none;
   }
 }

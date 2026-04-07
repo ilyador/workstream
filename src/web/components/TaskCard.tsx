@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { TaskCardActiveDetail } from './TaskCardActiveDetail';
 import { TaskCardCompact } from './TaskCardCompact';
 import { TaskCardFailedDetail } from './TaskCardFailedDetail';
@@ -12,6 +13,8 @@ import type { TaskView } from '../lib/task-view';
 import type { MentionMember, TaskCardMetaItem } from './task-card-types';
 import { capTaskCardToken } from './task-card-status';
 import s from './TaskCard.module.css';
+
+const COLLAPSE_ANIMATION_MS = 160;
 
 export interface TaskCardProps {
   task: TaskView;
@@ -93,13 +96,29 @@ export function TaskCardView({
   mentionMembers,
   viewMode = 'task',
 }: TaskCardViewProps) {
+  const [isCollapsing, setIsCollapsing] = useState(false);
   const jobStatus = job?.status;
   const isActive = jobStatus === 'queued' || jobStatus === 'running' || jobStatus === 'paused' || jobStatus === 'review';
   const isReview = jobStatus === 'review';
-  const showActiveDetail = isActive && (!isReview || isExpanded);
+  const renderExpandedDetail = isExpanded || isCollapsing;
+  const collapseActive = isCollapsing && !isExpanded;
+  const showActiveDetail = isActive && (!isReview || renderExpandedDetail);
   const taskDone = task.status === 'done' || jobStatus === 'done';
   const isHumanWaiting = task.mode === 'human' && task.status === 'in_progress' && !isActive;
   const isFlowStep = viewMode === 'flow-step';
+
+  useEffect(() => {
+    if (!isCollapsing) return;
+    const timer = setTimeout(() => {
+      setIsCollapsing(false);
+    }, COLLAPSE_ANIMATION_MS);
+    return () => clearTimeout(timer);
+  }, [isCollapsing]);
+
+  const handleToggleExpand = () => {
+    setIsCollapsing(isExpanded);
+    onToggleExpand();
+  };
 
   const statusClass = jobStatus
     ? s[`status${capTaskCardToken(jobStatus)}`]
@@ -120,7 +139,7 @@ export function TaskCardView({
     <div
       data-task-card="true"
       className={`${s.card} ${priorityBgClass} ${priorityBorderClass} ${statusClass} ${isDragging ? s.dragging : ''}`}
-      onClick={onToggleExpand}
+      onClick={handleToggleExpand}
     >
       <TaskCardCompact
         task={task}
@@ -147,19 +166,22 @@ export function TaskCardView({
           onReject={onReject}
           onRework={onRework}
           reviewArtifactsData={reviewArtifactsData}
+          collapsing={isReview && collapseActive}
         />
       )}
 
       {/* Preview: description only (visible when collapsed and NOT active) */}
-      {((!isActive && (!isExpanded || taskDone)) || (isReview && !isExpanded)) && (
-        <TaskCardPreview
-          task={task}
-          filePreviewArtifactsData={isReview ? reviewArtifactsData : undefined}
-        />
+      {((!isActive && (!renderExpandedDetail || taskDone)) || (isReview && !renderExpandedDetail)) && (
+        <div className={s.previewReveal}>
+          <TaskCardPreview
+            task={task}
+            filePreviewArtifactsData={isReview ? reviewArtifactsData : undefined}
+          />
+        </div>
       )}
 
       {/* Done section -- no border separator */}
-      {!isActive && isExpanded && taskDone && (jobStatus === 'done' || !job) && (
+      {!isActive && renderExpandedDetail && taskDone && (jobStatus === 'done' || !job) && (
         <TaskDoneDetail
           task={task}
           job={job}
@@ -170,12 +192,13 @@ export function TaskCardView({
           hideComments={hideComments}
           commentCount={commentCount}
           mentionMembers={mentionMembers}
+          collapsing={collapseActive}
         />
       )}
 
       {/* Expanded detail for non-active states (click to toggle) */}
-      {!isActive && isExpanded && !taskDone && (
-        <div className={s.detail} onClick={(e) => e.stopPropagation()}>
+      {!isActive && renderExpandedDetail && !taskDone && (
+        <div className={`${s.detail} ${collapseActive ? s.detailClosing : ''}`} onClick={(e) => e.stopPropagation()}>
           {isFlowStep && (
             <TaskFlowStepDetail
               task={task}
