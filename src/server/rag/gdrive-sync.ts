@@ -1,105 +1,8 @@
-import { google } from 'googleapis';
 import { ingestDocument, listDocuments, deleteDocument } from './service.js';
+import { exportFileContent, listDriveFilesRecursive } from './gdrive-client.js';
+import { GDRIVE_FOLDER_MIME } from './gdrive-mimes.js';
 
-const CREDENTIALS_PATH = process.env.GDRIVE_CREDENTIALS_PATH || '';
 const FOLDER_ID = process.env.GDRIVE_FOLDER_ID || '';
-
-let _auth: InstanceType<typeof google.auth.GoogleAuth> | null = null;
-function getAuth() {
-  if (!CREDENTIALS_PATH) throw new Error('GDRIVE_CREDENTIALS_PATH not set in .env');
-  if (!_auth) {
-    _auth = new google.auth.GoogleAuth({
-      keyFile: CREDENTIALS_PATH,
-      scopes: [
-        'https://www.googleapis.com/auth/drive.readonly',
-        'https://www.googleapis.com/auth/documents.readonly',
-        'https://www.googleapis.com/auth/spreadsheets.readonly',
-      ],
-    });
-  }
-  return _auth;
-}
-
-interface DriveFile {
-  id: string;
-  name: string;
-  mimeType: string;
-  modifiedTime: string;
-}
-
-const SUPPORTED_MIMES = new Set([
-  'application/vnd.google-apps.document',
-  'application/vnd.google-apps.spreadsheet',
-  'application/vnd.google-apps.presentation',
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-]);
-
-async function listDriveFilesRecursive(folderId: string, prefix = ''): Promise<DriveFile[]> {
-  const auth = getAuth();
-  const drive = google.drive({ version: 'v3', auth });
-  const files: DriveFile[] = [];
-  let pageToken: string | undefined;
-
-  do {
-    const res = await drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
-      pageSize: 100,
-      pageToken,
-    });
-    for (const f of res.data.files || []) {
-      if (f.mimeType === 'application/vnd.google-apps.folder') {
-        const subFiles = await listDriveFilesRecursive(f.id!, prefix ? `${prefix}/${f.name}` : f.name!);
-        files.push(...subFiles);
-      } else if (SUPPORTED_MIMES.has(f.mimeType!)) {
-        const name = prefix ? `${prefix}/${f.name}` : f.name!;
-        files.push({ id: f.id!, name, mimeType: f.mimeType!, modifiedTime: f.modifiedTime! });
-      }
-    }
-    pageToken = res.data.nextPageToken ?? undefined;
-  } while (pageToken);
-
-  return files;
-}
-
-async function exportFileContent(fileId: string, mimeType: string): Promise<{ content: string | Buffer; fileType: string }> {
-  const auth = getAuth();
-  const drive = google.drive({ version: 'v3', auth });
-
-  if (mimeType === 'application/vnd.google-apps.document') {
-    const res = await drive.files.export({ fileId, mimeType: 'text/plain' }, { responseType: 'text' });
-    return { content: res.data as string, fileType: 'txt' };
-  }
-
-  if (mimeType === 'application/vnd.google-apps.spreadsheet') {
-    const res = await drive.files.export({ fileId, mimeType: 'text/csv' }, { responseType: 'text' });
-    return { content: res.data as string, fileType: 'csv' };
-  }
-
-  if (mimeType === 'application/vnd.google-apps.presentation') {
-    const res = await drive.files.export({ fileId, mimeType: 'text/plain' }, { responseType: 'text' });
-    return { content: res.data as string, fileType: 'txt' };
-  }
-
-  if (mimeType === 'application/pdf') {
-    const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
-    return { content: Buffer.from(res.data as ArrayBuffer), fileType: 'pdf' };
-  }
-
-  if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
-    return { content: Buffer.from(res.data as ArrayBuffer), fileType: 'docx' };
-  }
-
-  // Plain text, markdown, csv, etc.
-  const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'text' });
-  const ext = mimeType.includes('csv') ? 'csv' : mimeType.includes('markdown') ? 'md' : 'txt';
-  return { content: res.data as string, fileType: ext };
-}
 
 export async function syncDriveFolder(projectId: string, folderId?: string): Promise<{ added: number; skipped: number; removed: number }> {
   const folder = folderId || FOLDER_ID;
@@ -118,7 +21,7 @@ export async function syncDriveFolder(projectId: string, folderId?: string): Pro
 
   for (const file of driveFiles) {
     // Skip folders
-    if (file.mimeType === 'application/vnd.google-apps.folder') {
+    if (file.mimeType === GDRIVE_FOLDER_MIME) {
       continue;
     }
 

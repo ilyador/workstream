@@ -641,26 +641,79 @@ export function subscribeToJob(jobId: string, handlers: {
 
 // --- SSE: Realtime project changes ---
 export function subscribeToChanges(projectId: string, onUpdate: (data: unknown) => void): () => void {
-  const url = `${BASE}/api/changes?project_id=${projectId}${accessToken ? `&token=${encodeURIComponent(accessToken)}` : ''}`;
-  const source = new EventSource(url);
+  let source: EventSource | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let closed = false;
   let consecutiveErrors = 0;
+  let reconnectAttempt = 0;
+  let needsFullSyncOnOpen = false;
   const MAX_CONSECUTIVE_ERRORS = 5;
+  const RECONNECT_BASE_MS = 1000;
+  const RECONNECT_MAX_MS = 30000;
 
-  source.addEventListener('message', (e) => {
-    consecutiveErrors = 0;
-    try {
-      onUpdate(JSON.parse(e.data));
-    } catch {
-      // Ignore malformed realtime events.
-    }
-  });
-
-  source.onerror = () => {
-    consecutiveErrors++;
-    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-      source.close();
+  const url = () => `${BASE}/api/changes?project_id=${encodeURIComponent(projectId)}${accessToken ? `&token=${encodeURIComponent(accessToken)}` : ''}`;
+  const clearReconnectTimer = () => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
     }
   };
+  const scheduleReconnect = () => {
+    if (closed || reconnectTimer) return;
+    needsFullSyncOnOpen = true;
+    const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** Math.min(reconnectAttempt, 5));
+    reconnectAttempt++;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  };
+  const connect = () => {
+    if (closed) return;
+    clearReconnectTimer();
+    consecutiveErrors = 0;
+    const nextSource = new EventSource(url());
+    source = nextSource;
 
-  return () => source.close();
+    nextSource.onopen = () => {
+      if (closed || source !== nextSource) return;
+      consecutiveErrors = 0;
+      reconnectAttempt = 0;
+      if (needsFullSyncOnOpen) {
+        needsFullSyncOnOpen = false;
+        onUpdate({ type: 'full_sync' });
+      }
+    };
+
+    nextSource.addEventListener('message', (e) => {
+      consecutiveErrors = 0;
+      reconnectAttempt = 0;
+      needsFullSyncOnOpen = false;
+      try {
+        onUpdate(JSON.parse(e.data));
+      } catch {
+        // Ignore malformed realtime events.
+      }
+    });
+
+    nextSource.onerror = () => {
+      if (closed || source !== nextSource) return;
+      consecutiveErrors++;
+      needsFullSyncOnOpen = true;
+      const sourceClosed = typeof EventSource.CLOSED === 'number' && nextSource.readyState === EventSource.CLOSED;
+      if (!sourceClosed && consecutiveErrors < MAX_CONSECUTIVE_ERRORS) return;
+      nextSource.close();
+      source = null;
+      scheduleReconnect();
+    };
+  };
+
+  connect();
+
+  return () => {
+    closed = true;
+    clearReconnectTimer();
+    source?.close();
+    source = null;
+  };
 }

@@ -30,6 +30,8 @@ export function useWorkstreams(projectId: string | null) {
           }
           return [...prev, event.workstream].sort((a, b) => a.position - b.position);
         });
+      } else if (event.type === 'workstream_deleted' && event.workstream_id) {
+        setWorkstreams(prev => prev.filter(w => w.id !== event.workstream_id));
       } else if (event.type === 'full_sync') {
         void load();
       }

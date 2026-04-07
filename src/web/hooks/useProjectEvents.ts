@@ -13,6 +13,7 @@ export type ProjectEvent =
   | { type: 'flow_changed'; flow: Flow }
   | { type: 'flow_deleted'; flow_id: string }
   | { type: 'workstream_changed'; workstream: WorkstreamRecord }
+  | { type: 'workstream_deleted'; workstream_id: string }
   | { type: 'member_changed' }
   | { type: 'custom_type_changed' }
   | { type: 'full_sync' }
