@@ -23,11 +23,13 @@ export interface ArtifactsData {
 const artifactCache = new Map<string, ArtifactCacheEntry>();
 const artifactRequests = new Map<string, Promise<Artifact[]>>();
 const artifactSubscribers = new Map<string, Set<(entry: ArtifactCacheEntry) => void>>();
+const artifactRequestVersions = new Map<string, number>();
 
 export function clearArtifactCacheForTests() {
   artifactCache.clear();
   artifactRequests.clear();
   artifactSubscribers.clear();
+  artifactRequestVersions.clear();
 }
 
 export function useArtifacts(taskId: string | null, projectId?: string | null): ArtifactsData {
@@ -96,8 +98,6 @@ export function useArtifacts(taskId: string | null, projectId?: string | null): 
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if ((event.type === 'artifact_changed' || event.type === 'artifact_deleted') && event.task_id === taskId) {
         void load({ force: true });
-      } else if (event.type === 'full_sync') {
-        void load({ force: true });
       }
     });
     return () => {
@@ -155,14 +155,28 @@ async function getCachedArtifacts(cacheKey: string, taskId: string, force: boole
   }
 
   const request = getArtifacts(taskId);
+  const version = nextArtifactRequestVersion(cacheKey);
   artifactRequests.set(cacheKey, request);
   try {
     const artifacts = await request;
-    writeArtifactCache(cacheKey, { artifacts, loaded: true, error: null });
+    if (artifactRequestVersions.get(cacheKey) === version) {
+      writeArtifactCache(cacheKey, { artifacts, loaded: true, error: null });
+    }
     return artifacts;
+  } catch (err) {
+    if (artifactRequestVersions.get(cacheKey) !== version) {
+      return artifactCache.get(cacheKey)?.artifacts ?? [];
+    }
+    throw err;
   } finally {
     if (artifactRequests.get(cacheKey) === request) {
       artifactRequests.delete(cacheKey);
     }
   }
+}
+
+function nextArtifactRequestVersion(cacheKey: string) {
+  const version = (artifactRequestVersions.get(cacheKey) ?? 0) + 1;
+  artifactRequestVersions.set(cacheKey, version);
+  return version;
 }
