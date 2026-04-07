@@ -15,13 +15,14 @@ interface Props {
   customTypes?: CustomTypeOption[];
   onSaveCustomType?: (name: string, pipeline: string) => Promise<void>;
   localPath?: string;
+  projectId?: string;
   defaultWorkstreamId?: string | null;
   editTask?: EditTaskData;
   onSubmit: (data: TaskFormData) => Promise<void>;
   onClose: () => void;
 }
 
-export function TaskForm({ workstreams, members, flows = [], customTypes = [], onSaveCustomType, localPath, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
+export function TaskForm({ workstreams, members, flows = [], customTypes = [], onSaveCustomType, localPath, projectId, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
   const {
     isEdit,
     title,
@@ -154,7 +155,7 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
                 This task requires a file attachment before it can be completed
               </div>
             )}
-              <TaskAttachmentsEditor taskId={editTask.id} />
+              <TaskAttachmentsEditor taskId={editTask.id} projectId={projectId} />
             </div>
           )}
 

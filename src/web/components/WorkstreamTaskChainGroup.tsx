@@ -2,6 +2,8 @@ import React from 'react';
 import { ArtifactConnector } from './ArtifactConnector';
 import type { TaskCardProps } from './TaskCard';
 import type { BuildTaskCardProps, ChainGroup } from './workstream-task-list-types';
+import type { JobView } from './job-types';
+import { buildTaskFileDependency, type TaskFileDependency } from '../lib/file-passing';
 import type { TaskView } from '../lib/task-view';
 import { clearDragPreview, setClonedDragPreview } from '../lib/drag-preview';
 import s from './WorkstreamColumn.module.css';
@@ -10,7 +12,8 @@ interface WorkstreamTaskChainGroupProps {
   group: ChainGroup;
   groupTasks: TaskView[];
   index: number;
-  previousTask: TaskView | null;
+  previousFileDependency: TaskFileDependency;
+  taskJobMap: Record<string, JobView>;
   projectId?: string;
   isDragging: boolean;
   dragDisabled: boolean;
@@ -24,7 +27,8 @@ export function WorkstreamTaskChainGroup({
   group,
   groupTasks,
   index,
-  previousTask,
+  previousFileDependency,
+  taskJobMap,
   projectId,
   isDragging,
   dragDisabled,
@@ -63,13 +67,11 @@ export function WorkstreamTaskChainGroup({
             />
           )}
           <div className={s.cardWrap} data-task-id={groupTask.id}>
-            {renderCard(buildCardProps(groupTask, index, {
-              prevTaskId: groupIndex > 0
-                ? groupTasks[groupIndex - 1].id
-                : previousTask?.id || null,
-              prevTask: groupIndex > 0
-                ? groupTasks[groupIndex - 1]
-                : previousTask,
+            {renderCard(buildCardProps(groupTask, index + groupIndex, {
+              fileDependency: buildTaskFileDependency(
+                groupIndex > 0 ? groupTasks[groupIndex - 1] : previousFileDependency.previousTask,
+                groupIndex > 0 ? taskJobMap[groupTasks[groupIndex - 1].id]?.status ?? null : previousFileDependency.previousJobStatus,
+              ),
               onDragStart: handleGroupDragStart,
               onDragEnd: handleGroupDragEnd,
               isDragging,

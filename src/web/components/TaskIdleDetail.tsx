@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useArtifacts } from '../hooks/useArtifacts';
 import { useComments } from '../hooks/useComments';
+import { useTaskFileGate } from '../hooks/useTaskFileGate';
 import { useModal } from '../hooks/modal-context';
 import { TaskAttachmentsView } from './TaskAttachments';
 import { TaskCommentsView } from './TaskComments';
 import type { JobView } from './job-types';
+import type { TaskFileDependency } from '../lib/file-passing';
 import type { TaskView } from '../lib/task-view';
 import type { MentionMember, TaskCardMetaItem } from './task-card-types';
 import s from './TaskCard.module.css';
@@ -22,9 +23,8 @@ interface TaskIdleDetailProps {
   onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
   metaItems?: TaskCardMetaItem[];
   hideComments?: boolean;
-  prevTaskId?: string | null;
-  prevTask?: TaskView | null;
-  prevJobStatus?: JobView['status'] | null;
+  jobStatus?: JobView['status'] | null;
+  fileDependency?: TaskFileDependency | null;
   commentCount?: number;
   mentionMembers?: MentionMember[];
 }
@@ -40,16 +40,14 @@ export function TaskIdleDetail({
   onUpdateTask,
   metaItems,
   hideComments,
-  prevTaskId,
-  prevTask,
-  prevJobStatus,
+  jobStatus,
+  fileDependency,
   commentCount = 0,
   mentionMembers,
 }: TaskIdleDetailProps) {
   const modal = useModal();
   const commentsData = useComments(task.id, projectId);
-  const ownArtifacts = useArtifacts(task.id, projectId);
-  const prevArtifacts = useArtifacts(prevTaskId || null, projectId);
+  const { gate, ownArtifacts } = useTaskFileGate({ task, jobStatus, projectId, dependency: fileDependency });
   const [showComplete, setShowComplete] = useState(false);
   const [completeNote, setCompleteNote] = useState('');
   const completeInputRef = useRef<HTMLInputElement>(null);
@@ -59,31 +57,6 @@ export function TaskIdleDetail({
       completeInputRef.current?.focus();
     }
   }, [showComplete]);
-
-  const chaining = task.chaining || 'none';
-  const needsAccept = chaining === 'accept' || chaining === 'both';
-  const needsProduce = chaining === 'produce' || chaining === 'both';
-  const missingPreviousTask = needsAccept && !prevTaskId;
-  const previousTaskComplete = !needsAccept || prevTask?.status === 'done' || prevJobStatus === 'done';
-  const previousTaskPending = needsAccept && !!prevTaskId && !previousTaskComplete;
-  const checkingAcceptArtifacts = needsAccept && !!prevTaskId && previousTaskComplete && !prevArtifacts.loaded && !prevArtifacts.error;
-  const checkingProduceArtifacts = needsProduce && !ownArtifacts.loaded && !ownArtifacts.error;
-  const acceptCheckFailed = needsAccept && !!prevTaskId && previousTaskComplete && !!prevArtifacts.error;
-  const produceCheckFailed = needsProduce && !!ownArtifacts.error;
-  const acceptBlocked = missingPreviousTask || previousTaskPending || acceptCheckFailed || (
-    needsAccept && previousTaskComplete && prevArtifacts.loaded && prevArtifacts.artifacts.length === 0
-  );
-  const produceBlocked = produceCheckFailed || (needsProduce && ownArtifacts.loaded && ownArtifacts.artifacts.length === 0);
-  const completionChecking = checkingAcceptArtifacts || checkingProduceArtifacts;
-  const completionBlocked = acceptBlocked || produceBlocked || completionChecking;
-  let blockReason = '';
-  if (missingPreviousTask) blockReason = 'Previous task file is unavailable';
-  else if (previousTaskPending) blockReason = 'Awaiting previous task approval';
-  else if (acceptCheckFailed) blockReason = 'Failed to check previous task file';
-  else if (produceCheckFailed) blockReason = 'Failed to check required files';
-  else if (acceptBlocked) blockReason = 'Awaiting file from previous task';
-  else if (produceBlocked) blockReason = 'Attach a file before completing';
-  else if (completionChecking) blockReason = 'Checking required files...';
 
   return (
     <>
@@ -106,9 +79,9 @@ export function TaskIdleDetail({
 
       <TaskAttachmentsView artifactsData={ownArtifacts} legacyImages={task.images} readOnly />
 
-      {completionBlocked && !completionChecking && (
+      {gate.blocked && !gate.checking && (
         <div className={s.completionBlockedNotice}>
-          {blockReason}
+          {gate.message}
         </div>
       )}
 
@@ -118,8 +91,8 @@ export function TaskIdleDetail({
             <button
               className="btn btnSuccess btnSm"
               onClick={() => onUpdateTask(task.id, { status: 'done' })}
-              disabled={completionBlocked}
-              title={blockReason || undefined}
+              disabled={gate.blocked}
+              title={gate.message || undefined}
             >
               Done
             </button>
@@ -135,8 +108,8 @@ export function TaskIdleDetail({
             <button
               className={`btn btnGhost btnSm ${s.completeAction}`}
               onClick={() => setShowComplete(v => !v)}
-              disabled={completionBlocked}
-              title={blockReason || 'Mark as complete'}
+              disabled={gate.blocked}
+              title={gate.message || 'Mark as complete'}
             >Complete</button>
           )}
           {onEdit && (

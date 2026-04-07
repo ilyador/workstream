@@ -1,11 +1,14 @@
 import type { TaskCardProps } from './TaskCard';
+import type { JobView } from './job-types';
 import { WorkstreamTaskChainGroup } from './WorkstreamTaskChainGroup';
 import { WorkstreamTaskListItem } from './WorkstreamTaskListItem';
 import type { BuildTaskCardProps, ChainGroup } from './workstream-task-list-types';
+import { buildTaskFileDependency, isTaskApprovedForFilePassing } from '../lib/file-passing';
 import type { TaskView } from '../lib/task-view';
 
 interface WorkstreamTaskListContentProps {
   tasks: TaskView[];
+  taskJobMap: Record<string, JobView>;
   chainGroups: ChainGroup[];
   getChainGroup: (taskId: string) => ChainGroup | null;
   draggedTaskId: string | null;
@@ -22,6 +25,7 @@ interface WorkstreamTaskListContentProps {
 
 export function WorkstreamTaskListContent({
   tasks,
+  taskJobMap,
   chainGroups,
   getChainGroup,
   draggedTaskId,
@@ -43,6 +47,11 @@ export function WorkstreamTaskListContent({
     const group = getChainGroup(task.id);
     if (group && index === group.startIndex) {
       const groupTasks = group.taskIds.map(id => tasks.find(candidate => candidate.id === id)!);
+      const previousTask = index > 0 ? tasks[index - 1] || null : null;
+      const previousDependency = buildTaskFileDependency(
+        previousTask,
+        previousTask ? taskJobMap[previousTask.id]?.status ?? null : null,
+      );
       const isGroupDragging = draggedGroupIds ? group.taskIds.some(id => draggedGroupIds.includes(id)) : false;
       group.taskIds.forEach(id => rendered.add(id));
 
@@ -52,7 +61,8 @@ export function WorkstreamTaskListContent({
           group={group}
           groupTasks={groupTasks}
           index={index}
-          previousTask={index > 0 ? tasks[index - 1] || null : null}
+          previousFileDependency={previousDependency}
+          taskJobMap={taskJobMap}
           projectId={projectId}
           isDragging={isGroupDragging}
           dragDisabled={dragDisabledGlobal || index <= freezeIndex}
@@ -67,9 +77,10 @@ export function WorkstreamTaskListContent({
     if (group) return null;
 
     const prevTask = index > 0 ? tasks[index - 1] : null;
+    const fileDependency = buildTaskFileDependency(prevTask, prevTask ? taskJobMap[prevTask.id]?.status ?? null : null);
     const showConnector = !!(
       prevTask &&
-      prevTask.status === 'done' &&
+      isTaskApprovedForFilePassing(prevTask, fileDependency.previousJobStatus) &&
       task.chaining &&
       ['accept', 'both'].includes(task.chaining) &&
       !chainGroups.some(chainGroup => chainGroup.taskIds.includes(task.id))
@@ -80,7 +91,7 @@ export function WorkstreamTaskListContent({
         key={task.id}
         task={task}
         index={index}
-        prevTask={prevTask}
+        fileDependency={fileDependency}
         projectId={projectId}
         draggedTaskId={draggedTaskId}
         dragDisabled={dragDisabledGlobal || index <= freezeIndex}

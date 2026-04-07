@@ -1,4 +1,4 @@
-import { useArtifacts } from '../hooks/useArtifacts';
+import { useArtifacts, type ArtifactsData } from '../hooks/useArtifacts';
 import { useFilePreview } from './filePreviewContext';
 import { AttachmentList, type AttachmentListItem } from './AttachmentList';
 import s from './TaskCard.module.css';
@@ -23,7 +23,7 @@ export function TaskAttachmentsView({
   legacyImages,
   readOnly,
 }: {
-  artifactsData: ReturnType<typeof useArtifacts>;
+  artifactsData: ArtifactsData;
   legacyImages?: string[];
   readOnly?: boolean;
 }) {

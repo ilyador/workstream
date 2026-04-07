@@ -1,13 +1,14 @@
 import { ArtifactConnector } from './ArtifactConnector';
 import type { TaskCardProps } from './TaskCard';
 import type { BuildTaskCardProps } from './workstream-task-list-types';
+import type { TaskFileDependency } from '../lib/file-passing';
 import type { TaskView } from '../lib/task-view';
 import s from './WorkstreamColumn.module.css';
 
 interface WorkstreamTaskListItemProps {
   task: TaskView;
   index: number;
-  prevTask: TaskView | null;
+  fileDependency: TaskFileDependency;
   projectId?: string;
   draggedTaskId: string | null;
   dragDisabled: boolean;
@@ -21,7 +22,7 @@ interface WorkstreamTaskListItemProps {
 export function WorkstreamTaskListItem({
   task,
   index,
-  prevTask,
+  fileDependency,
   projectId,
   draggedTaskId,
   dragDisabled,
@@ -33,13 +34,12 @@ export function WorkstreamTaskListItem({
 }: WorkstreamTaskListItemProps) {
   return (
     <div>
-      {showConnector && prevTask && (
-        <ArtifactConnector taskId={prevTask.id} projectId={projectId} />
+      {showConnector && fileDependency.previousTask && (
+        <ArtifactConnector taskId={fileDependency.previousTask.id} projectId={projectId} />
       )}
       <div className={s.cardWrap} data-task-id={task.id}>
         {renderCard(buildCardProps(task, index, {
-          prevTaskId: prevTask?.id || null,
-          prevTask,
+          fileDependency,
           onDragStart: () => onDragTaskStart(task.id),
           onDragEnd: onDragTaskEnd,
           isDragging: draggedTaskId === task.id,
