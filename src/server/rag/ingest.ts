@@ -58,7 +58,7 @@ export async function ingestDocument(
   content: string | Buffer,
 ): Promise<{ id: string; status: string; chunkCount: number }> {
   const hashInput = contentBuffer(content);
-  const contentHash = createHash('sha256').update(hashInput).digest('hex');
+  const contentHash = createHash('md5').update(hashInput).digest('hex');
 
   const { data: existing, error: existingError } = await supabase
     .from('rag_documents')
