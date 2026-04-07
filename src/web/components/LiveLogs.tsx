@@ -95,7 +95,7 @@ export function LiveLogs({ jobId, footer }: { jobId: string; footer?: React.Reac
     <>
       <div ref={scrollRef} className={s.logBox}>
         {lines.length === 0 && connState === 'connecting' && (
-          <span style={{ color: 'var(--text-4)' }}>Waiting for output...</span>
+          <span className={s.waitingOutput}>Waiting for output...</span>
         )}
         {lines.length === 0 && connState === 'open' && (
           <span className={s.noOutput}>Claude is working... output will appear when the phase completes.</span>

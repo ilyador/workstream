@@ -101,11 +101,11 @@ export function useFlowBoard({
     try {
       await onCreateFlow({ project_id: projectId, name: 'New Flow', description: '', steps: [] });
     } catch (err) {
-      console.error('Failed to create flow:', err);
+      await modal.alert('Error', getErrorMessage(err, 'Failed to create flow'));
     } finally {
       setCreating(false);
     }
-  }, [onCreateFlow, projectId]);
+  }, [modal, onCreateFlow, projectId]);
 
   const openNewStepModal = useCallback((flowId: string) => {
     setModalTarget({ flowId, stepIndex: -1 });

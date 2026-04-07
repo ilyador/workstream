@@ -1,4 +1,5 @@
 import { WorkstreamColumn } from './WorkstreamColumn';
+import { useModal } from '../hooks/modal-context';
 import type { BoardColumnDataProps, BoardColumnDragProps, BoardProps, BoardTaskActionProps } from './board-types';
 import type { TaskView, WorkstreamView } from '../lib/task-view';
 
@@ -55,6 +56,8 @@ export function BoardWorkstreamColumn({
   onCreatePr,
   currentUserId,
 }: BoardWorkstreamColumnProps) {
+  const modal = useModal();
+
   return (
     <WorkstreamColumn
       workstream={workstream}
@@ -100,7 +103,7 @@ export function BoardWorkstreamColumn({
         try {
           await onUpdateWorkstream(workstream.id, { status: 'archived' });
         } catch (err) {
-          console.error('Archive failed:', err);
+          await modal.alert('Error', err instanceof Error ? err.message : 'Failed to archive workstream');
         }
       }}
     />

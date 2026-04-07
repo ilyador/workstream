@@ -24,7 +24,7 @@ export function TaskCommentsView({
   data: ReturnType<typeof useComments>;
   mentionMembers?: MentionMember[];
 }) {
-  const { comments, addComment, removeComment } = data;
+  const { comments, addComment, removeComment, error } = data;
 
   return (
     <div className={s.commentsSection}>
@@ -35,6 +35,7 @@ export function TaskCommentsView({
         )}
       </div>
       <TaskCommentList comments={comments} onRemoveComment={removeComment} />
+      {error && <div className={s.errorMsg}>{error}</div>}
       <TaskCommentComposer mentionMembers={mentionMembers} onAddComment={addComment} />
     </div>
   );

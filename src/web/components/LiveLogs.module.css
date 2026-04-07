@@ -62,3 +62,7 @@
   font-family: var(--font);
   font-size: 12px;
 }
+
+.waitingOutput {
+  color: var(--text-4);
+}

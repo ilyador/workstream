@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getArtifacts, uploadArtifact as apiUpload, deleteArtifact as apiDelete, type Artifact } from '../lib/api';
 import { subscribeProjectEvents } from './useProjectEvents';
 
@@ -6,28 +6,51 @@ export function useArtifacts(taskId: string | null, projectId?: string | null) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestRef = useRef(0);
 
   const load = useCallback(async () => {
-    if (!taskId) return;
+    const activeTaskId = taskId;
+    const requestId = ++requestRef.current;
+
+    if (!activeTaskId) {
+      setArtifacts([]);
+      setLoading(false);
+      setLoaded(false);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await getArtifacts(taskId);
+      const data = await getArtifacts(activeTaskId);
+      if (requestRef.current !== requestId) return;
       setArtifacts(data);
       setLoaded(true);
-    } catch { /* ignore */ }
-    setLoading(false);
+      setError(null);
+    } catch (err) {
+      if (requestRef.current !== requestId) return;
+      setArtifacts([]);
+      setLoaded(false);
+      setError(err instanceof Error ? err.message : 'Failed to load artifacts');
+    } finally {
+      if (requestRef.current === requestId) setLoading(false);
+    }
   }, [taskId]);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      void load();
-    });
+    requestRef.current += 1;
+    setArtifacts([]);
+    setLoading(Boolean(taskId));
+    setLoaded(false);
+    setError(null);
+    void load();
     if (!projectId) return;
     const unsub = subscribeProjectEvents(projectId, (event) => {
       if ((event.type === 'artifact_changed' || event.type === 'artifact_deleted') && event.task_id === taskId) {
-        load();
+        void load();
       } else if (event.type === 'full_sync') {
-        load();
+        void load();
       }
     });
     return unsub;
@@ -44,5 +67,5 @@ export function useArtifacts(taskId: string | null, projectId?: string | null) {
     await load();
   }
 
-  return { artifacts, loading, loaded, upload, remove, reload: load };
+  return { artifacts, loading, loaded, error, upload, remove, reload: load };
 }

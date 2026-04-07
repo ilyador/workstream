@@ -25,22 +25,31 @@ export function useProjectResource<T>(
   const [readyProjectId, setReadyProjectId] = useState<string | null>(null);
   const requestRef = useRef(0);
   const projectIdRef = useRef<string | null>(projectId);
+  const loaderRef = useRef(loader);
+  const createInitialValueRef = useRef(createInitialValue);
+  const getErrorMessageRef = useRef(getErrorMessage);
+
+  useEffect(() => {
+    loaderRef.current = loader;
+    createInitialValueRef.current = createInitialValue;
+    getErrorMessageRef.current = getErrorMessage;
+  }, [loader, createInitialValue, getErrorMessage]);
 
   useEffect(() => {
     projectIdRef.current = projectId;
     requestRef.current += 1;
-    setData(createInitialValue());
+    setData(createInitialValueRef.current());
     setError(null);
     setReadyProjectId(null);
     setLoading(Boolean(projectId));
-  }, [projectId, createInitialValue]);
+  }, [projectId]);
 
   const reload = useCallback(async () => {
     const activeProjectId = projectIdRef.current;
     const requestId = ++requestRef.current;
 
     if (!activeProjectId) {
-      const empty = createInitialValue();
+      const empty = createInitialValueRef.current();
       setData(empty);
       setError(null);
       setReadyProjectId(null);
@@ -51,7 +60,7 @@ export function useProjectResource<T>(
     setLoading(true);
 
     try {
-      const result = await loader(activeProjectId);
+      const result = await loaderRef.current(activeProjectId);
       if (requestRef.current !== requestId || projectIdRef.current !== activeProjectId) {
         return undefined;
       }
@@ -63,14 +72,17 @@ export function useProjectResource<T>(
       if (requestRef.current !== requestId || projectIdRef.current !== activeProjectId) {
         return undefined;
       }
-      setError(getErrorMessage ? getErrorMessage(err) : (err instanceof Error ? err.message : 'Failed to load'));
+      const message = getErrorMessageRef.current
+        ? getErrorMessageRef.current(err)
+        : (err instanceof Error ? err.message : 'Failed to load');
+      setError(message);
       return undefined;
     } finally {
       if (requestRef.current === requestId && projectIdRef.current === activeProjectId) {
         setLoading(false);
       }
     }
-  }, [createInitialValue, getErrorMessage, loader]);
+  }, []);
 
   return {
     data,

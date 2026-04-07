@@ -9,6 +9,7 @@ interface FilePreviewModalProps {
   editing: boolean;
   dirty: boolean;
   saving: boolean;
+  error: string | null;
   contentKey: number;
   onClose: () => void;
   onStartEdit: () => void;
@@ -22,6 +23,7 @@ export function FilePreviewModal({
   editing,
   dirty,
   saving,
+  error,
   contentKey,
   onClose,
   onStartEdit,
@@ -46,6 +48,7 @@ export function FilePreviewModal({
           onClose={onClose}
         />
         <div className={s.body}>
+          {error && <div className={s.error}>{error}</div>}
           {isPreviewable(file.mime_type) ? (
             <FilePreviewContent
               key={contentKey}

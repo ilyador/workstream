@@ -1,4 +1,5 @@
 import type React from 'react';
+import { clearColumnDragPreview, setColumnDragPreview } from '../lib/drag-preview';
 import type { WorkstreamView } from '../lib/task-view';
 import s from './WorkstreamColumn.module.css';
 
@@ -71,30 +72,12 @@ export function WorkstreamColumnHeader({
                 if (isBacklog || !workstream || !onColumnDragStart) return;
                 e.dataTransfer.effectAllowed = 'move';
                 e.dataTransfer.setData('text/plain', workstream.id);
-                const ghost = document.createElement('div');
-                ghost.textContent = workstream.name;
-                ghost.style.cssText = `
-                  padding: 8px 16px;
-                  background: var(--white, #fff);
-                  color: var(--text, #1a1a1a);
-                  font-family: 'Instrument Sans', system-ui, sans-serif;
-                  font-size: 13px;
-                  font-weight: 600;
-                  border-radius: 8px;
-                  border: 1.5px solid rgba(37, 99, 235, 0.3);
-                  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-                  position: fixed; top: -999px; left: -999px;
-                  pointer-events: none;
-                  white-space: nowrap;
-                `;
-                ghost.id = '__column-drag-preview__';
-                document.body.appendChild(ghost);
-                e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 20);
+                setColumnDragPreview(workstream.name, e.dataTransfer);
                 onColumnDragStart(workstream.id);
                 e.stopPropagation();
               }}
               onDragEnd={() => {
-                document.getElementById('__column-drag-preview__')?.remove();
+                clearColumnDragPreview();
               }}
               onDoubleClick={() => {
                 if (!isBacklog && workstream) onStartEdit();

@@ -10,6 +10,7 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [contentKey, setContentKey] = useState(0);
   const textRef = useRef('');
   const canceledRef = useRef(false);
@@ -19,6 +20,7 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
       setFile(nextFile);
       setEditing(false);
       setDirty(false);
+      setSaveError(null);
       return;
     }
 
@@ -29,17 +31,19 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
     setFile(null);
     setEditing(false);
     setDirty(false);
+    setSaveError(null);
   }, []);
 
   const handleSave = useCallback(async () => {
     if (!file?.id || saving) return;
     setSaving(true);
+    setSaveError(null);
     try {
       await updateArtifactContent(file.id, textRef.current);
       setDirty(false);
       setEditing(false);
     } catch (err) {
-      console.error('Failed to save artifact:', err);
+      setSaveError(err instanceof Error ? err.message : 'Failed to save artifact');
     } finally {
       setSaving(false);
     }
@@ -49,6 +53,7 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
     canceledRef.current = true;
     setEditing(false);
     setDirty(false);
+    setSaveError(null);
     setContentKey(key => key + 1);
   }, []);
 
@@ -79,6 +84,7 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
           editing={editing}
           dirty={dirty}
           saving={saving}
+          error={saveError}
           contentKey={contentKey}
           onClose={close}
           onStartEdit={() => setEditing(true)}

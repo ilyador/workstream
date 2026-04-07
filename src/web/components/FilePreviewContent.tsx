@@ -20,23 +20,42 @@ export function FilePreviewContent({ file, editing, onTextChange }: FilePreviewC
   });
 
   useEffect(() => {
+    let active = true;
     const isText = mime.startsWith('text/') || mime === 'application/json';
-    if (!isText) return;
+    if (!isText) {
+      queueMicrotask(() => {
+        if (!active) return;
+        setText(null);
+        setLoading(false);
+      });
+      return () => {
+        active = false;
+      };
+    }
 
+    const controller = new AbortController();
     queueMicrotask(() => {
+      if (!active || controller.signal.aborted) return;
+      setText(null);
       setLoading(true);
     });
-    fetch(url)
+    fetch(url, { signal: controller.signal })
       .then(response => response.text())
       .then(value => {
+        if (!active) return;
         setText(value);
         notifyTextChange(value);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (!active || (err instanceof DOMException && err.name === 'AbortError')) return;
         setText('Failed to load file');
         setLoading(false);
       });
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [url, mime]);
 
   if (mime.startsWith('image/')) {

@@ -1,6 +1,7 @@
 import { useArtifacts } from '../hooks/useArtifacts';
 import { useFilePreview } from './filePreviewContext';
 import { AttachmentList, type AttachmentListItem } from './AttachmentList';
+import s from './TaskCard.module.css';
 
 export function TaskAttachments({
   taskId,
@@ -26,7 +27,7 @@ export function TaskAttachmentsView({
   legacyImages?: string[];
   readOnly?: boolean;
 }) {
-  const { artifacts, loaded, upload, remove } = artifactsData;
+  const { artifacts, loaded, error, upload, remove } = artifactsData;
   const { preview } = useFilePreview();
   const legacyArtifacts: AttachmentListItem[] = (legacyImages || []).map((url, i) => ({
     id: `legacy-${i}`,
@@ -38,6 +39,7 @@ export function TaskAttachmentsView({
   }));
   const allFiles = [...artifacts.map(a => ({ ...a, isLegacy: false })), ...legacyArtifacts];
 
+  if (error) return <div className={s.errorMsg}>{error}</div>;
   if (!loaded) return null;
   return (
     <AttachmentList

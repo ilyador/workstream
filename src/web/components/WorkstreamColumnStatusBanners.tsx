@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { WorkstreamView } from '../lib/task-view';
 import s from './WorkstreamColumn.module.css';
 
@@ -24,6 +25,8 @@ export function WorkstreamColumnStatusBanners({
   members,
   onUpdateWorkstream,
 }: WorkstreamColumnStatusBannersProps) {
+  const [reviewerError, setReviewerError] = useState<string | null>(null);
+
   const renderReviewer = () => {
     if (!workstream || !members || members.length === 0 || !onUpdateWorkstream) return null;
     if (workstream.reviewer_id) {
@@ -41,10 +44,12 @@ export function WorkstreamColumnStatusBanners({
         defaultValue=""
         onChange={async e => {
           if (!e.target.value) return;
+          setReviewerError(null);
           try {
             await onUpdateWorkstream(workstream.id, { reviewer_id: e.target.value });
           } catch (err) {
-            console.error('Failed to assign reviewer:', err);
+            setReviewerError(err instanceof Error ? err.message : 'Failed to assign reviewer');
+            e.currentTarget.value = '';
           }
         }}
       >
@@ -101,6 +106,7 @@ export function WorkstreamColumnStatusBanners({
               )}
             </div>
           </div>
+          {reviewerError && <div className={s.bannerError}>{reviewerError}</div>}
           {workstream?.review_output && (
             <pre className={s.reviewOutput}>{workstream.review_output}</pre>
           )}
@@ -136,6 +142,7 @@ export function WorkstreamColumnStatusBanners({
               </button>
             )}
           </div>
+          {reviewerError && <div className={s.bannerError}>{reviewerError}</div>}
         </div>
       )}
     </>
