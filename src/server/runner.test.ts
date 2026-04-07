@@ -19,7 +19,7 @@ vi.mock('./supabase.js', () => {
           };
         }
         if (table === 'task_artifacts') {
-          return { insert: mockInsert };
+          return { insert: mockInsert, upsert: mockInsert };
         }
         return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
       }),

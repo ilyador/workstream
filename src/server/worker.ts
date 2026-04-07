@@ -29,20 +29,26 @@ type ClaimedJob = Record<string, unknown> & {
 
 const logBuffer: Array<{ job_id: string; event: string; data: Record<string, any> }> = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let flushing = false;
 const FLUSH_INTERVAL = 100; // ms
 const FLUSH_SIZE = 20;
 
 async function flushLogs(): Promise<void> {
-  if (logBuffer.length === 0) return;
-  const batch = logBuffer.slice();
-  const { error } = await supabase.from('job_logs').insert(batch);
-  if (error) {
-    console.error('[worker] Batch log write error:', error.message);
-    // Keep entries in buffer for next flush attempt
-    return;
+  if (flushing || logBuffer.length === 0) return;
+  flushing = true;
+  try {
+    const batch = logBuffer.slice();
+    const { error } = await supabase.from('job_logs').insert(batch);
+    if (error) {
+      console.error('[worker] Batch log write error:', error.message);
+      // Keep entries in buffer for next flush attempt
+      return;
+    }
+    // Only remove on success
+    logBuffer.splice(0, batch.length);
+  } finally {
+    flushing = false;
   }
-  // Only remove on success
-  logBuffer.splice(0, batch.length);
 }
 
 function scheduleFlush() {
@@ -243,7 +249,18 @@ async function startJob(job: ClaimedJob): Promise<void> {
   const onReview = task.auto_continue === true
     ? async (result: any) => {
         await writeLog(jobId, 'review', result);
-        // Auto-approve: mark job done + checkpoint cleaned, task done, clean checkpoint
+        // Auto-approve: commit first, then mark done, then queue next
+        try { deleteCheckpoint(localPath, jobId); } catch (e: any) { console.warn(`[worker] Checkpoint delete failed for job ${jobId}:`, e.message); }
+        // Commit changes BEFORE marking done — if commit fails, job stays in review
+        let commitSucceeded = false;
+        try {
+          await autoCommit(localPath, task.type, task.title);
+          commitSucceeded = true;
+        } catch (err: any) {
+          console.error('[worker] Auto-commit failed:', err.message);
+          await writeLog(jobId, 'log', { text: `[auto-approve] Commit failed: ${err.message}. Job left in review for manual handling.` });
+          return;
+        }
         const now = new Date().toISOString();
         const { data: doneRows, error: doneError } = await supabase
           .from('jobs')
@@ -262,18 +279,10 @@ async function startJob(job: ClaimedJob): Promise<void> {
         const { error: taskDoneError } = await supabase.from('tasks').update({ status: 'done', completed_at: now }).eq('id', task.id);
         if (taskDoneError) {
           console.error(`[worker] Auto-approve task update failed for job ${jobId}:`, taskDoneError.message);
-          return;
-        }
-        try { deleteCheckpoint(localPath, jobId); } catch (e: any) { console.warn(`[worker] Checkpoint delete failed for job ${jobId}:`, e.message); }
-        // Auto-commit the changes
-        try {
-          await autoCommit(localPath, task.type, task.title);
-        } catch (err: any) {
-          console.error('[worker] Auto-commit failed:', err.message);
         }
         await writeLog(jobId, 'done', {});
-        // Queue next task in workstream
-        if (task.workstream_id) {
+        // Queue next task in workstream only if commit succeeded
+        if (commitSucceeded && task.workstream_id) {
           try {
             await queueNextWorkstreamTask({
               completedTaskId: task.id,
@@ -285,6 +294,7 @@ async function startJob(job: ClaimedJob): Promise<void> {
           } catch (err: any) {
             console.error('[worker] auto-continue error:', err.message);
             await writeLog(jobId, 'log', { text: `[auto-continue] Failed to queue next task: ${err.message}` });
+            if (task) notifyTaskFailure(task, `Auto-continue failed: ${err.message}`).catch(() => {});
           }
         }
       }
@@ -358,7 +368,7 @@ async function startJob(job: ClaimedJob): Promise<void> {
 
 let busyJobId: string | null = null;
 
-setInterval(async () => {
+const pollInterval = setInterval(async () => {
   try {
     if (busyJobId) return;
 
@@ -380,7 +390,7 @@ setInterval(async () => {
 // Cancellation loop: handle jobs marked as canceling
 // ---------------------------------------------------------------------------
 
-setInterval(async () => {
+const cancelInterval = setInterval(async () => {
   try {
     const { data: cancelingJobs } = await supabase
       .from('jobs')
@@ -455,7 +465,7 @@ setInterval(async () => {
 // PR merge polling: check GitHub for merged PRs every 60 seconds
 // ---------------------------------------------------------------------------
 
-setInterval(async () => {
+const prMergeInterval = setInterval(async () => {
   try {
     const { data: workstreams } = await supabase
       .from('workstreams')
@@ -523,6 +533,9 @@ setInterval(async () => {
 
 async function shutdown() {
   console.log('[worker] Shutting down...');
+  clearInterval(pollInterval);
+  clearInterval(cancelInterval);
+  clearInterval(prMergeInterval);
   cancelAllJobs();
   await flushLogs();
   process.exit(0);
