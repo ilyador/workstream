@@ -54,12 +54,37 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
   return (
     <div className={s.archive}>
       {completedBacklogTasks.length > 0 && (
-        <div className={s.columnWrap}>
+        <WorkstreamColumn
+          workstream={null}
+          tasks={completedBacklogTasks}
+          taskJobMap={taskJobMap}
+          isBacklog
+          canRunAi={false}
+          projectId={projectId}
+          members={members}
+          mentionedTaskIds={emptySet}
+          focusTaskId={null}
+          draggedTaskId={null}
+          onDragTaskStart={noop}
+          onDragTaskEnd={noop}
+          onDropTask={noop}
+          onAddTask={noop}
+          onUpdateTask={onUpdateTask}
+        />
+      )}
+      {workstreams.map(ws => {
+        const wsTasks = tasks
+          .filter(t => t.workstream_id === ws.id)
+          .map(t => mapArchiveTask(t, memberMap))
+          .sort(compareByPosition);
+
+        return (
           <WorkstreamColumn
-            workstream={null}
-            tasks={completedBacklogTasks}
+            key={ws.id}
+            workstream={ws}
+            tasks={wsTasks}
             taskJobMap={taskJobMap}
-            isBacklog
+            isBacklog={false}
             canRunAi={false}
             projectId={projectId}
             members={members}
@@ -70,38 +95,12 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
             onDragTaskEnd={noop}
             onDropTask={noop}
             onAddTask={noop}
-            onUpdateTask={onUpdateTask}
+            listHeader={(
+              <div className={s.restoreBar}>
+                <button className={s.restoreBtn} onClick={() => onRestore(ws.id)}>Restore to board</button>
+              </div>
+            )}
           />
-        </div>
-      )}
-      {workstreams.map(ws => {
-        const wsTasks = tasks
-          .filter(t => t.workstream_id === ws.id)
-          .map(t => mapArchiveTask(t, memberMap))
-          .sort(compareByPosition);
-
-        return (
-          <div key={ws.id} className={s.columnWrap}>
-            <div className={s.restoreBar}>
-              <button className={s.restoreBtn} onClick={() => onRestore(ws.id)}>Restore to board</button>
-            </div>
-            <WorkstreamColumn
-              workstream={ws}
-              tasks={wsTasks}
-              taskJobMap={taskJobMap}
-              isBacklog={false}
-              canRunAi={false}
-              projectId={projectId}
-              members={members}
-              mentionedTaskIds={emptySet}
-              focusTaskId={null}
-              draggedTaskId={null}
-              onDragTaskStart={noop}
-              onDragTaskEnd={noop}
-              onDropTask={noop}
-              onAddTask={noop}
-            />
-          </div>
         );
       })}
     </div>

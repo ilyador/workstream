@@ -2,6 +2,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  height: calc(100vh - 56px);
   height: calc(100dvh - 56px);
   color: var(--text-4);
   font-size: 15px;
@@ -11,26 +12,20 @@
 .archive {
   display: flex;
   gap: 20px;
-  padding: 20px 32px;
+  padding: 20px 32px 20px;
+  height: calc(100vh - 56px);
   height: calc(100dvh - 56px);
   overflow-x: auto;
   overflow-y: hidden;
   align-items: flex-start;
-}
-
-.columnWrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 0 0 500px;
-  min-width: 500px;
-  max-width: 700px;
+  scroll-behavior: smooth;
 }
 
 .restoreBar {
   display: flex;
   justify-content: flex-end;
-  padding: 0 4px;
+  padding: 0 0 4px;
+  flex-shrink: 0;
 }
 
 .restoreBtn {
@@ -51,14 +46,34 @@
   border-color: var(--text-4);
 }
 
+.archive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.archive::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.archive::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 3px;
+}
+
+.archive::-webkit-scrollbar-thumb:hover {
+  background: var(--text-4);
+}
+
 @media (max-width: 768px) {
   .archive {
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     gap: 12px;
-    padding: 10px 8px;
-  }
-  .columnWrap {
-    flex: 0 0 calc(100vw - 24px);
-    min-width: calc(100vw - 24px);
-    max-width: none;
+    padding: 10px 12px 0;
+    height: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding: 0 12px;
   }
 }
