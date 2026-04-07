@@ -394,6 +394,7 @@ export async function buildStepPrompt(
   }
 
   prompt += 'If you need clarification from the human, clearly state your question and stop.\n';
+  prompt += '\nAt the very end of your response, write a one-line summary of what you did in this step using this exact format:\n[summary] Your short summary here\n';
 
   return prompt;
 }
@@ -988,6 +989,7 @@ or if issues found:
 
   prompt += '\nWhen done, write a brief summary of what you did and any issues found.\n';
   prompt += 'If you need clarification from the human, clearly state your question and stop.\n';
+  prompt += '\nAt the very end of your response, write a one-line summary of what you did in this step using this exact format:\n[summary] Your short summary here\n';
 
   return prompt;
 }
@@ -1001,16 +1003,26 @@ interface PhaseVerdict {
 
 /** Extract a one-sentence summary from a phase's raw output. */
 function extractPhaseSummary(rawOutput: string): string {
+  // Prefer the explicit [summary] tag the LLM was asked to produce
+  const match = rawOutput.match(/\[summary]\s*(.+)/i);
+  if (match) {
+    const summary = match[1].trim();
+    return summary.length > 200 ? summary.substring(0, 197) + '...' : summary;
+  }
+
+  // Fallback: last meaningful line, with markdown stripped
   const lines = rawOutput.split('\n').filter(l => {
     const t = l.trim();
     if (!t) return false;
     if (/^\[/.test(t)) return false;
-    if (t.startsWith('---')) return false;
+    if (t.startsWith('---') || t.startsWith('```') || t.startsWith('#')) return false;
+    if (/^[*=]{3,}$/.test(t)) return false;
     if (t.startsWith('RULES:') || t.startsWith('IMPORTANT:')) return false;
     return true;
   });
-  const last = lines[lines.length - 1]?.trim() || '';
-  return last.length > 120 ? last.substring(0, 117) + '...' : last;
+  let last = lines[lines.length - 1]?.trim() || '';
+  last = last.replace(/^[-*]\s+/, '').replace(/^`+|`+$/g, '');
+  return last.length > 200 ? last.substring(0, 197) + '...' : last;
 }
 
 /** Extract the last JSON verdict block from Claude's output. */
