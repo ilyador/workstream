@@ -9,7 +9,7 @@ function makeWorkstream(overrides: Partial<WorkstreamRecord> = {}): WorkstreamRe
     name: 'Review checkout flow',
     description: '',
     has_code: true,
-    status: 'done',
+    status: 'complete',
     position: 1,
     pr_url: null,
     reviewer_id: null,
@@ -32,7 +32,7 @@ function makeReviewRequest(overrides: Partial<NotificationRecord> = {}): Notific
 }
 
 describe('buildReviewItems', () => {
-  it('includes workstreams assigned directly to the current user', () => {
+  it('includes complete workstreams assigned directly to the current user', () => {
     const items = buildReviewItems(
       [makeWorkstream({ reviewer_id: 'user-1' })],
       [],
@@ -64,7 +64,7 @@ describe('buildReviewItems', () => {
     expect(items.map(item => item.workstreamId)).toEqual(['ws-1']);
   });
 
-  it('ignores read review-request notifications when reviewer data is missing from the record', () => {
+  it('keeps read review-request workstreams when reviewer data is missing from the record', () => {
     const items = buildReviewItems(
       [makeWorkstream()],
       [],
@@ -74,7 +74,7 @@ describe('buildReviewItems', () => {
       [makeReviewRequest({ read: true })],
     );
 
-    expect(items).toEqual([]);
+    expect(items.map(item => item.workstreamId)).toEqual(['ws-1']);
   });
 
   it('does not duplicate assigned workstreams with matching review-request notifications', () => {
@@ -103,10 +103,21 @@ describe('buildReviewItems', () => {
     expect(items).toEqual([]);
   });
 
-  it('omits merged and archived workstreams from review items', () => {
+  it('includes assigned merged workstreams until they are archived', () => {
+    const items = buildReviewItems(
+      [makeWorkstream({ id: 'merged-ws', status: 'merged', reviewer_id: 'user-1' })],
+      [],
+      [],
+      {},
+      'user-1',
+    );
+
+    expect(items.map(item => item.workstreamId)).toEqual(['merged-ws']);
+  });
+
+  it('omits archived workstreams from review items', () => {
     const items = buildReviewItems(
       [
-        makeWorkstream({ id: 'merged-ws', status: 'merged', reviewer_id: 'user-1' }),
         makeWorkstream({ id: 'archived-ws', status: 'archived', reviewer_id: 'user-1' }),
       ],
       [],
