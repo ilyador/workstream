@@ -7,7 +7,6 @@ export {
 export {
   buildReviewItems,
   buildTodoItems,
-  buildWorkspaceProgress,
 } from './project-list-view-models';
 export type {
   ProjectReviewItem,

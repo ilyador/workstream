@@ -8,7 +8,6 @@ export function useProjectWorkspaceHeaderProps({
   profile,
   webNotifications,
   notifications,
-  milestone,
   todoItems,
   reviewItems,
   onSwitchProject,
@@ -23,7 +22,6 @@ export function useProjectWorkspaceHeaderProps({
     profile,
     webNotifications,
     notifications,
-    milestone,
     todoItems,
     reviewItems,
     onSwitchProject,
@@ -32,7 +30,6 @@ export function useProjectWorkspaceHeaderProps({
     onOpenMembersModal,
     onUpdateLocalPath,
   }), [
-    milestone,
     notifications,
     onOpenAddProject,
     onOpenMembersModal,

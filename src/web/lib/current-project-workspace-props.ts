@@ -8,7 +8,6 @@ export function buildProjectWorkspaceHeaderProps({
   profile,
   webNotifications,
   notifications,
-  milestone,
   todoItems,
   reviewItems,
   onSwitchProject,
@@ -22,7 +21,6 @@ export function buildProjectWorkspaceHeaderProps({
   profile: ProjectWorkspaceHeaderProps['user'];
   webNotifications: ProjectWorkspaceHeaderProps['webNotifications'];
   notifications: ProjectWorkspaceHeaderProps['notifications'];
-  milestone: ProjectWorkspaceHeaderProps['milestone'];
   todoItems: ProjectWorkspaceHeaderProps['todoItems'];
   reviewItems: ProjectWorkspaceHeaderProps['reviewItems'];
   onSwitchProject: ProjectWorkspaceHeaderProps['onSwitchProject'];
@@ -37,7 +35,6 @@ export function buildProjectWorkspaceHeaderProps({
     user: profile,
     webNotifications,
     notifications,
-    milestone,
     todoItems,
     reviewItems,
     onSwitchProject,

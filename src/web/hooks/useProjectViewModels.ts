@@ -12,14 +12,12 @@ import {
   buildTaskTypeMap,
   buildTodoItems,
   buildTypeFlowMap,
-  buildWorkspaceProgress,
   buildWorkstreamNameMap,
 } from '../lib/project-view-models';
 
 interface UseProjectViewModelsArgs {
   tasks: TaskRecord[];
   jobs: JobRecord[];
-  activeWorkstreams: WorkstreamRecord[];
   workstreams: WorkstreamRecord[];
   members: MemberRecord[];
   flows: Flow[];
@@ -30,7 +28,6 @@ interface UseProjectViewModelsArgs {
 export function useProjectViewModels({
   tasks,
   jobs,
-  activeWorkstreams,
   workstreams,
   members,
   flows,
@@ -51,8 +48,6 @@ export function useProjectViewModels({
     () => buildReviewItems(workstreams, primaryJobViews, tasks, wsNameMap, currentUserId),
     [currentUserId, workstreams, primaryJobViews, tasks, wsNameMap],
   );
-  const wsProgress = useMemo(() => buildWorkspaceProgress(activeWorkstreams, tasks), [activeWorkstreams, tasks]);
-
   return {
     mentionedTaskIds,
     taskTitleMap,
@@ -63,6 +58,5 @@ export function useProjectViewModels({
     primaryJobViews,
     todoItems,
     reviewItems,
-    wsProgress,
   };
 }

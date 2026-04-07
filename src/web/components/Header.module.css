@@ -73,7 +73,6 @@
   .right { gap: 4px; flex-shrink: 0; }
   .logo { display: none; }
   .sep { display: none; }
-  .milestone { display: none; }
   .localPath { display: none; }
   .localPathBtn { display: none; }
   .localPathInput { display: none; }
@@ -377,7 +376,6 @@
   .actionCount { min-width: 17px; height: 17px; font-size: 10px; padding: 0 4px; }
 }
 
-.milestone { font-size: 13px; color: var(--text-3); }
 .localPath {
   font-size: 12px;
   color: var(--text-4);

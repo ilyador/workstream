@@ -36,11 +36,6 @@ export interface CurrentProjectWorkspaceProps {
     markRead: (id: string) => void | Promise<void>;
     markAllRead: () => void | Promise<void>;
   };
-  milestone: {
-    name: string;
-    tasksDone: number;
-    tasksTotal: number;
-  };
   todoItems: Array<{ id: string; label: string; sublabel?: string; tag?: string; taskId?: string }>;
   reviewItems: Array<{ id: string; label: string; sublabel?: string; tag?: string; taskId?: string; workstreamId?: string }>;
   tasks: TaskRecord[];
