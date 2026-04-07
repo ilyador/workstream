@@ -1,39 +1,34 @@
 import 'dotenv/config';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
-import { runChecks } from './onboarding.js';
+import { corsMiddleware } from './cors.js';
+import { artifactsRouter } from './routes/artifacts.js';
+import { commentsRouter } from './routes/comments.js';
+import { dashboardRouter } from './routes/dashboard.js';
 import { executionRouter } from './routes/execution.js';
 import { gitRouter } from './routes/git.js';
 import { authRouter } from './routes/auth.js';
-import { dataRouter } from './routes/data.js';
 import { documentsRouter } from './routes/documents.js';
+import { flowsRouter } from './routes/flows.js';
+import { jobEventsRouter } from './routes/job-events.js';
+import { onboardingRouter } from './routes/onboarding.js';
+import { projectsRouter } from './routes/projects.js';
+import { jobsRouter } from './routes/jobs.js';
+import { notificationsRouter } from './routes/notifications.js';
+import { skillsRouter } from './routes/skills.js';
+import { tasksRouter } from './routes/tasks.js';
+import { workstreamsRouter } from './routes/workstreams.js';
+import { changesRouter } from './realtime.js';
 
 const PORT = process.env.PORT || 3001;
 const app = express();
 
-// CORS
-app.use((_req: Request, res: Response, next: NextFunction) => {
-  const origin = _req.headers.origin || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  if (_req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
-  next();
-});
+app.use(corsMiddleware);
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Onboarding
-app.get('/api/onboarding', async (req, res) => {
-  const localPath = req.query.localPath as string | undefined;
-  const checks = await runChecks(localPath);
-  const allRequiredOk = checks.filter(c => c.required).every(c => c.ok);
-  res.json({ checks, ready: allRequiredOk });
-});
+app.use(onboardingRouter);
 
 // Health
 app.get('/api/health', (_req, res) => {
@@ -43,10 +38,21 @@ app.get('/api/health', (_req, res) => {
 // Auth (signup, signin, signout, me, refresh)
 app.use(authRouter);
 
-// Data (projects, tasks, milestones, jobs, comments, notifications, SSE changes)
-app.use(dataRouter);
+// Data (projects, tasks, workstreams, jobs, comments, notifications, SSE changes)
+app.use(projectsRouter);
+app.use(flowsRouter);
+app.use(workstreamsRouter);
+app.use(tasksRouter);
+app.use(jobsRouter);
+app.use(commentsRouter);
+app.use(artifactsRouter);
+app.use(notificationsRouter);
+app.use(dashboardRouter);
+app.use(skillsRouter);
+app.use(changesRouter);
 
 // Execution engine (run, reply, approve, reject, SSE job events)
+app.use(jobEventsRouter);
 app.use(executionRouter);
 
 // Git operations (commit, push, pr)
@@ -55,12 +61,24 @@ app.use(gitRouter);
 // Documents (upload, search, list, delete)
 app.use(documentsRouter);
 
+function errorStatus(error: unknown): number {
+  if (!error || typeof error !== 'object') return 500;
+  const record = error as Record<string, unknown>;
+  const status = typeof record.status === 'number' ? record.status : record.statusCode;
+  return typeof status === 'number' ? status : 500;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Internal server error';
+}
+
 // Global error handler
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+  void next;
   console.error('Unhandled error:', err);
-  const status = err.status || err.statusCode || 500;
+  const status = errorStatus(err);
   res.status(status).json({
-    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message || 'Internal server error'),
+    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : errorMessage(err),
   });
 });
 

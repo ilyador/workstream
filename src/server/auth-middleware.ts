@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { supabase } from './supabase.js';
+import type { AuthenticatedRequest } from './authz.js';
 
 /**
  * Extracts and verifies the JWT from the Authorization header using Supabase auth.
@@ -7,7 +8,8 @@ import { supabase } from './supabase.js';
  * On failure, responds with 401.
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const token = req.headers.authorization?.replace('Bearer ', '') || (req.query.token as string);
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
+  const token = req.headers.authorization?.replace('Bearer ', '') || queryToken;
   if (!token) {
     res.status(401).json({ error: 'No token provided' });
     return;
@@ -19,6 +21,6 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  (req as any).userId = user.id;
+  (req as AuthenticatedRequest).userId = user.id;
   next();
 }

@@ -86,8 +86,13 @@ export function revertToCheckpoint(localPath: string, jobId: string): { reverted
 export function deleteCheckpoint(localPath: string, jobId: string): void {
   try {
     git(['update-ref', '-d', `refs/workstream/checkpoints/${jobId}`], localPath);
-  } catch (e: any) { console.warn(`[checkpoint] Failed to delete ref for job ${jobId}:`, e.message); }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[checkpoint] Failed to delete ref for job ${jobId}:`, message);
+  }
   try {
     git(['config', '--unset', `workstream.checkpoint.${jobId}.branch`], localPath);
-  } catch (e: any) { /* config key may not exist — non-fatal */ }
+  } catch {
+    // Config key may not exist; checkpoint refs are still cleaned up.
+  }
 }
