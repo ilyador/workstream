@@ -21,7 +21,7 @@ export function FilePreviewContent({ file, editing, onTextChange }: FilePreviewC
 
   useEffect(() => {
     let active = true;
-    const isText = mime.startsWith('text/') || mime === 'application/json';
+    const isText = mime.startsWith('text/') || mime === 'application/json' || isMdFile(mime, filename);
     if (!isText) {
       queueMicrotask(() => {
         if (!active) return;
@@ -56,7 +56,7 @@ export function FilePreviewContent({ file, editing, onTextChange }: FilePreviewC
       active = false;
       controller.abort();
     };
-  }, [url, mime]);
+  }, [filename, url, mime]);
 
   if (mime.startsWith('image/')) {
     return <img src={url} alt={filename} className={s.previewImage} />;
