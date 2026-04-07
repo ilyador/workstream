@@ -64,6 +64,19 @@ describe('buildReviewItems', () => {
     expect(items.map(item => item.workstreamId)).toEqual(['ws-1']);
   });
 
+  it('ignores read review-request notifications when reviewer data is missing from the record', () => {
+    const items = buildReviewItems(
+      [makeWorkstream()],
+      [],
+      [],
+      {},
+      'user-1',
+      [makeReviewRequest({ read: true })],
+    );
+
+    expect(items).toEqual([]);
+  });
+
   it('does not duplicate assigned workstreams with matching review-request notifications', () => {
     const items = buildReviewItems(
       [makeWorkstream({ reviewer_id: 'user-1' })],
