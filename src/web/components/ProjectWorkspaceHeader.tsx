@@ -23,11 +23,6 @@ export interface ProjectWorkspaceHeaderProps {
     markRead: (id: string) => void | Promise<void>;
     markAllRead: () => void | Promise<void>;
   };
-  milestone: {
-    name: string;
-    tasksDone: number;
-    tasksTotal: number;
-  };
   todoItems: Array<{ id: string; label: string; sublabel?: string; tag?: string; taskId?: string }>;
   reviewItems: Array<{ id: string; label: string; sublabel?: string; tag?: string; taskId?: string; workstreamId?: string }>;
   onSwitchProject: (projectId: string) => void | Promise<void>;
@@ -43,7 +38,6 @@ export function ProjectWorkspaceHeader({
   user,
   webNotifications,
   notifications,
-  milestone,
   todoItems,
   reviewItems,
   onSwitchProject,
@@ -79,7 +73,6 @@ export function ProjectWorkspaceHeader({
       <Header
         projectName={project.name}
         localPath={project.local_path ?? undefined}
-        milestone={milestone}
         notifications={notifications.unreadCount}
         notificationList={notifications.notifications}
         onMarkRead={notifications.markRead}

@@ -3,13 +3,11 @@ import s from './Header.module.css';
 
 interface HeaderAccountControlsProps {
   localPath?: string;
-  milestone: { name: string; tasksDone: number; tasksTotal: number };
   onUpdateLocalPath?: (path: string) => void;
 }
 
 export function HeaderAccountControls({
   localPath,
-  milestone,
   onUpdateLocalPath,
 }: HeaderAccountControlsProps) {
   const [editingPath, setEditingPath] = useState(false);
@@ -17,11 +15,6 @@ export function HeaderAccountControls({
 
   return (
     <>
-      {milestone.tasksTotal > 0 && (
-        <span className={s.milestone}>
-          {milestone.name}: {milestone.tasksDone}/{milestone.tasksTotal}
-        </span>
-      )}
       {onUpdateLocalPath && (editingPath ? (
         <input
           className={s.localPathInput}

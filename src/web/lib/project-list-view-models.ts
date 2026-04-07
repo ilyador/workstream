@@ -79,19 +79,3 @@ export function buildReviewItems(
 
   return items;
 }
-
-export function buildWorkspaceProgress(
-  activeWorkstreams: WorkstreamRecord[],
-  tasks: TaskRecord[],
-) {
-  const activeWorkstream = activeWorkstreams[0];
-  const wsTasks = activeWorkstream
-    ? tasks.filter(task => task.workstream_id === activeWorkstream.id)
-    : tasks;
-
-  return {
-    name: activeWorkstream?.name || 'All',
-    tasksDone: wsTasks.filter(task => task.status === 'done').length,
-    tasksTotal: wsTasks.length,
-  };
-}

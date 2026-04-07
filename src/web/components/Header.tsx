@@ -11,7 +11,6 @@ import s from './Header.module.css';
 interface Props {
   projectName: string;
   localPath?: string;
-  milestone: { name: string; tasksDone: number; tasksTotal: number };
   notifications: number;
   notificationList?: NotificationRecord[];
   onMarkRead?: (id: string) => void;
@@ -31,7 +30,6 @@ interface Props {
 export function Header({
   projectName,
   localPath,
-  milestone,
   notifications,
   notificationList = [],
   onMarkRead,
@@ -67,7 +65,6 @@ export function Header({
       <div className={s.right}>
         <HeaderAccountControls
           localPath={localPath}
-          milestone={milestone}
           onUpdateLocalPath={onUpdateLocalPath}
         />
         <HeaderNotifications

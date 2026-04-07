@@ -47,7 +47,6 @@ export default function App() {
   const viewModels = useProjectViewModels({
     tasks: projectResources.tasks.tasks,
     jobs: projectResources.jobs.jobs,
-    activeWorkstreams: projectResources.workstreams.active,
     workstreams: projectResources.workstreams.workstreams,
     members: projectResources.members.members,
     flows: projectResources.aiFlows.flows,

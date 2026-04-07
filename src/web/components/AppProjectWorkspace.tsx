@@ -67,7 +67,6 @@ export function AppProjectWorkspace({
       profile={{ id: profile.id, initials: profile.initials }}
       webNotifications={webNotifications}
       notifications={notifications}
-      milestone={viewModels.wsProgress}
       todoItems={viewModels.todoItems}
       reviewItems={viewModels.reviewItems}
       tasks={resources.tasks.tasks}
