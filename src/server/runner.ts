@@ -577,9 +577,10 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
             // 'skip' -- fall through to next step
             onLog(`\n${step.name} failed but on_max_retries=skip, continuing...\n`);
           }
-        } else if (step.is_gate) {
-          // Gate passed — clear stale feedback from previous failures
-          delete task._gateFeedback;
+          if (!failed) {
+            // Gate passed — clear stale feedback from previous failures
+            delete task._gateFeedback;
+          }
         }
 
         i++;
