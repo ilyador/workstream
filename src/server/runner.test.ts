@@ -140,15 +140,15 @@ describe('buildStepPrompt', () => {
     expect(prompt).toContain('## File Output');
   });
 
-  it('honors include_agents_md when injecting flow agent instructions', async () => {
+  it('always injects agents_md when the flow has it', async () => {
     const task = makeTask();
     const flow = makeFlow({ agents_md: 'Use the project agent rules.' });
 
-    const withAgents = await buildStepPrompt(makeStep({ include_agents_md: true }), flow, task, [], '/tmp/fake');
-    const withoutAgents = await buildStepPrompt(makeStep({ include_agents_md: false }), flow, task, [], '/tmp/fake');
+    const withFlag = await buildStepPrompt(makeStep({ include_agents_md: true }), flow, task, [], '/tmp/fake');
+    const withoutFlag = await buildStepPrompt(makeStep({ include_agents_md: false }), flow, task, [], '/tmp/fake');
 
-    expect(withAgents).toContain('Use the project agent rules.');
-    expect(withoutAgents).not.toContain('Use the project agent rules.');
+    expect(withFlag).toContain('Use the project agent rules.');
+    expect(withoutFlag).toContain('Use the project agent rules.');
   });
 });
 
