@@ -28,7 +28,8 @@
 }
 .statusReview {
   border-left: 4px solid var(--amber);
-  background: var(--amber-bg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--amber-bg) 72%, var(--white)), var(--white));
 }
 .statusFailed {
   border-left: 4px solid var(--red);
@@ -42,10 +43,12 @@
 
 /* Priority ambient background (always applied) */
 .priorityCriticalBg {
-  background: var(--priority-critical-bg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--priority-critical-bg) 72%, var(--white)), var(--white));
 }
 .priorityUpcomingBg {
-  background: var(--priority-upcoming-bg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--priority-upcoming-bg) 72%, var(--white)), var(--white));
 }
 /* Priority left border (only when no active status border) */
 .priorityCriticalBorder {

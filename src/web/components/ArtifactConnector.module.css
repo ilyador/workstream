@@ -19,14 +19,14 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: none;
+  border: 1.5px solid color-mix(in srgb, var(--blue) 22%, var(--divider));
   background: var(--surface-strong);
   color: var(--text-4);
   font-family: var(--font);
   font-size: 10px;
   cursor: default;
   box-shadow: 0 2px 8px rgba(20, 20, 18, 0.05);
-  transition: background 0.12s, color 0.12s, transform 0.12s, box-shadow 0.12s;
+  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.12s, box-shadow 0.12s;
 }
 .iconActive {
   cursor: pointer;
@@ -34,10 +34,12 @@
   border-radius: 10px;
   padding: 0 6px;
   color: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 34%, var(--divider));
   background: var(--blue-bg);
 }
 .iconActive:hover {
   background: color-mix(in srgb, var(--blue-bg) 78%, var(--white));
+  border-color: color-mix(in srgb, var(--blue) 48%, var(--divider));
   box-shadow: 0 6px 18px color-mix(in srgb, var(--blue) 16%, transparent);
   transform: translateY(-1px);
 }
