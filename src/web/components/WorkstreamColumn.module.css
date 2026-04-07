@@ -5,8 +5,6 @@
   max-width: 700px;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px);
-  height: calc(100dvh - 120px);
   max-height: calc(100vh - 120px);
   max-height: calc(100dvh - 120px);
   background: var(--white);
@@ -22,7 +20,6 @@
     flex: 0 0 calc(100vw - 24px);
     min-width: calc(100vw - 24px);
     max-width: none;
-    height: calc(100dvh - 68px);
     max-height: calc(100dvh - 68px);
     border-radius: 10px;
     scroll-snap-align: start;
