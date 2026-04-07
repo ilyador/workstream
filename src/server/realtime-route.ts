@@ -18,6 +18,9 @@ changesRouter.get('/api/changes', requireAuth, async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
   res.flushHeaders?.();
+  // Flush an initial comment so proxies (e.g. Vite dev server) forward the
+  // response immediately rather than buffering until the first real event.
+  res.write(':ok\n\n');
 
   let cleanedUp = false;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
