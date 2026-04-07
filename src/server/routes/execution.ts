@@ -278,7 +278,7 @@ executionRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => {
   }
 
   // Auto-continue: queue next task in workstream
-  if (task?.auto_continue && task.workstream_id) {
+  if (task?.workstream_id) {
     try {
       await queueNextWorkstreamTask({
         completedTaskId: task.id,

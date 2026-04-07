@@ -315,7 +315,7 @@ dataRouter.patch('/api/tasks/:id', requireAuth, async (req, res) => {
   if (error) return res.status(400).json({ error: error.message });
 
   // Auto-continue: when task is marked done, queue next AI task in workstream
-  if (updates.status === 'done' && data.auto_continue === true && data.workstream_id != null) {
+  if (updates.status === 'done' && data.workstream_id != null) {
     try {
       const userId = (req as any).userId;
       const { data: member } = await supabase
