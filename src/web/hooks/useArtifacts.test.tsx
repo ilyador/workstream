@@ -67,6 +67,24 @@ describe('useArtifacts', () => {
     expect(getArtifactsMock).toHaveBeenCalledTimes(2);
   });
 
+  it('does not refetch artifacts on generic full sync events', async () => {
+    const callbacks: Array<(event: ProjectEvent) => void> = [];
+    subscribeProjectEventsMock.mockImplementation((_projectId: string, cb: (event: ProjectEvent) => void) => {
+      callbacks.push(cb);
+      return () => {};
+    });
+    getArtifactsMock.mockResolvedValue([makeArtifact('file-1')]);
+    const { result } = renderHook(() => useArtifacts('task-1', 'project-1'));
+
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+
+    await act(async () => {
+      callbacks[0]({ type: 'full_sync' });
+    });
+
+    expect(getArtifactsMock).toHaveBeenCalledTimes(1);
+  });
+
   it('publishes cache updates to other mounted artifact consumers', async () => {
     getArtifactsMock
       .mockResolvedValueOnce([makeArtifact('file-1')])
@@ -85,6 +103,31 @@ describe('useArtifacts', () => {
     await waitFor(() => expect(second.result.current.artifacts[0]?.id).toBe('file-2'));
     expect(getArtifactsMock).toHaveBeenCalledTimes(2);
   });
+
+  it('does not let stale in-flight loads overwrite a newer force reload', async () => {
+    const initial = deferred<Artifact[]>();
+    const forced = deferred<Artifact[]>();
+    getArtifactsMock
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(forced.promise);
+    const { result } = renderHook(() => useArtifacts('task-1', 'project-1'));
+
+    await waitFor(() => expect(getArtifactsMock).toHaveBeenCalledTimes(1));
+    const reloadPromise = act(async () => {
+      const pendingReload = result.current.reload({ force: true });
+      forced.resolve([makeArtifact('fresh-file')]);
+      await pendingReload;
+    });
+    await reloadPromise;
+    expect(result.current.artifacts[0]?.id).toBe('fresh-file');
+
+    await act(async () => {
+      initial.resolve([makeArtifact('stale-file')]);
+      await initial.promise;
+    });
+
+    expect(result.current.artifacts[0]?.id).toBe('fresh-file');
+  });
 });
 
 function makeArtifact(id: string): Artifact {
@@ -101,4 +144,12 @@ function makeArtifact(id: string): Artifact {
     url: `/${id}.md`,
     created_at: 'now',
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
 }
