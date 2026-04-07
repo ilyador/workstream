@@ -330,7 +330,6 @@
   border-radius: 999px;
   margin: 3px 0 5px;
   box-shadow: 0 0 14px color-mix(in srgb, var(--blue) 34%, transparent);
-  animation: dropLineIn 0.12s ease-out;
 }
 
 .dropAfter::after {
@@ -341,7 +340,6 @@
   border-radius: 999px;
   margin: 5px 0 3px;
   box-shadow: 0 0 14px color-mix(in srgb, var(--blue) 34%, transparent);
-  animation: dropLineIn 0.12s ease-out;
 }
 
 @keyframes columnSettle {

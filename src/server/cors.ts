@@ -1,24 +1,20 @@
 import type { Request, Response, NextFunction } from 'express';
 
-const DEFAULT_ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:4173',
-  'http://127.0.0.1:4173',
-];
-
-function allowedOrigins(): Set<string> {
+function allowedOrigins(): Set<string> | null {
   const configured = process.env.CORS_ORIGINS
     ?.split(',')
     .map(origin => origin.trim())
     .filter(Boolean);
-  return new Set(configured && configured.length > 0 ? configured : DEFAULT_ALLOWED_ORIGINS);
+  if (configured && configured.length > 0) return new Set(configured);
+  // No CORS_ORIGINS set — allow any origin (local dev)
+  return null;
 }
 
 export function corsMiddleware(req: Request, res: Response, next: NextFunction): void {
   const origin = req.headers.origin;
   if (origin) {
-    if (!allowedOrigins().has(origin)) {
+    const allowed = allowedOrigins();
+    if (allowed && !allowed.has(origin)) {
       res.status(403).json({ error: 'Origin not allowed' });
       return;
     }
@@ -37,4 +33,3 @@ export function corsMiddleware(req: Request, res: Response, next: NextFunction):
 
   next();
 }
-
