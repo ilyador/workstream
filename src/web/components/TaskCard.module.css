@@ -472,15 +472,13 @@
 .stepSummaries {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  margin-top: 4px;
 }
 .stepSummary {
   font-size: 11px;
   color: var(--text-3);
   line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .stepName {
   font-weight: 600;
