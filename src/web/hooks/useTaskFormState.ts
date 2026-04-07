@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BUILT_IN_TYPES } from '../lib/constants';
 import type { Flow } from '../lib/api';
-import { getPreferredFlowId, type CustomTypeOption } from '../components/task-form-shared';
+import { getFlowIdForType, getPreferredFlowId, type CustomTypeOption } from '../components/task-form-shared';
 import type { EditTaskData, TaskFormData } from '../components/task-form-types';
 import { useTaskImages } from './useTaskImages';
 
@@ -53,19 +53,12 @@ export function useTaskFormState({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const preferredFlowId = getPreferredFlowId(flows, type);
+  const matchingFlowId = getFlowIdForType(flows, type);
 
   useEffect(() => {
-    if (isEdit || assignee || flows.length === 0) return;
-    const currentFlowExists = flowId ? flows.some(flow => flow.id === flowId) : false;
-    if (!currentFlowExists && preferredFlowId) {
-      setFlowId(preferredFlowId);
-      return;
-    }
-    if (!flowId && preferredFlowId) {
-      setFlowId(preferredFlowId);
-    }
-  }, [assignee, flowId, flows, isEdit, preferredFlowId]);
+    if (isEdit || assignee || flowId || !matchingFlowId) return;
+    setFlowId(matchingFlowId);
+  }, [assignee, flowId, isEdit, matchingFlowId]);
 
   const imagesState = useTaskImages({
     initialImages: editTask?.images,

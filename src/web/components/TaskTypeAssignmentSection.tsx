@@ -1,7 +1,7 @@
 import type { Flow } from '../lib/api';
 import { BUILT_IN_TYPES } from '../lib/constants';
 import {
-  getPreferredFlowId,
+  getFlowIdForType,
   PIPELINE_OPTIONS,
   type CustomTypeOption,
   type MemberOption,
@@ -103,12 +103,12 @@ export function TaskTypeAssignmentSection({
               }
               const nextType = event.target.value;
               setType(nextType);
-              const matchingFlowId = getPreferredFlowId(flows, nextType);
+              const matchingFlowId = getFlowIdForType(flows, nextType);
               if (matchingFlowId) {
                 setFlowId(matchingFlowId);
+                setAssignee('');
+                setMode('ai');
               }
-              setAssignee('');
-              setMode('ai');
             }}
           >
             {BUILT_IN_TYPES.map(option => (

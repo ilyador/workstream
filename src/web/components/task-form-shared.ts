@@ -11,6 +11,10 @@ export const PIPELINE_OPTIONS = [
   { value: 'test', label: 'test (plan -> write-tests -> verify -> review)' },
 ];
 
+export function getFlowIdForType(flows: Flow[], taskType: string): string {
+  return flows.find(flow => (flow.default_types || []).includes(taskType))?.id || '';
+}
+
 export function getPreferredFlowId(flows: Flow[], taskType: string): string {
-  return flows.find(flow => (flow.default_types || []).includes(taskType))?.id || flows[0]?.id || '';
+  return getFlowIdForType(flows, taskType) || flows[0]?.id || '';
 }

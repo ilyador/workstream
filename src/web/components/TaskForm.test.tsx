@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { TaskForm } from './TaskForm';
 import type { Flow } from '../lib/api';
+import { useTaskFormState } from '../hooks/useTaskFormState';
 
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api');
@@ -50,6 +51,22 @@ function renderTaskForm(flows: Flow[]) {
       onSubmit={vi.fn().mockResolvedValue(undefined)}
       onClose={() => {}}
     />,
+  );
+}
+
+function TaskFormStateHarness({ flows }: { flows: Flow[] }) {
+  const { flowId, setFlowId } = useTaskFormState({
+    flows,
+    customTypes: [],
+    onSubmit: vi.fn().mockResolvedValue(undefined),
+    onClose: () => {},
+  });
+
+  return (
+    <div>
+      <div data-testid="flow-id">{flowId}</div>
+      <button type="button" onClick={() => setFlowId('flow-bug')}>Choose Bug Flow</button>
+    </div>
   );
 }
 
@@ -113,6 +130,47 @@ describe('TaskForm flow selection', () => {
 
     await waitFor(() => {
       expect((screen.getByRole('combobox', { name: 'Assignee' }) as HTMLSelectElement).value).toBe('human:user-1');
+    });
+  });
+
+  it('keeps a human assignment when changing to a type without a preferred flow', async () => {
+    const user = userEvent.setup();
+    const featureFlow = makeFlow('flow-feature', 'Feature Flow', ['feature']);
+
+    renderTaskForm([featureFlow]);
+
+    const typeSelect = screen.getByRole('combobox', { name: 'Type' });
+    const assigneeSelect = screen.getByRole('combobox', { name: 'Assignee' }) as HTMLSelectElement;
+
+    await waitFor(() => {
+      expect(assigneeSelect.value).toBe('flow:flow-feature');
+    });
+
+    await user.selectOptions(assigneeSelect, 'human:user-1');
+    expect(assigneeSelect.value).toBe('human:user-1');
+
+    await user.selectOptions(typeSelect, 'chore');
+    expect(assigneeSelect.value).toBe('human:user-1');
+  });
+
+  it('does not replace an existing flow selection when flows reload', async () => {
+    const user = userEvent.setup();
+    const featureFlow = makeFlow('flow-feature', 'Feature Flow', ['feature']);
+    const bugFlow = makeFlow('flow-bug', 'Bug Flow', ['bug-fix']);
+
+    const { rerender } = render(<TaskFormStateHarness flows={[featureFlow, bugFlow]} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('flow-id').textContent).toBe('flow-feature');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Choose Bug Flow' }));
+    expect(screen.getByTestId('flow-id').textContent).toBe('flow-bug');
+
+    rerender(<TaskFormStateHarness flows={[featureFlow]} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('flow-id').textContent).toBe('flow-bug');
     });
   });
 });
