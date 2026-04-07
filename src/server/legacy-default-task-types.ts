@@ -1,0 +1,78 @@
+import type { TaskTypeConfig } from './legacy-task-type-types.js';
+
+export const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
+  'bug-fix': {
+    phases: ['plan', 'analyze', 'fix', 'verify'],
+    on_verify_fail: 'fix',
+    verify_retries: 2,
+    final: 'review',
+    on_review_fail: 'fix',
+    review_retries: 1,
+    on_max_retries: 'pause',
+    phase_config: {
+      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
+      analyze: { skill: null, tools: ['Read', 'Grep', 'Bash'], prompt: '', model: 'opus' },
+      fix: { skill: null, tools: ['Read', 'Edit', 'Bash'], prompt: '', model: 'opus' },
+      verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
+      review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
+    },
+  },
+  feature: {
+    phases: ['plan', 'implement', 'verify'],
+    on_verify_fail: 'implement',
+    verify_retries: 2,
+    final: 'review',
+    on_review_fail: 'implement',
+    review_retries: 1,
+    on_max_retries: 'pause',
+    phase_config: {
+      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
+      implement: { skill: null, tools: ['Read', 'Edit', 'Write', 'Bash'], prompt: '', model: 'opus' },
+      verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
+      review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
+    },
+  },
+  refactor: {
+    phases: ['plan', 'analyze', 'refactor', 'verify'],
+    on_verify_fail: 'refactor',
+    verify_retries: 2,
+    final: 'review',
+    on_review_fail: 'refactor',
+    review_retries: 1,
+    on_max_retries: 'pause',
+    phase_config: {
+      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
+      analyze: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'opus' },
+      refactor: { skill: null, tools: ['Read', 'Edit', 'Bash'], prompt: '', model: 'opus' },
+      verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
+      review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
+    },
+  },
+  test: {
+    phases: ['plan', 'write-tests', 'verify'],
+    on_verify_fail: 'write-tests',
+    verify_retries: 2,
+    final: 'review',
+    on_review_fail: 'write-tests',
+    review_retries: 1,
+    on_max_retries: 'pause',
+    phase_config: {
+      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
+      'write-tests': { skill: null, tools: ['Read', 'Write', 'Bash'], prompt: '', model: 'opus' },
+      verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
+      review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
+    },
+  },
+  'doc-search': {
+    phases: ['answer'],
+    on_verify_fail: 'answer',
+    verify_retries: 0,
+    final: 'answer',
+    on_review_fail: 'answer',
+    review_retries: 0,
+    on_max_retries: 'pause',
+    phase_config: {
+      answer: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'sonnet' },
+    },
+  },
+};

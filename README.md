@@ -73,6 +73,9 @@ npx supabase db reset
 # Fill .env with keys from:
 npx supabase status
 
+# Optional: restrict project local paths to one or more roots
+WORKSTREAM_ALLOWED_PROJECT_ROOTS=/home/me/Dev,/srv/workstream-projects
+
 # Start all services (web + API + worker)
 pnpm dev
 ```
@@ -85,12 +88,17 @@ Opens at `http://localhost:3000`. Creates 4 default AI workers on first project 
 # Get a token from @BotFather in Telegram
 # Add to .env:
 TELEGRAM_BOT_TOKEN=your-token-here
+TELEGRAM_ALLOWED_CHAT_IDS=123456789
+# or:
+TELEGRAM_ALLOWED_USER_IDS=123456789
+# optional project scope:
+TELEGRAM_ALLOWED_PROJECT_IDS=project-uuid-1,project-uuid-2
 
 # Start the bot
 pnpm dev:bot
 ```
 
-Link a chat to a project with `/start`. Send messages to create tasks, check status, get summaries. Tag the bot in group chats.
+Link an allowed chat to a project with `/start`. Send messages to create tasks, check status, get summaries. Tag the bot in group chats. To intentionally disable the chat/user allowlist for a local-only bot, set `TELEGRAM_ALLOW_ALL=true`. Use `TELEGRAM_ALLOWED_PROJECT_IDS` to limit which projects the bot can link to.
 
 ## RAG / Document Search
 
@@ -117,7 +125,7 @@ Embeddings are stored locally in Supabase with pgvector. Workers get relevant do
 pnpm mcp
 ```
 
-9 tools: `project_focus`, `project_summary`, `task_create`, `task_update`, `task_log`, `workstream_status`, `job_reply`, `job_approve`, `job_reject`
+9 tools: `project_focus`, `project_summary`, `task_create`, `task_update`, `task_log`, `workstream_status`, `job_reply`, `job_approve`, `job_reject`. Use `MCP_ALLOWED_PROJECT_IDS=project-uuid-1,project-uuid-2` to limit which projects the MCP server can read or mutate.
 
 ## Self-Deployed
 
