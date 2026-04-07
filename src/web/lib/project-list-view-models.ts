@@ -43,7 +43,7 @@ export function buildReviewItems(
   const addedWorkstreamIds = new Set<string>();
 
   const addWorkstreamReviewItem = (workstream: WorkstreamRecord) => {
-    if (workstream.status === 'merged' || workstream.status === 'archived') return;
+    if (workstream.status === 'archived') return;
     if (addedWorkstreamIds.has(workstream.id)) return;
     addedWorkstreamIds.add(workstream.id);
     items.push({
@@ -62,7 +62,7 @@ export function buildReviewItems(
     }
 
     for (const notification of notifications) {
-      if (notification.read || notification.type !== 'review_request' || !notification.workstream_id) continue;
+      if (notification.type !== 'review_request' || !notification.workstream_id) continue;
       const workstream = workstreams.find(w => w.id === notification.workstream_id);
       if (!workstream) continue;
       if (workstream.reviewer_id && workstream.reviewer_id !== currentUserId) continue;
