@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import type { ActionItem } from './header-types';
 import s from './Header.module.css';
@@ -13,9 +14,17 @@ interface ActionModalProps {
 }
 
 function ActionModal({ title, items, toneClass, emptyLabel, onClose, onSelect }: ActionModalProps) {
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div className={s.modalOverlay} onClick={onClose}>
-      <div className={`${s.modalCard} ${s.actionModal}`} onClick={event => event.stopPropagation()}>
+      <div
+        className={`${s.modalCard} ${s.actionModal}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={event => event.stopPropagation()}
+      >
         <div className={s.actionModalHeader}>
           <span className={s.actionModalTitle}>{title}</span>
           {items.length > 0 && <span className={`${s.actionCount} ${toneClass}`}>{items.length}</span>}
@@ -48,7 +57,8 @@ function ActionModal({ title, items, toneClass, emptyLabel, onClose, onSelect }:
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
