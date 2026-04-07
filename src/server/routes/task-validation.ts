@@ -53,9 +53,9 @@ export function validateTaskScalars(updates: DbRecord): string | null {
   if (
     'position' in updates
     && updates.position != null
-    && (typeof updates.position !== 'number' || !Number.isInteger(updates.position) || updates.position < 0)
+    && (typeof updates.position !== 'number' || updates.position < 0)
   ) {
-    return 'position must be a non-negative integer';
+    return 'position must be a non-negative number';
   }
   return null;
 }

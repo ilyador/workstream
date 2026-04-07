@@ -9,9 +9,9 @@ export async function normalizeWorkstreamUpdates(updates: Record<string, unknown
   if (
     'position' in updates
     && updates.position != null
-    && (typeof updates.position !== 'number' || !Number.isInteger(updates.position) || updates.position < 0)
+    && (typeof updates.position !== 'number' || updates.position < 0)
   ) {
-    return 'position must be a non-negative integer';
+    return 'position must be a non-negative number';
   }
   if ('description' in updates && updates.description != null && typeof updates.description !== 'string') {
     return 'description must be a string';
