@@ -163,6 +163,35 @@ describe('TaskCard review checks', () => {
     expect(screen.queryByText('No comments yet')).toBeNull();
   });
 
+  it('does not render a collapsing comment skeleton when the expected comment count is zero', () => {
+    useCommentsMock.mockReturnValue({
+      comments: [],
+      loaded: false,
+      loading: true,
+      error: null as string | null,
+      addComment: vi.fn(),
+      removeComment: vi.fn(),
+    });
+
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'backlog',
+          mode: 'ai',
+        }}
+        job={null}
+        canRunAi
+        isExpanded
+        commentCount={0}
+        onToggleExpand={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('No comments yet')).toBeTruthy();
+    expect(screen.queryByLabelText('Loading comments')).toBeNull();
+  });
+
   it('does not show missing-file warnings while required artifacts are loading', () => {
     useArtifactsMock.mockImplementation((taskId: string | null) => ({
       artifacts: [] as Artifact[],

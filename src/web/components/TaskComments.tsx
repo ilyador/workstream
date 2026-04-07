@@ -30,7 +30,8 @@ export function TaskCommentsView({
 }) {
   const { comments, loaded, loading, addComment, removeComment, error } = data;
   const isInitialLoading = loading && !loaded;
-  const loadingRows = Math.min(Math.max(expectedCount, 1), 4);
+  const shouldShowLoadingRows = isInitialLoading && expectedCount > 0;
+  const loadingRows = Math.min(expectedCount, 4);
   const loadingClass = loadingRows >= 4
     ? s.commentsLoadingFour
     : loadingRows === 3
@@ -46,12 +47,13 @@ export function TaskCommentsView({
     <div className={s.commentsSection}>
       <div className={s.commentsHeader}>
         <span className={s.commentsTitle}>Comments</span>
-        {isInitialLoading && <span className={s.commentsEmpty}>Loading...</span>}
+        {isInitialLoading && expectedCount > 0 && <span className={s.commentsEmpty}>Loading...</span>}
+        {isInitialLoading && expectedCount === 0 && <span className={s.commentsEmpty}>No comments yet</span>}
         {!isInitialLoading && comments.length === 0 && (
           <span className={s.commentsEmpty}>No comments yet</span>
         )}
       </div>
-      {isInitialLoading ? (
+      {shouldShowLoadingRows ? (
         <div className={`${s.commentsLoading} ${loadingClass}`} aria-live="polite" aria-label={loadingLabel}>
           {Array.from({ length: loadingRows }, (_, index) => (
             <span key={index} className={s.commentSkeletonRow} />
