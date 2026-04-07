@@ -551,11 +551,26 @@
   display: flex;
   gap: 8px;
 }
+.editAction {
+  color: var(--blue);
+}
+.editAction:hover:not(:disabled) {
+  color: var(--blue);
+  background: var(--blue-bg);
+}
 .completeAction {
   color: var(--green);
 }
+.completeAction:hover:not(:disabled) {
+  color: var(--green);
+  background: var(--green-bg);
+}
 .deleteAction {
   color: var(--red);
+}
+.deleteAction:hover:not(:disabled) {
+  color: var(--red);
+  background: var(--red-bg);
 }
 .completionBlockedNotice {
   padding: 8px 12px;
@@ -665,6 +680,15 @@
 }
 
 .commentsEmpty {
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.commentsLoading {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
   font-size: 12px;
   color: var(--text-4);
 }

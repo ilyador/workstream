@@ -56,10 +56,22 @@ export function TaskIdleDetail({
   const chaining = task.chaining || 'none';
   const needsAccept = chaining === 'accept' || chaining === 'both';
   const needsProduce = chaining === 'produce' || chaining === 'both';
-  const acceptBlocked = needsAccept && (!prevArtifacts.loaded || prevArtifacts.artifacts.length === 0);
-  const produceBlocked = needsProduce && (!ownArtifacts.loaded || ownArtifacts.artifacts.length === 0);
-  const completionBlocked = acceptBlocked || produceBlocked;
-  const blockReason = acceptBlocked ? 'Awaiting file from previous task' : produceBlocked ? 'Attach a file before completing' : '';
+  const missingPreviousTask = needsAccept && !prevTaskId;
+  const checkingAcceptArtifacts = needsAccept && !!prevTaskId && !prevArtifacts.loaded && !prevArtifacts.error;
+  const checkingProduceArtifacts = needsProduce && !ownArtifacts.loaded && !ownArtifacts.error;
+  const acceptCheckFailed = needsAccept && !!prevTaskId && !!prevArtifacts.error;
+  const produceCheckFailed = needsProduce && !!ownArtifacts.error;
+  const acceptBlocked = missingPreviousTask || acceptCheckFailed || (needsAccept && prevArtifacts.loaded && prevArtifacts.artifacts.length === 0);
+  const produceBlocked = produceCheckFailed || (needsProduce && ownArtifacts.loaded && ownArtifacts.artifacts.length === 0);
+  const completionChecking = checkingAcceptArtifacts || checkingProduceArtifacts;
+  const completionBlocked = acceptBlocked || produceBlocked || completionChecking;
+  let blockReason = '';
+  if (missingPreviousTask) blockReason = 'Previous task file is unavailable';
+  else if (acceptCheckFailed) blockReason = 'Failed to check previous task file';
+  else if (produceCheckFailed) blockReason = 'Failed to check required files';
+  else if (acceptBlocked) blockReason = 'Awaiting file from previous task';
+  else if (produceBlocked) blockReason = 'Attach a file before completing';
+  else if (completionChecking) blockReason = 'Checking required files...';
 
   return (
     <>
@@ -82,7 +94,7 @@ export function TaskIdleDetail({
 
       <TaskAttachmentsView artifactsData={ownArtifacts} legacyImages={task.images} readOnly />
 
-      {completionBlocked && (
+      {completionBlocked && !completionChecking && (
         <div className={s.completionBlockedNotice}>
           {blockReason}
         </div>
@@ -116,7 +128,7 @@ export function TaskIdleDetail({
             >Complete</button>
           )}
           {onEdit && (
-            <button className="btn btnGhost btnSm" onClick={onEdit}>Edit</button>
+            <button className={`btn btnGhost btnSm ${s.editAction}`} onClick={onEdit}>Edit</button>
           )}
           {onDelete && (
             <button

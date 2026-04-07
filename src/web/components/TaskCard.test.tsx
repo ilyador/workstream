@@ -7,20 +7,29 @@ import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
 
 const { useCommentsMock, useArtifactsMock } = vi.hoisted(() => ({
-  useCommentsMock: vi.fn(() => ({
-    comments: [],
-    loaded: true,
-    addComment: vi.fn(),
-    removeComment: vi.fn(),
-  })),
-  useArtifactsMock: vi.fn(() => ({
-    artifacts: [],
-    loading: false,
-    loaded: true,
-    upload: vi.fn(),
-    remove: vi.fn(),
-    reload: vi.fn(),
-  })),
+  useCommentsMock: vi.fn((...args: [string | null, string?]) => {
+    void args;
+    return {
+      comments: [],
+      loaded: true,
+      loading: false,
+      error: null as string | null,
+      addComment: vi.fn(),
+      removeComment: vi.fn(),
+    };
+  }),
+  useArtifactsMock: vi.fn((...args: [string | null, string?]) => {
+    void args;
+    return {
+      artifacts: [],
+      loading: false,
+      loaded: true,
+      error: null as string | null,
+      upload: vi.fn(),
+      remove: vi.fn(),
+      reload: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../hooks/modal-context', () => ({
@@ -67,6 +76,23 @@ function makeReviewJob(review: JobView['review']): JobView {
 describe('TaskCard review checks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useCommentsMock.mockReturnValue({
+      comments: [],
+      loaded: true,
+      loading: false,
+      error: null as string | null,
+      addComment: vi.fn(),
+      removeComment: vi.fn(),
+    });
+    useArtifactsMock.mockReturnValue({
+      artifacts: [],
+      loading: false,
+      loaded: true,
+      error: null as string | null,
+      upload: vi.fn(),
+      remove: vi.fn(),
+      reload: vi.fn(),
+    });
   });
 
   it('does not mount comments or artifacts for a collapsed idle card', () => {
@@ -105,6 +131,124 @@ describe('TaskCard review checks', () => {
 
     expect(useCommentsMock).toHaveBeenCalled();
     expect(screen.getByText('Comments')).toBeTruthy();
+  });
+
+  it('keeps comment loading from flashing the empty state', () => {
+    useCommentsMock.mockReturnValue({
+      comments: [],
+      loaded: false,
+      loading: true,
+      error: null as string | null,
+      addComment: vi.fn(),
+      removeComment: vi.fn(),
+    });
+
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'backlog',
+          mode: 'ai',
+        }}
+        job={null}
+        canRunAi
+        isExpanded
+        onToggleExpand={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Loading comments...')).toBeTruthy();
+    expect(screen.queryByText('No comments yet')).toBeNull();
+  });
+
+  it('does not show missing-file warnings while required artifacts are loading', () => {
+    useArtifactsMock.mockImplementation((taskId: string | null) => ({
+      artifacts: [],
+      loading: taskId === 'prev-task',
+      loaded: taskId !== 'prev-task',
+      error: null as string | null,
+      upload: vi.fn(),
+      remove: vi.fn(),
+      reload: vi.fn(),
+    }));
+
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'backlog',
+          mode: 'ai',
+          chaining: 'accept',
+        }}
+        job={null}
+        canRunAi
+        isExpanded
+        isBacklog
+        onToggleExpand={() => {}}
+        onUpdateTask={() => {}}
+        prevTaskId="prev-task"
+      />,
+    );
+
+    expect(screen.queryByText('Awaiting file from previous task')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Complete' }).getAttribute('title')).toBe('Checking required files...');
+  });
+
+  it('shows missing-file warnings after required artifact checks finish empty', () => {
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'backlog',
+          mode: 'ai',
+          chaining: 'accept',
+        }}
+        job={null}
+        canRunAi
+        isExpanded
+        isBacklog
+        onToggleExpand={() => {}}
+        onUpdateTask={() => {}}
+        prevTaskId="prev-task"
+      />,
+    );
+
+    expect(screen.getByText('Awaiting file from previous task')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Complete' }).getAttribute('title')).toBe('Awaiting file from previous task');
+  });
+
+  it('blocks completion when required artifact checks fail', () => {
+    useArtifactsMock.mockImplementation((taskId: string | null) => ({
+      artifacts: [],
+      loading: false,
+      loaded: false,
+      error: taskId === 'prev-task' ? 'Network error' : null,
+      upload: vi.fn(),
+      remove: vi.fn(),
+      reload: vi.fn(),
+    }));
+
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'backlog',
+          mode: 'ai',
+          chaining: 'accept',
+        }}
+        job={null}
+        canRunAi
+        isExpanded
+        isBacklog
+        onToggleExpand={() => {}}
+        onUpdateTask={() => {}}
+        prevTaskId="prev-task"
+      />,
+    );
+
+    const completeButton = screen.getByRole('button', { name: 'Complete' });
+    expect(screen.getByText('Failed to check previous task file')).toBeTruthy();
+    expect(completeButton).toHaveProperty('disabled', true);
   });
 
   it('shows the tests badge only when testsPassed is explicitly true', () => {

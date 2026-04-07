@@ -24,17 +24,23 @@ export function TaskCommentsView({
   data: ReturnType<typeof useComments>;
   mentionMembers?: MentionMember[];
 }) {
-  const { comments, addComment, removeComment, error } = data;
+  const { comments, loaded, loading, addComment, removeComment, error } = data;
+  const isInitialLoading = loading && !loaded;
 
   return (
     <div className={s.commentsSection}>
       <div className={s.commentsHeader}>
         <span className={s.commentsTitle}>Comments</span>
-        {comments.length === 0 && (
+        {isInitialLoading && <span className={s.commentsEmpty}>Loading...</span>}
+        {!isInitialLoading && comments.length === 0 && (
           <span className={s.commentsEmpty}>No comments yet</span>
         )}
       </div>
-      <TaskCommentList comments={comments} onRemoveComment={removeComment} />
+      {isInitialLoading ? (
+        <div className={s.commentsLoading} aria-live="polite">Loading comments...</div>
+      ) : (
+        <TaskCommentList comments={comments} onRemoveComment={removeComment} />
+      )}
       {error && <div className={s.errorMsg}>{error}</div>}
       <TaskCommentComposer mentionMembers={mentionMembers} onAddComment={addComment} />
     </div>
