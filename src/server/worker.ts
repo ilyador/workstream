@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import { homedir } from 'os';
 import { runJob, runFlowJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
 import type { FlowConfig } from './runner.js';
-import { supabase, hasActiveWorkstreamJob } from './supabase.js';
+import { supabase } from './supabase.js';
 import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
 import { queueNextWorkstreamTask } from './auto-continue.js';
 import { ensureWorktree } from './worktree.js';
@@ -12,6 +12,16 @@ import { autoCommit, slugify } from './git-utils.js';
 import { search as ragSearch } from './rag/service.js';
 
 const execFileAsync = promisify(execFile);
+
+type ClaimedJob = Record<string, unknown> & {
+  id: string;
+  task_id: string;
+  project_id: string;
+  local_path: string | null;
+  answer?: string | null;
+  flow_snapshot?: FlowConfig | null;
+  phases_completed?: unknown;
+};
 
 // ---------------------------------------------------------------------------
 // DB logging with batching for high-throughput log events
@@ -125,17 +135,39 @@ async function notifyTaskFailure(task: any, errorMsg: string): Promise<void> {
 // Start a queued job
 // ---------------------------------------------------------------------------
 
-async function startJob(job: any): Promise<void> {
+function claimedJob(value: unknown): ClaimedJob | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  return typeof record.id === 'string'
+    && typeof record.task_id === 'string'
+    && typeof record.project_id === 'string'
+    && (record.local_path === null || typeof record.local_path === 'string')
+    ? record as ClaimedJob
+    : null;
+}
+
+async function claimNextQueuedJob(): Promise<ClaimedJob | null> {
+  const { data, error } = await supabase.rpc('claim_next_queued_job');
+  if (error) throw new Error(`Failed to claim queued job: ${error.message}`);
+  return claimedJob(Array.isArray(data) ? data[0] : data);
+}
+
+async function startJob(job: ClaimedJob): Promise<void> {
   const jobId: string = job.id;
-  let localPath: string = job.local_path;
+  let localPath = job.local_path;
+
+  if (!localPath) {
+    const failMsg = 'Job failed: local_path is missing.';
+    await writeLog(jobId, 'failed', { error: failMsg });
+    await supabase.from('jobs').update({ status: 'failed', completed_at: new Date().toISOString(), question: failMsg }).eq('id', jobId);
+    await supabase.from('tasks').update({ status: 'paused' }).eq('id', job.task_id);
+    return;
+  }
 
   // Expand ~ to home directory (Node doesn't do this automatically)
   if (localPath.startsWith('~/')) {
     localPath = localPath.replace('~', process.env.HOME || homedir());
   }
-
-  // Mark running
-  await supabase.from('jobs').update({ status: 'running', started_at: new Date().toISOString() }).eq('id', jobId);
 
   // Fetch the task
   const { data: task, error: taskErr } = await supabase
@@ -178,7 +210,7 @@ async function startJob(job: any): Promise<void> {
   const taskType = flowSnapshot ? null : loadTaskTypeConfig(localPath, task.type);
 
   // Determine fresh start vs resume
-  const phasesAlreadyCompleted: any[] = (job.phases_completed as any[]) || [];
+  const phasesAlreadyCompleted = Array.isArray(job.phases_completed) ? job.phases_completed : [];
   const isResume = phasesAlreadyCompleted.length > 0;
 
   // Create checkpoint for fresh starts only
@@ -213,11 +245,26 @@ async function startJob(job: any): Promise<void> {
         await writeLog(jobId, 'review', result);
         // Auto-approve: mark job done + checkpoint cleaned, task done, clean checkpoint
         const now = new Date().toISOString();
+        const { data: doneRows, error: doneError } = await supabase
+          .from('jobs')
+          .update({ status: 'done', completed_at: now, checkpoint_status: 'cleaned' })
+          .eq('id', jobId)
+          .eq('status', 'review')
+          .select('id');
+        if (doneError) {
+          console.error(`[worker] Auto-approve failed for job ${jobId}:`, doneError.message);
+          return;
+        }
+        if (!doneRows || doneRows.length === 0) {
+          await writeLog(jobId, 'log', { text: '[auto-approve] Skipped because job is no longer in review' });
+          return;
+        }
+        const { error: taskDoneError } = await supabase.from('tasks').update({ status: 'done', completed_at: now }).eq('id', task.id);
+        if (taskDoneError) {
+          console.error(`[worker] Auto-approve task update failed for job ${jobId}:`, taskDoneError.message);
+          return;
+        }
         try { deleteCheckpoint(localPath, jobId); } catch (e: any) { console.warn(`[worker] Checkpoint delete failed for job ${jobId}:`, e.message); }
-        await Promise.all([
-          supabase.from('jobs').update({ status: 'done', completed_at: now, checkpoint_status: 'cleaned' }).eq('id', jobId),
-          supabase.from('tasks').update({ status: 'done', completed_at: now }).eq('id', task.id),
-        ]);
         // Auto-commit the changes
         try {
           await autoCommit(localPath, task.type, task.title);
@@ -315,23 +362,7 @@ setInterval(async () => {
   try {
     if (busyJobId) return;
 
-    const { data: jobs } = await supabase
-      .from('jobs')
-      .select('*, tasks!inner(workstream_id)')
-      .eq('status', 'queued')
-      .order('started_at', { ascending: true })
-      .limit(5);
-
-    if (!jobs || jobs.length === 0) return;
-
-    // Skip jobs whose workstream already has a running job
-    let job = null;
-    for (const candidate of jobs) {
-      const wsId = (candidate as any).tasks?.workstream_id;
-      if (wsId && await hasActiveWorkstreamJob(wsId, ['running'])) continue;
-      job = candidate;
-      break;
-    }
+    const job = await claimNextQueuedJob();
     if (!job) return;
 
     busyJobId = job.id;

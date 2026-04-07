@@ -1,7 +1,7 @@
-import { spawn, ChildProcess, execFileSync } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
 import { join } from 'path';
-import { supabase, savePhases } from './supabase.js';
+import { supabase } from './supabase.js';
 import { stagedDiff, stagedDiffStat } from './git-utils.js';
 import { discoverSkills } from './routes/data.js';
 
@@ -30,6 +30,7 @@ export async function scanAndUploadArtifacts(
     return;
   }
 
+  let hadFailure = false;
   for (const filename of files) {
     const filePath = join(artifactsDir, filename);
     try {
@@ -40,19 +41,26 @@ export async function scanAndUploadArtifacts(
       const mimeType = MIME_MAP[ext] || 'application/octet-stream';
       const storagePath = `${taskRow.project_id}/${taskId}/${filename}`;
 
-      await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
+      const { error: uploadError } = await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
         contentType: mimeType, upsert: true,
       });
-      await supabase.from('task_artifacts').insert({
+      if (uploadError) throw new Error(uploadError.message);
+      const { error: insertError } = await supabase.from('task_artifacts').insert({
         task_id: taskId, job_id: jobId, phase: lastPhase,
         filename, mime_type: mimeType, size_bytes: fileStat.size, storage_path: storagePath,
       });
+      if (insertError) throw new Error(insertError.message);
       onLog(`[artifact] Captured: ${filename} (${mimeType}, ${fileStat.size} bytes)\n`);
+      rmSync(filePath, { force: true });
     } catch (err: any) {
+      hadFailure = true;
       onLog(`[artifact] Failed to capture ${filename}: ${err.message}\n`);
     }
   }
-  // Clean up
+  if (hadFailure) {
+    onLog('[artifact] Leaving .artifacts/ in place because one or more files failed to upload\n');
+    return;
+  }
   try { rmSync(artifactsDir, { recursive: true, force: true }); } catch { /* best effort */ }
 }
 
@@ -176,8 +184,7 @@ export async function buildStepPrompt(
 ): Promise<string> {
   let prompt = 'You are working on a task in this project\'s codebase.\n\n';
 
-  // Agents.md -- always injected if the flow has it (applies to all steps)
-  if (flow.agents_md) {
+  if (flow.agents_md && step.include_agents_md) {
     prompt += `## Agent Instructions\n${flow.agents_md.substring(0, 8000)}\n\n`;
   }
 
@@ -434,11 +441,11 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
       const displayAttempt = attemptOffset + attempt;
       onPhaseStart(step.name, displayAttempt);
 
-      await supabase.from('jobs').update({
+      if (!await updateRunningJob(jobId, {
         current_phase: step.name,
         attempt: displayAttempt,
         question: null,
-      }).eq('id', jobId);
+      })) return;
 
       const prompt = await buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer);
 
@@ -456,7 +463,9 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
       onLog(`\n--- Step: ${step.name} (attempt ${displayAttempt}/${maxAttempts}) ---\n`);
 
       try {
+        if (!await isJobStillRunning(jobId)) return;
         const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
+        if (!await isJobStillRunning(jobId)) return;
 
         const phaseOutput = {
           phase: step.name,
@@ -465,7 +474,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
           summary: extractPhaseSummary(output),
         };
         phasesCompleted.push(phaseOutput);
-        await savePhases(jobId, phasesCompleted);
+        if (!await updateRunningJob(jobId, { phases_completed: phasesCompleted })) return;
         onPhaseComplete(step.name, phaseOutput);
 
         // Check if claude asked a question
@@ -476,11 +485,11 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         });
         const lastLines = candidateLines.join('\n');
         if (lastLines.includes('?') && (lastLines.includes('Should I') || lastLines.includes('Could you') || lastLines.includes('Which') || lastLines.includes('clarif'))) {
-          await supabase.from('jobs').update({
+          if (!await updateRunningJob(jobId, {
             status: 'paused',
             question: lastLines,
             phases_completed: phasesCompleted,
-          }).eq('id', jobId);
+          })) return;
           await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
           onPause(lastLines);
           return;
@@ -500,7 +509,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
               if (jumpIndex >= 0 && jumpIndex < i) {
                 const retryMsg = `${step.name} failed (attempt ${displayAttempt}/${maxAttempts}): ${reason}. Retrying from '${steps[jumpIndex].name}'...`;
                 onLog(`\n${retryMsg}\n`);
-                await supabase.from('jobs').update({ question: retryMsg }).eq('id', jobId);
+                if (!await updateRunningJob(jobId, { question: retryMsg })) return;
                 await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
                 // Clear steps from jumpIndex through i so they re-run
                 // Preserve failed step's output for retry context
@@ -523,30 +532,30 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
             }
             const retryMsg = `${step.name} failed (attempt ${displayAttempt}/${maxAttempts}): ${reason}. Retrying...`;
             onLog(`\n${retryMsg}\n`);
-            await supabase.from('jobs').update({ question: retryMsg }).eq('id', jobId);
+            if (!await updateRunningJob(jobId, { question: retryMsg })) return;
             await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
             continue;
           }
           if (failed && displayAttempt >= maxAttempts) {
             if (step.on_max_retries === 'pause') {
               const pauseMsg = `${step.name} still failing after ${maxAttempts} attempts: ${reason}`;
-              await supabase.from('jobs').update({
+              if (!await updateRunningJob(jobId, {
                 status: 'paused',
                 question: pauseMsg,
                 phases_completed: phasesCompleted,
-              }).eq('id', jobId);
+              })) return;
               await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
               onPause(pauseMsg);
               return;
             }
             if (step.on_max_retries === 'fail') {
               const failMsg = `${step.name} failed after ${maxAttempts} attempts: ${reason}`;
-              await supabase.from('jobs').update({
+              if (!await updateRunningJob(jobId, {
                 status: 'failed',
                 phases_completed: phasesCompleted,
                 completed_at: new Date().toISOString(),
                 question: failMsg,
-              }).eq('id', jobId);
+              })) return;
               await supabase.from('tasks').update({ status: 'failed' }).eq('id', task.id);
               onFail(failMsg);
               return;
@@ -565,6 +574,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
         onLog(`\nError in step ${step.name}: ${err.message}\n`);
         if (displayAttempt >= maxAttempts) {
+          if (!await isJobStillRunning(jobId)) return;
           let failMessage = `Step '${step.name}' failed: ${err.message}`;
           try {
             const { revertToCheckpoint } = await import('./checkpoint.js');
@@ -575,12 +585,12 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
             onLog(`[checkpoint] Could not revert: ${revertErr.message}\n`);
             failMessage += '. WARNING: Changes were NOT reverted.';
           }
-          await supabase.from('jobs').update({
+          if (!await updateRunningJob(jobId, {
             status: 'failed',
             phases_completed: phasesCompleted,
             completed_at: new Date().toISOString(),
             question: failMessage,
-          }).eq('id', jobId);
+          })) return;
           await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
           onFail(failMessage);
           return;
@@ -591,10 +601,14 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
   // All steps complete -- generate summary and move to review
 
+  if (!await isJobStillRunning(jobId)) return;
+
   // Scan .artifacts/ directory for produced files
   if (ctx.task.chaining === 'produce' || ctx.task.chaining === 'both') {
     await scanAndUploadArtifacts(localPath, ctx.taskId, jobId, phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown', onLog);
   }
+
+  if (!await isJobStillRunning(jobId)) return;
 
   let { filesChanged, linesAdded, linesRemoved, changedFiles } = { filesChanged: 0, linesAdded: 0, linesRemoved: 0, changedFiles: [] as string[] };
   try {
@@ -609,10 +623,13 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
     }).join('\n\n');
     const diffInfo = changedFiles.length > 0 ? `Files changed: ${changedFiles.join(', ')} (+${linesAdded} -${linesRemoved})` : `${filesChanged} files changed (+${linesAdded} -${linesRemoved})`;
     const summaryPrompt = `You are summarizing a completed code task for a project dashboard.\n\nTask: ${task.title}\n${diffInfo}\n\nPhase outputs:\n${phaseLog.substring(0, 3000)}\n\nWrite a concise summary (2-4 sentences) of what was done and why. Focus on the actual change, not the process. No markdown formatting, no bullet points. Plain text only.`;
-    finalSummary = await generateSummary(summaryPrompt);
+    finalSummary = await generateSummary(jobId, summaryPrompt);
   } catch (err: any) {
+    if (err.message === 'Job canceled') return;
     console.error('[runner] Summary generation failed:', err.message);
   }
+
+  if (!await isJobStillRunning(jobId)) return;
 
   const reviewResult = {
     filesChanged,
@@ -626,12 +643,12 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
     summary: finalSummary,
   };
 
-  const { error: reviewErr } = await supabase.from('jobs').update({
+  const reviewSaved = await markRunningJobForReview(jobId, {
     status: 'review',
     phases_completed: phasesCompleted,
     review_result: reviewResult,
-  }).eq('id', jobId);
-  if (reviewErr) console.error(`[runner] Failed to save review for job ${jobId}:`, reviewErr.message);
+  });
+  if (!reviewSaved) return;
   await supabase.from('tasks').update({ status: 'review' }).eq('id', task.id);
   await onReview(reviewResult);
   await onDone();
@@ -1080,31 +1097,62 @@ export const claudeEnv = {
   PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}`,
 };
 
-// Active processes for cancellation
-const activeProcesses = new Map<string, ChildProcess>();
+// Active processes for cancellation. A job can have multiple short-lived Claude
+// calls over its lifecycle, so track process identity instead of only job id.
+const activeProcesses = new Map<string, Set<ChildProcess>>();
 
-export function cancelJob(jobId: string): Promise<void> {
-  const proc = activeProcesses.get(jobId);
-  if (!proc) return Promise.resolve();
-  activeProcesses.delete(jobId);
+function registerActiveProcess(jobId: string, proc: ChildProcess): void {
+  const processes = activeProcesses.get(jobId) ?? new Set<ChildProcess>();
+  processes.add(proc);
+  activeProcesses.set(jobId, processes);
+}
+
+function isActiveProcess(jobId: string, proc: ChildProcess): boolean {
+  return activeProcesses.get(jobId)?.has(proc) === true;
+}
+
+function unregisterActiveProcess(jobId: string, proc: ChildProcess): void {
+  const processes = activeProcesses.get(jobId);
+  if (!processes) return;
+  processes.delete(proc);
+  if (processes.size === 0) activeProcesses.delete(jobId);
+}
+
+function terminateProcess(proc: ChildProcess): Promise<void> {
   return new Promise((resolve) => {
-    proc.kill('SIGTERM');
-    const escalate = setTimeout(() => {
-      try { if (!proc.killed) proc.kill('SIGKILL'); } catch { /* already dead */ }
+    let closed = false;
+    let escalate: ReturnType<typeof setTimeout> | null = null;
+    let fallback: ReturnType<typeof setTimeout> | null = null;
+    const finish = () => {
+      if (closed) return;
+      closed = true;
+      if (escalate) clearTimeout(escalate);
+      if (fallback) clearTimeout(fallback);
+      resolve();
+    };
+
+    proc.once('close', finish);
+    try { proc.kill('SIGTERM'); } catch { finish(); return; }
+    escalate = setTimeout(() => {
+      if (!closed) {
+        try { proc.kill('SIGKILL'); } catch { /* already dead */ }
+      }
     }, 5000);
-    proc.on('close', () => { clearTimeout(escalate); resolve(); });
-    // Resolve after 6s regardless to avoid hanging forever
-    setTimeout(resolve, 6000);
+    fallback = setTimeout(finish, 6000);
   });
 }
 
+export function cancelJob(jobId: string): Promise<void> {
+  const processes = activeProcesses.get(jobId);
+  if (!processes || processes.size === 0) return Promise.resolve();
+  activeProcesses.delete(jobId);
+  return Promise.all([...processes].map(terminateProcess)).then(() => {});
+}
+
 export function cancelAllJobs() {
-  for (const [jobId, proc] of activeProcesses) {
-    proc.kill('SIGTERM');
-    setTimeout(() => {
-      try { if (!proc.killed) proc.kill('SIGKILL'); } catch { /* already dead */ }
-    }, 5000);
+  for (const [jobId, processes] of activeProcesses) {
     activeProcesses.delete(jobId);
+    for (const proc of processes) terminateProcess(proc).catch(() => {});
   }
 }
 
@@ -1205,10 +1253,10 @@ export async function runJob(ctx: JobContext): Promise<void> {
       onPhaseStart(phase, displayAttempt);
 
       // Update job in DB
-      await supabase.from('jobs').update({
+      if (!await updateRunningJob(jobId, {
         current_phase: phase,
         attempt: displayAttempt,
-      }).eq('id', jobId);
+      })) return;
 
       const prompt = await buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
 
@@ -1237,7 +1285,9 @@ export async function runJob(ctx: JobContext): Promise<void> {
       onLog(`\n--- Phase: ${phase} (attempt ${displayAttempt}/${maxAttempts}) ---\n`);
 
       try {
+        if (!await isJobStillRunning(jobId)) return;
         const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
+        if (!await isJobStillRunning(jobId)) return;
 
         const phaseOutput = {
           phase,
@@ -1246,17 +1296,17 @@ export async function runJob(ctx: JobContext): Promise<void> {
           summary: extractPhaseSummary(output),
         };
         phasesCompleted.push(phaseOutput);
-        await savePhases(jobId, phasesCompleted);
+        if (!await updateRunningJob(jobId, { phases_completed: phasesCompleted })) return;
         onPhaseComplete(phase, phaseOutput);
 
         // Check if claude asked a question (simple heuristic: ends with ?)
         const lastLines = output.trim().split('\n').slice(-3).join('\n');
         if (lastLines.includes('?') && (lastLines.includes('Should I') || lastLines.includes('Could you') || lastLines.includes('Which') || lastLines.includes('clarif'))) {
-          await supabase.from('jobs').update({
+          if (!await updateRunningJob(jobId, {
             status: 'paused',
             question: lastLines,
             phases_completed: phasesCompleted,
-          }).eq('id', jobId);
+          })) return;
           await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
           onPause(lastLines);
           return;
@@ -1289,11 +1339,11 @@ export async function runJob(ctx: JobContext): Promise<void> {
           if (failed && displayAttempt >= maxAttempts) {
             if (taskType.on_max_retries === 'pause') {
               const pauseMsg = `Tests still failing after ${maxAttempts} attempts: ${reason}`;
-              await supabase.from('jobs').update({
+              if (!await updateRunningJob(jobId, {
                 status: 'paused',
                 question: pauseMsg,
                 phases_completed: phasesCompleted,
-              }).eq('id', jobId);
+              })) return;
               await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
               onPause(pauseMsg);
               return;
@@ -1328,11 +1378,11 @@ export async function runJob(ctx: JobContext): Promise<void> {
           if (failed && displayAttempt >= maxAttempts) {
             if (taskType.on_max_retries === 'pause') {
               const pauseMsg = `Review still failing after ${maxAttempts} attempts: ${reason}`;
-              await supabase.from('jobs').update({
+              if (!await updateRunningJob(jobId, {
                 status: 'paused',
                 question: pauseMsg,
                 phases_completed: phasesCompleted,
-              }).eq('id', jobId);
+              })) return;
               await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
               onPause(pauseMsg);
               return;
@@ -1350,6 +1400,7 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
         onLog(`\nError in phase ${phase}: ${err.message}\n`);
         if (displayAttempt >= maxAttempts) {
+          if (!await isJobStillRunning(jobId)) return;
           let failMessage = `Phase '${phase}' failed: ${err.message}`;
           let revertSucceeded = false;
           try {
@@ -1362,13 +1413,13 @@ export async function runJob(ctx: JobContext): Promise<void> {
             onLog(`[checkpoint] Could not revert: ${revertErr.message}\n`);
             failMessage += '. WARNING: Changes were NOT reverted — manual cleanup may be needed.';
           }
-          await supabase.from('jobs').update({
+          if (!await updateRunningJob(jobId, {
             status: 'failed',
             phases_completed: phasesCompleted,
             completed_at: new Date().toISOString(),
             question: failMessage,
             checkpoint_status: revertSucceeded ? 'reverted' : 'active',
-          }).eq('id', jobId);
+          })) return;
           // Runner is sole authority: always update task status on failure
           await supabase.from('tasks').update({ status: 'paused' }).eq('id', ctx.taskId);
           onFail(failMessage);
@@ -1380,12 +1431,14 @@ export async function runJob(ctx: JobContext): Promise<void> {
 
   // All phases complete -- move to review
 
+  if (!await isJobStillRunning(jobId)) return;
+
   // Scan .artifacts/ directory for produced files
   if (ctx.task.chaining === 'produce' || ctx.task.chaining === 'both') {
     await scanAndUploadArtifacts(localPath, ctx.taskId, jobId, phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown', onLog);
   }
 
-  const reviewOutput = phasesCompleted[phasesCompleted.length - 1];
+  if (!await isJobStillRunning(jobId)) return;
 
   let { filesChanged, linesAdded, linesRemoved, changedFiles } = { filesChanged: 0, linesAdded: 0, linesRemoved: 0, changedFiles: [] as string[] };
   try {
@@ -1417,10 +1470,13 @@ ${phaseLog.substring(0, 3000)}
 
 Write a concise summary (2-4 sentences) of what was done and why. Focus on the actual change, not the process. No markdown formatting, no bullet points. Plain text only.`;
 
-    finalSummary = await generateSummary(summaryPrompt);
+    finalSummary = await generateSummary(jobId, summaryPrompt);
   } catch (err: any) {
+    if (err.message === 'Job canceled') return;
     console.error('[runner] Summary generation failed, using fallback:', err.message);
   }
+
+  if (!await isJobStillRunning(jobId)) return;
 
   const reviewResult = {
     filesChanged,
@@ -1434,14 +1490,52 @@ Write a concise summary (2-4 sentences) of what was done and why. Focus on the a
     summary: finalSummary,
   };
 
-  await supabase.from('jobs').update({
+  const reviewSaved = await markRunningJobForReview(jobId, {
     status: 'review',
     phases_completed: phasesCompleted,
     review_result: reviewResult,
-  }).eq('id', jobId);
+  });
+  if (!reviewSaved) return;
   await supabase.from('tasks').update({ status: 'review' }).eq('id', ctx.taskId);
   await onReview(reviewResult);
   await onDone();
+}
+
+async function isJobStillRunning(jobId: string): Promise<boolean> {
+  const { data, error } = await supabase.from('jobs').select('status').eq('id', jobId).single();
+  if (error) {
+    console.warn(`[runner] Could not check status for job ${jobId}:`, error.message);
+    return true;
+  }
+  return data?.status === 'running';
+}
+
+async function updateRunningJob(jobId: string, payload: Record<string, unknown>): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('jobs')
+    .update(payload)
+    .eq('id', jobId)
+    .eq('status', 'running')
+    .select('id');
+  if (error) {
+    console.error(`[runner] Failed to update running job ${jobId}:`, error.message);
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
+async function markRunningJobForReview(jobId: string, payload: Record<string, unknown>): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('jobs')
+    .update(payload)
+    .eq('id', jobId)
+    .eq('status', 'running')
+    .select('id');
+  if (error) {
+    console.error(`[runner] Failed to save review for job ${jobId}:`, error.message);
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
 }
 
 function formatStreamEvent(event: any): string | null {
@@ -1485,7 +1579,7 @@ function formatStreamEvent(event: any): string | null {
 }
 
 /** Quick claude call for generating summaries. No tools, no streaming, just text in/out. */
-function generateSummary(prompt: string): Promise<string> {
+function generateSummary(jobId: string, prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn('claude', ['-p', '--output-format', 'text', '--max-turns', '1', '--model', 'sonnet'], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -1493,15 +1587,25 @@ function generateSummary(prompt: string): Promise<string> {
       timeout: 30000,
     });
 
+    registerActiveProcess(jobId, proc);
     let stdout = '';
     proc.stdin.write(prompt);
     proc.stdin.end();
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
     proc.on('close', (code) => {
+      const wasCanceled = !isActiveProcess(jobId, proc);
+      unregisterActiveProcess(jobId, proc);
+      if (wasCanceled) {
+        reject(new Error('Job canceled'));
+        return;
+      }
       if (code === 0 || code === null) resolve(stdout.trim() || 'Completed');
       else reject(new Error(`summary claude exited with code ${code}`));
     });
-    proc.on('error', reject);
+    proc.on('error', (err) => {
+      unregisterActiveProcess(jobId, proc);
+      reject(err);
+    });
   });
 }
 
@@ -1513,7 +1617,7 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
       env: claudeEnv,
     });
 
-    activeProcesses.set(jobId, proc);
+    registerActiveProcess(jobId, proc);
     let fullOutput = '';
     let lineBuffer = '';
 
@@ -1572,8 +1676,8 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
       }
       // If cancelJob() already removed this jobId from activeProcesses, the
       // process was killed intentionally — reject so the runner stops.
-      const wasCanceled = !activeProcesses.has(jobId);
-      activeProcesses.delete(jobId);
+      const wasCanceled = !isActiveProcess(jobId, proc);
+      unregisterActiveProcess(jobId, proc);
       if (wasCanceled) {
         reject(new Error('Job canceled'));
         return;
@@ -1594,7 +1698,7 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
     });
 
     proc.on('error', (err) => {
-      activeProcesses.delete(jobId);
+      unregisterActiveProcess(jobId, proc);
       reject(err);
     });
   });
