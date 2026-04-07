@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMembers } from '../hooks/useMembers';
-import { useModal } from '../hooks/useModal';
+import { useModal } from '../hooks/modal-context';
 import { inviteMember, removeMember } from '../lib/api';
 import s from './MembersModal.module.css';
 
@@ -41,8 +41,8 @@ export function MembersModal({ projectId, currentUserId, onClose }: Props) {
       setEmail('');
       setRole('member');
       await reload();
-    } catch (err: any) {
-      setError(err.message || 'Failed to invite member');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to invite member');
     } finally {
       setLoading(false);
     }
@@ -53,8 +53,8 @@ export function MembersModal({ projectId, currentUserId, onClose }: Props) {
     try {
       await removeMember(projectId, userId);
       await reload();
-    } catch (err: any) {
-      setError(err.message || 'Failed to remove member');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove member');
     }
   }
 

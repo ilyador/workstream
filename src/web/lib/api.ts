@@ -1,4 +1,105 @@
+import type { JobRecord } from '../components/job-types';
+
 const BASE = '';
+
+interface ApiErrorResponse {
+  error?: string;
+  message?: string;
+  msg?: string;
+}
+
+interface SessionTokens {
+  access_token: string;
+  refresh_token: string;
+}
+
+interface AuthResponse {
+  session?: SessionTokens;
+}
+
+export interface AuthProfile {
+  id: string;
+  name: string;
+  email: string;
+  initials: string;
+}
+
+export interface MeResponse {
+  profile: AuthProfile;
+}
+
+export interface OnboardingCheckRecord {
+  id: string;
+  label: string;
+  ok: boolean;
+  help: string;
+  required: boolean;
+}
+
+export interface OnboardingResponse {
+  checks: OnboardingCheckRecord[];
+  ready: boolean;
+}
+
+export interface WorkstreamRecord {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string;
+  has_code: boolean;
+  status: string;
+  position: number;
+  pr_url: string | null;
+  reviewer_id: string | null;
+  created_at: string;
+}
+
+export interface TaskRecord {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  type: string;
+  mode: string;
+  effort: string;
+  multiagent: string;
+  status: string;
+  auto_continue: boolean;
+  assignee: string | null;
+  workstream_id: string | null;
+  position: number;
+  priority: string;
+  images: string[];
+  followup_notes: string | null;
+  created_at: string;
+  completed_at: string | null;
+  created_by: string | null;
+  flow_id: string | null;
+  chaining?: string;
+}
+
+export interface NotificationRecord {
+  id: string;
+  type: string;
+  task_id: string | null;
+  workstream_id?: string | null;
+  message: string;
+  read: boolean;
+  created_at: string;
+}
+
+export interface MemberRecord {
+  id: string;
+  name: string;
+  initials: string;
+  role: string;
+  email?: string;
+  pending?: boolean;
+}
+
+interface WorkstreamPrResponse {
+  prUrl?: string | null;
+}
 
 // Session token management
 let accessToken: string | null = typeof localStorage !== 'undefined' ? localStorage.getItem('workstream-token') : null;
@@ -34,9 +135,13 @@ async function refreshSession(): Promise<boolean> {
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
       if (res.ok) {
-        const data = await res.json();
-        setSession(data.session.access_token, data.session.refresh_token);
-        return true;
+        const data = await res.json() as AuthResponse;
+        if (data.session) {
+          setSession(data.session.access_token, data.session.refresh_token);
+          return true;
+        }
+        clearSession();
+        return false;
       }
       clearSession();
       return false;
@@ -47,20 +152,20 @@ async function refreshSession(): Promise<boolean> {
   return refreshPromise;
 }
 
-async function parseResponse(res: Response): Promise<any> {
+async function parseResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
+    const err = await res.json().catch((): ApiErrorResponse => ({ error: res.statusText })) as ApiErrorResponse;
     const msg = typeof err?.error === 'string' ? err.error
       : typeof err?.message === 'string' ? err.message
       : typeof err?.msg === 'string' ? err.msg
       : res.statusText || 'Request failed';
     throw new Error(msg);
   }
-  if (res.status === 204) return { ok: true };
-  return res.json();
+  if (res.status === 204) return { ok: true } as T;
+  return res.json() as Promise<T>;
 }
 
-async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
@@ -73,18 +178,18 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
     const refreshed = await refreshSession();
     if (refreshed) {
       headers['Authorization'] = `Bearer ${accessToken}`;
-      return parseResponse(await fetch(`${BASE}${path}`, { ...options, headers }));
+      return parseResponse<T>(await fetch(`${BASE}${path}`, { ...options, headers }));
     }
     clearSession();
     throw new Error('Session expired');
   }
 
-  return parseResponse(res);
+  return parseResponse<T>(res);
 }
 
 // --- Auth ---
-export async function signUp(email: string, password: string, name: string) {
-  const data = await apiFetch('/api/auth/signup', {
+export async function signUp(email: string, password: string, name: string): Promise<AuthResponse> {
+  const data = await apiFetch<AuthResponse>('/api/auth/signup', {
     method: 'POST',
     body: JSON.stringify({ email, password, name }),
   });
@@ -92,8 +197,8 @@ export async function signUp(email: string, password: string, name: string) {
   return data;
 }
 
-export async function signIn(email: string, password: string) {
-  const data = await apiFetch('/api/auth/signin', {
+export async function signIn(email: string, password: string): Promise<AuthResponse> {
+  const data = await apiFetch<AuthResponse>('/api/auth/signin', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
@@ -106,19 +211,19 @@ export async function signOut() {
   clearSession();
 }
 
-export async function getMe() {
+export async function getMe(): Promise<MeResponse> {
   return apiFetch('/api/auth/me');
 }
 
 // --- Onboarding ---
-export async function fetchOnboarding(localPath?: string) {
+export async function fetchOnboarding(localPath?: string): Promise<OnboardingResponse> {
   const params = localPath ? `?localPath=${encodeURIComponent(localPath)}` : '';
   return apiFetch(`/api/onboarding${params}`);
 }
 
 // --- Projects ---
 export async function getProjects() {
-  return apiFetch('/api/projects') as Promise<{ id: string; name: string; role: string }[]>;
+  return apiFetch('/api/projects') as Promise<ProjectSummary[]>;
 }
 
 export type SupabaseConfig = {
@@ -127,7 +232,14 @@ export type SupabaseConfig = {
   serviceRoleKey?: string;
 };
 
-export async function createProject(name: string, supabaseConfig?: SupabaseConfig, localPath?: string) {
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  role: string;
+  local_path: string | null;
+}
+
+export async function createProject(name: string, supabaseConfig?: SupabaseConfig, localPath?: string): Promise<ProjectSummary> {
   return apiFetch('/api/projects', {
     method: 'POST',
     body: JSON.stringify({ name, supabase_config: supabaseConfig, local_path: localPath }),
@@ -147,11 +259,11 @@ export async function checkHealth(): Promise<{ ok: boolean }> {
 
 // --- Members ---
 export async function getMembers(projectId: string) {
-  return apiFetch(`/api/members?project_id=${projectId}`) as Promise<{ id: string; name: string; initials: string; role: string; email?: string; pending?: boolean }[]>;
+  return apiFetch(`/api/members?project_id=${projectId}`) as Promise<MemberRecord[]>;
 }
 
 // --- Workstreams ---
-export async function getWorkstreams(projectId: string) {
+export async function getWorkstreams(projectId: string): Promise<WorkstreamRecord[]> {
   return apiFetch(`/api/workstreams?project_id=${projectId}`);
 }
 
@@ -168,7 +280,7 @@ export async function deleteWorkstream(id: string) {
 }
 
 // --- Tasks ---
-export async function getTasks(projectId: string) {
+export async function getTasks(projectId: string): Promise<TaskRecord[]> {
   return apiFetch(`/api/tasks?project_id=${projectId}`);
 }
 
@@ -200,7 +312,7 @@ export async function deleteTask(id: string) {
 }
 
 // --- Jobs ---
-export async function getJobs(projectId: string) {
+export async function getJobs(projectId: string): Promise<JobRecord[]> {
   return apiFetch(`/api/jobs?project_id=${projectId}`);
 }
 
@@ -260,11 +372,11 @@ export async function gitPr(jobId: string, localPath: string) {
   return apiFetch('/api/git/pr', { method: 'POST', body: JSON.stringify({ jobId, localPath }) });
 }
 
-export async function createWorkstreamPr(workstreamId: string, localPath: string) {
+export async function createWorkstreamPr(workstreamId: string, localPath: string): Promise<WorkstreamPrResponse> {
   return apiFetch('/api/git/workstream-pr', { method: 'POST', body: JSON.stringify({ workstreamId, localPath }) });
 }
 
-export async function reviewAndCreatePr(workstreamId: string, localPath: string) {
+export async function reviewAndCreatePr(workstreamId: string, localPath: string): Promise<WorkstreamPrResponse> {
   return apiFetch('/api/git/workstream-review-pr', { method: 'POST', body: JSON.stringify({ workstreamId, localPath }) });
 }
 
@@ -355,7 +467,7 @@ export async function updateArtifactContent(id: string, content: string): Promis
 }
 
 // --- Notifications ---
-export async function getNotifications() {
+export async function getNotifications(): Promise<NotificationRecord[]> {
   return apiFetch('/api/notifications');
 }
 
@@ -426,7 +538,7 @@ export async function getFlows(projectId: string): Promise<Flow[]> {
   return apiFetch(`/api/flows?project_id=${projectId}`);
 }
 
-export async function createFlow(data: { project_id: string; name: string; description?: string; icon?: string; agents_md?: string; steps?: any[] }): Promise<Flow> {
+export async function createFlow(data: { project_id: string; name: string; description?: string; icon?: string; agents_md?: string; steps?: Array<Omit<FlowStep, 'id'>> }): Promise<Flow> {
   return apiFetch('/api/flows', { method: 'POST', body: JSON.stringify(data) });
 }
 
@@ -438,7 +550,7 @@ export async function deleteFlow(id: string) {
   return apiFetch(`/api/flows/${id}`, { method: 'DELETE' });
 }
 
-export async function updateFlowSteps(flowId: string, steps: any[]) {
+export async function updateFlowSteps(flowId: string, steps: Array<Omit<FlowStep, 'id'>>) {
   return apiFetch(`/api/flows/${flowId}/steps`, { method: 'PUT', body: JSON.stringify({ steps }) });
 }
 
@@ -460,9 +572,9 @@ export type ConnectionState = 'connecting' | 'open' | 'error';
 export function subscribeToJob(jobId: string, handlers: {
   onLog?: (text: string) => void;
   onPhaseStart?: (phase: string, attempt: number) => void;
-  onPhaseComplete?: (phase: string, output: any) => void;
+  onPhaseComplete?: (phase: string, output: unknown) => void;
   onPause?: (question: string) => void;
-  onReview?: (result: any) => void;
+  onReview?: (result: unknown) => void;
   onDone?: () => void;
   onFail?: (error: string) => void;
   onConnectionChange?: (state: ConnectionState) => void;
@@ -485,19 +597,50 @@ export function subscribeToJob(jobId: string, handlers: {
     }
   };
 
-  const parse = (e: MessageEvent) => { try { return JSON.parse(e.data); } catch { return null; } };
-  source.addEventListener('log', (e) => { const d = parse(e); if (d) handlers.onLog?.(d.text); });
-  source.addEventListener('phase_start', (e) => { const d = parse(e); if (d) handlers.onPhaseStart?.(d.phase, d.attempt); });
-  source.addEventListener('phase_complete', (e) => { const d = parse(e); if (d) handlers.onPhaseComplete?.(d.phase, d.output); });
-  source.addEventListener('paused', (e) => { const d = parse(e); if (d) handlers.onPause?.(d.question); });
-  source.addEventListener('review', (e) => { const d = parse(e); if (d) handlers.onReview?.(d); });
+  const parse = (e: MessageEvent): Record<string, unknown> | null => {
+    try {
+      return JSON.parse(e.data) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+  source.addEventListener('log', (e) => {
+    const d = parse(e);
+    const text = d && typeof d.text === 'string' ? d.text : null;
+    if (text) handlers.onLog?.(text);
+  });
+  source.addEventListener('phase_start', (e) => {
+    const d = parse(e);
+    const phase = d && typeof d.phase === 'string' ? d.phase : null;
+    const attempt = d && typeof d.attempt === 'number' ? d.attempt : 1;
+    if (phase) handlers.onPhaseStart?.(phase, attempt);
+  });
+  source.addEventListener('phase_complete', (e) => {
+    const d = parse(e);
+    const phase = d && typeof d.phase === 'string' ? d.phase : null;
+    if (phase) handlers.onPhaseComplete?.(phase, d ? d.output : undefined);
+  });
+  source.addEventListener('paused', (e) => {
+    const d = parse(e);
+    const question = d && typeof d.question === 'string' ? d.question : null;
+    if (question) handlers.onPause?.(question);
+  });
+  source.addEventListener('review', (e) => {
+    const d = parse(e);
+    if (d) handlers.onReview?.(d);
+  });
   source.addEventListener('done', () => { handlers.onDone?.(); source.close(); });
-  source.addEventListener('failed', (e) => { const d = parse(e); handlers.onFail?.(d?.error || 'Unknown error'); source.close(); });
+  source.addEventListener('failed', (e) => {
+    const d = parse(e);
+    const error = d && typeof d.error === 'string' ? d.error : 'Unknown error';
+    handlers.onFail?.(error);
+    source.close();
+  });
   return () => source.close();
 }
 
 // --- SSE: Realtime project changes ---
-export function subscribeToChanges(projectId: string, onUpdate: (data: any) => void): () => void {
+export function subscribeToChanges(projectId: string, onUpdate: (data: unknown) => void): () => void {
   const url = `${BASE}/api/changes?project_id=${projectId}${accessToken ? `&token=${encodeURIComponent(accessToken)}` : ''}`;
   const source = new EventSource(url);
   let consecutiveErrors = 0;
@@ -505,7 +648,11 @@ export function subscribeToChanges(projectId: string, onUpdate: (data: any) => v
 
   source.addEventListener('message', (e) => {
     consecutiveErrors = 0;
-    try { onUpdate(JSON.parse(e.data)); } catch { /* malformed event */ }
+    try {
+      onUpdate(JSON.parse(e.data));
+    } catch {
+      // Ignore malformed realtime events.
+    }
   });
 
   source.onerror = () => {

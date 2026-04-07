@@ -23,7 +23,7 @@ export function OnboardingCheck({ onReady }: { onReady: () => void }) {
         if (data.ready) onReady();
       })
       .catch(() => setError('Cannot connect to WorkStream server. Is it running on port 3001?'));
-  }, []);
+  }, [onReady]);
 
   if (error) {
     return (

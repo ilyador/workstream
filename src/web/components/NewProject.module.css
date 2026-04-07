@@ -39,6 +39,21 @@
 }
 .input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 .input::placeholder { color: var(--text-4); }
+.pathHint {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: -8px;
+}
+.error {
+  width: 100%;
+  max-width: 360px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 14px;
+}
 /* Submit button now uses global .btn .btnPrimary */
 .submitWrap {
   width: 100%;
@@ -143,6 +158,9 @@
   background: var(--red-bg) !important;
   border-color: var(--red) !important;
   color: var(--red) !important;
+}
+.checkButton {
+  align-self: flex-start;
 }
 .backWrap {
   margin-bottom: 24px;

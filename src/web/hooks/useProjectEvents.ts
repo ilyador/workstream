@@ -1,11 +1,29 @@
-import { subscribeToChanges } from '../lib/api';
+import { subscribeToChanges, type Flow, type TaskRecord, type WorkstreamRecord } from '../lib/api';
+import type { JobRecord } from '../components/job-types';
 
-type Callback = (event: any) => void;
+export type ProjectEvent =
+  | { type: 'task_changed'; task: TaskRecord }
+  | { type: 'task_deleted'; task: TaskRecord }
+  | { type: 'job_changed'; job: JobRecord }
+  | { type: 'job_deleted'; job: JobRecord }
+  | { type: 'artifact_changed'; task_id: string }
+  | { type: 'artifact_deleted'; task_id: string }
+  | { type: 'comment_changed'; task_id: string }
+  | { type: 'comment_deleted'; task_id: string }
+  | { type: 'flow_changed'; flow: Flow }
+  | { type: 'flow_deleted'; flow_id: string }
+  | { type: 'workstream_changed'; workstream: WorkstreamRecord }
+  | { type: 'member_changed' }
+  | { type: 'custom_type_changed' }
+  | { type: 'full_sync' }
+  | { type: 'unknown' };
+
+type Callback = (event: ProjectEvent) => void;
 const subscriptions = new Map<string, { unsub: () => void; callbacks: Set<Callback> }>();
 
 function connectProject(projectId: string, callbacks: Set<Callback>) {
   const unsub = subscribeToChanges(projectId, (event) => {
-    for (const fn of callbacks) fn(event);
+    for (const fn of callbacks) fn(event as ProjectEvent);
   });
   return unsub;
 }

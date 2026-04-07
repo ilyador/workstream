@@ -2,6 +2,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  height: calc(100vh - 56px);
   height: calc(100dvh - 56px);
   color: var(--text-4);
   font-size: 15px;
@@ -11,26 +12,25 @@
 .archive {
   display: flex;
   gap: 20px;
-  padding: 20px 32px;
+  padding: 20px 32px 20px;
+  height: calc(100vh - 56px);
   height: calc(100dvh - 56px);
   overflow-x: auto;
   overflow-y: hidden;
   align-items: flex-start;
-}
-
-.columnWrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 0 0 500px;
-  min-width: 500px;
-  max-width: 700px;
+  scroll-behavior: smooth;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--divider) 26%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--divider) 24%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: -1px -1px;
 }
 
 .restoreBar {
   display: flex;
   justify-content: flex-end;
-  padding: 0 4px;
+  padding: 0 0 4px;
+  flex-shrink: 0;
 }
 
 .restoreBtn {
@@ -38,27 +38,49 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--text-3);
-  background: none;
+  background: color-mix(in srgb, var(--white) 78%, transparent);
   border: 1px solid var(--divider);
-  border-radius: 6px;
-  padding: 3px 10px;
+  border-radius: 999px;
+  padding: 4px 11px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s;
 }
 .restoreBtn:hover {
   color: var(--text-2);
-  background: var(--bg-hover);
+  background: var(--surface-strong);
   border-color: var(--text-4);
+  transform: translateY(-1px);
+}
+
+.archive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.archive::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.archive::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 3px;
+}
+
+.archive::-webkit-scrollbar-thumb:hover {
+  background: var(--text-4);
 }
 
 @media (max-width: 768px) {
   .archive {
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     gap: 12px;
-    padding: 10px 8px;
-  }
-  .columnWrap {
-    flex: 0 0 calc(100vw - 24px);
-    min-width: calc(100vw - 24px);
-    max-width: none;
+    padding: 10px 12px 0;
+    height: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding: 0 12px;
+    background-size: 36px 36px;
   }
 }

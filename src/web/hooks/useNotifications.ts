@@ -1,17 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getNotifications, markNotificationRead, markAllNotificationsRead } from '../lib/api';
-
-interface Notification {
-  id: string;
-  type: string;
-  task_id: string | null;
-  message: string;
-  read: boolean;
-  created_at: string;
-}
+import { getNotifications, markNotificationRead, markAllNotificationsRead, type NotificationRecord } from '../lib/api';
 
 export function useNotifications(userId: string | undefined) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -23,7 +14,9 @@ export function useNotifications(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId) return;
-    load();
+    queueMicrotask(() => {
+      void load();
+    });
     const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
   }, [userId, load]);

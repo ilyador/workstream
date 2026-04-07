@@ -38,8 +38,8 @@ export function AddProjectModal({ onClose, onCreate }: Props) {
     try {
       await onCreate(name.trim(), localPath.trim());
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create project');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create project');
     } finally {
       setLoading(false);
     }

@@ -1,36 +1,14 @@
 import { useMemo } from 'react';
 import { WorkstreamColumn } from './WorkstreamColumn';
 import type { JobView } from './job-types';
+import type { TaskRecord } from '../lib/api';
+import { compareByPosition, toTaskView, type TaskView, type WorkstreamView } from '../lib/task-view';
+import { mapPrimaryJobsByTask } from '../lib/job-selection';
 import s from './ArchivePage.module.css';
 
-interface Workstream {
-  id: string;
-  name: string;
-  description?: string;
-  has_code?: boolean;
-  status: string;
-  position: number;
-  pr_url?: string | null;
-}
-
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  type: string;
-  mode: string;
-  effort: string;
-  multiagent?: string;
-  auto_continue: boolean;
-  assignee?: { type: string; name?: string; initials?: string } | null;
-  images?: string[];
-  status?: string;
-  priority?: string;
-}
-
 interface ArchivePageProps {
-  workstreams: Workstream[];
-  tasks: Task[];
+  workstreams: WorkstreamView[];
+  tasks: TaskRecord[];
   jobs: JobView[];
   memberMap: Record<string, { name: string; initials: string }>;
   projectId: string | null;
@@ -41,32 +19,28 @@ interface ArchivePageProps {
 const emptySet = new Set<string>();
 const noop = () => {};
 
+function mapArchiveTask(
+  task: TaskRecord,
+  memberMap: Record<string, { name: string; initials: string }>,
+): TaskView {
+  return toTaskView(task, memberMap);
+}
+
 export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, onRestore, onUpdateTask }: ArchivePageProps) {
+  const members = useMemo(
+    () => Object.entries(memberMap).map(([id, m]) => ({ id, name: m.name, initials: m.initials })),
+    [memberMap],
+  );
+
   const taskJobMap = useMemo(() => {
-    const priority: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
-    const map: Record<string, JobView> = {};
-    for (const job of jobs) {
-      const existing = map[job.taskId];
-      if (!existing || (priority[job.status] ?? 5) < (priority[existing.status] ?? 5)) {
-        map[job.taskId] = job;
-      }
-    }
-    return map;
+    return mapPrimaryJobsByTask(jobs);
   }, [jobs]);
 
   const completedBacklogTasks = useMemo(() => {
     return tasks
-      .filter(t => !(t as any).workstream_id && t.status === 'done')
-      .map(t => {
-        const member = (t as any).assignee ? memberMap[(t as any).assignee] : null;
-        return {
-          ...t,
-          assignee: member
-            ? { type: 'user', name: member.name, initials: member.initials }
-            : (t as any).assignee ? { type: 'ai' } : null,
-        };
-      })
-      .sort((a, b) => ((a as any).position || 0) - ((b as any).position || 0));
+      .filter(t => !t.workstream_id && t.status === 'done')
+      .map(t => mapArchiveTask(t, memberMap))
+      .sort(compareByPosition);
   }, [tasks, memberMap]);
 
   if (workstreams.length === 0 && completedBacklogTasks.length === 0) {
@@ -80,14 +54,40 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
   return (
     <div className={s.archive}>
       {completedBacklogTasks.length > 0 && (
-        <div className={s.columnWrap}>
+        <WorkstreamColumn
+          workstream={null}
+          tasks={completedBacklogTasks}
+          taskJobMap={taskJobMap}
+          isBacklog
+          canRunAi={false}
+          projectId={projectId}
+          members={members}
+          mentionedTaskIds={emptySet}
+          focusTaskId={null}
+          draggedTaskId={null}
+          onDragTaskStart={noop}
+          onDragTaskEnd={noop}
+          onDropTask={noop}
+          onAddTask={noop}
+          onUpdateTask={onUpdateTask}
+        />
+      )}
+      {workstreams.map(ws => {
+        const wsTasks = tasks
+          .filter(t => t.workstream_id === ws.id)
+          .map(t => mapArchiveTask(t, memberMap))
+          .sort(compareByPosition);
+
+        return (
           <WorkstreamColumn
-            workstream={null}
-            tasks={completedBacklogTasks}
+            key={ws.id}
+            workstream={ws}
+            tasks={wsTasks}
             taskJobMap={taskJobMap}
-            isBacklog
+            isBacklog={false}
             canRunAi={false}
             projectId={projectId}
+            members={members}
             mentionedTaskIds={emptySet}
             focusTaskId={null}
             draggedTaskId={null}
@@ -95,45 +95,12 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
             onDragTaskEnd={noop}
             onDropTask={noop}
             onAddTask={noop}
-            onUpdateTask={onUpdateTask}
+            listHeader={(
+              <div className={s.restoreBar}>
+                <button className={s.restoreBtn} onClick={() => onRestore(ws.id)}>Restore to board</button>
+              </div>
+            )}
           />
-        </div>
-      )}
-      {workstreams.map(ws => {
-        const wsTasks = tasks
-          .filter(t => (t as any).workstream_id === ws.id)
-          .map(t => {
-            const member = (t as any).assignee ? memberMap[(t as any).assignee] : null;
-            return {
-              ...t,
-              assignee: member
-                ? { type: 'user', name: member.name, initials: member.initials }
-                : (t as any).assignee ? { type: 'ai' } : null,
-            };
-          })
-          .sort((a, b) => ((a as any).position || 0) - ((b as any).position || 0));
-
-        return (
-          <div key={ws.id} className={s.columnWrap}>
-            <div className={s.restoreBar}>
-              <button className={s.restoreBtn} onClick={() => onRestore(ws.id)}>Restore to board</button>
-            </div>
-            <WorkstreamColumn
-              workstream={ws}
-              tasks={wsTasks}
-              taskJobMap={taskJobMap}
-              isBacklog={false}
-              canRunAi={false}
-              projectId={projectId}
-              mentionedTaskIds={emptySet}
-              focusTaskId={null}
-              draggedTaskId={null}
-              onDragTaskStart={noop}
-              onDragTaskEnd={noop}
-              onDropTask={noop}
-              onAddTask={noop}
-            />
-          </div>
         );
       })}
     </div>

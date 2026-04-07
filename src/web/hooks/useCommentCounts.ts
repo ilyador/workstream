@@ -1,27 +1,32 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { getCommentCounts } from '../lib/api';
 import { subscribeProjectEvents } from './useProjectEvents';
+import { useProjectResource } from './useProjectResource';
 
 export function useCommentCounts(projectId: string | null) {
-  const [counts, setCounts] = useState<Record<string, number>>({});
-
-  const load = useCallback(async () => {
-    if (!projectId) return;
-    try {
-      const data = await getCommentCounts(projectId);
-      setCounts(data);
-    } catch { /* ignore */ }
-  }, [projectId]);
+  const {
+    data: counts,
+    setData: setCounts,
+    loading,
+    error,
+    ready,
+    reload: load,
+  } = useProjectResource(projectId, getCommentCounts, {
+    createInitialValue: () => ({}),
+    getErrorMessage: (err) => err instanceof Error ? err.message : 'Failed to load comment counts',
+  });
 
   useEffect(() => {
-    load();
+    void load();
     if (!projectId) return;
     // Reload when tasks change (comments might have been added)
     const unsub = subscribeProjectEvents(projectId, (event) => {
-      if (event.type === 'task_changed' || event.type === 'comment_changed' || event.type === 'comment_deleted' || event.type === 'full_sync') load();
+      if (event.type === 'task_changed' || event.type === 'comment_changed' || event.type === 'comment_deleted' || event.type === 'full_sync') {
+        void load();
+      }
     });
     return unsub;
   }, [projectId, load]);
 
-  return { counts, reload: load };
+  return { counts, setCounts, loading, error, ready, reload: load };
 }

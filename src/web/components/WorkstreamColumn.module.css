@@ -7,11 +7,13 @@
   flex-direction: column;
   max-height: calc(100vh - 120px);
   max-height: calc(100dvh - 120px);
-  background: var(--white);
-  border: 1px solid var(--divider);
-  border-radius: 14px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--white) 96%, var(--bg-hover)), var(--white) 120px);
+  border: 1px solid color-mix(in srgb, var(--divider) 86%, var(--white));
+  border-radius: 16px;
   overflow: hidden;
-  transition: box-shadow 0.2s, background 0.2s, border-color 0.2s;
+  box-shadow: var(--shadow-soft);
+  transition: box-shadow 0.2s, background 0.2s, border-color 0.2s, transform 0.2s;
   position: relative;
 }
 
@@ -21,25 +23,28 @@
     min-width: calc(100vw - 24px);
     max-width: none;
     max-height: calc(100dvh - 68px);
-    border-radius: 10px;
+    border-radius: 12px;
     scroll-snap-align: start;
     align-self: stretch;
   }
 }
 .column:hover {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  border-color: color-mix(in srgb, var(--divider) 60%, var(--text-4));
+  box-shadow: 0 18px 42px rgba(20, 20, 18, 0.1);
 }
 
 /* Backlog column gets a slightly different feel */
 .backlog {
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-hover) 70%, var(--white)), var(--bg) 120px);
   border-style: dashed;
 }
 
 /* Drop target highlight -- subtle tint, not harsh ring */
 .dropOver {
-  background: color-mix(in srgb, var(--blue-bg) 50%, var(--white));
+  background: color-mix(in srgb, var(--blue-bg) 52%, var(--white));
   border-color: var(--blue-soft);
+  box-shadow: var(--shadow-soft), inset 0 0 0 1px color-mix(in srgb, var(--blue) 22%, transparent);
 }
 
 /* Column reorder wrapper + separator line between columns */
@@ -48,17 +53,21 @@
 }
 .columnDropLine {
   flex-shrink: 0;
-  width: 2px;
-  background: var(--blue);
-  border-radius: 1px;
+  width: 4px;
+  background: linear-gradient(180deg, transparent, var(--blue), transparent);
+  border-radius: 999px;
   align-self: stretch;
-  margin: 8px -10px;
+  margin: 12px -12px;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--blue) 34%, transparent);
 }
 
 /* ─── Column header ─── */
 .headerWrap {
   border-bottom: 1px solid var(--divider);
   position: relative;
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .header {
@@ -66,7 +75,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 13px 15px;
   min-height: 44px;
 }
 .headerLeft {
@@ -82,8 +91,8 @@
   flex-shrink: 0;
 }
 .name {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 700;
   color: var(--text);
   min-width: 0;
   overflow: hidden;
@@ -109,11 +118,20 @@
 .taskCount {
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-4);
+  color: var(--text-3);
   white-space: nowrap;
   padding: 2px 8px;
-  background: var(--bg-hover);
-  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-hover) 82%, var(--white));
+  border-radius: 999px;
+}
+
+.cardHighlight {
+  animation: highlightPulse 5s ease-out;
+}
+
+@keyframes highlightPulse {
+  0%, 60% { box-shadow: 0 0 0 3px var(--blue); }
+  100% { box-shadow: none; }
 }
 
 /* ─── Status pill: compact badge next to stream name ─── */
@@ -123,13 +141,17 @@
   letter-spacing: 0.03em;
   text-transform: lowercase;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: 999px;
   white-space: nowrap;
   flex-shrink: 0;
   color: var(--text-3);
   background: var(--bg-hover);
 }
 .statusPill--in-progress { color: var(--blue); background: var(--blue-bg); }
+
+.nameDraggable {
+  cursor: grab;
+}
 .statusPill--pending-review { color: var(--amber); background: var(--amber-bg); }
 .statusPill--reviewing { color: #7850A0; background: rgba(120, 80, 160, 0.08); }
 .statusPill--review-failed { color: var(--red); background: var(--red-bg); }
@@ -138,7 +160,7 @@
 
 /* ─── Progress line: full-width bar on the header separator ─── */
 .progressLine {
-  height: 2px;
+  height: 3px;
   background: transparent;
 }
 .progressLineFill {
@@ -182,6 +204,12 @@
   background: var(--bg-hover);
   color: var(--text-2);
 }
+.actionBtn:focus-visible,
+.addBtn:focus-visible,
+.runBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
 .actionBtnDanger:hover {
   background: var(--red-bg);
   color: var(--red);
@@ -193,7 +221,7 @@
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: var(--text);
+  background: linear-gradient(135deg, var(--text), color-mix(in srgb, var(--text) 78%, var(--blue)));
   color: var(--bg);
   border: none;
   border-radius: 6px;
@@ -201,10 +229,11 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--text) 14%, transparent);
+  transition: opacity 0.15s, transform 0.15s;
   flex-shrink: 0;
 }
-.runBtn:hover { opacity: 0.8; }
+.runBtn:hover { opacity: 0.88; transform: translateY(-1px); }
 
 /* Compact add-task button in header */
 .addBtn {
@@ -234,10 +263,10 @@
 .tasks {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 10px;
+  padding: 11px 11px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
   min-height: 60px;
 }
 .tasks::-webkit-scrollbar {
@@ -263,8 +292,9 @@
 /* Empty drop zone: visible only during active drag over an empty column */
 .emptyDropZone {
   padding: 24px 12px;
-  border: 2px dashed var(--divider);
+  border: 1.5px dashed color-mix(in srgb, var(--blue) 34%, var(--divider));
   border-radius: 10px;
+  background: color-mix(in srgb, var(--blue-bg) 64%, transparent);
   text-align: center;
   font-size: 13px;
   color: var(--text-4);
@@ -280,6 +310,7 @@
 .chainGroup {
   display: flex;
   flex-direction: column;
+  gap: 0;
   transition: opacity 0.2s;
 }
 
@@ -291,19 +322,21 @@
 .dropBefore::before {
   content: '';
   display: block;
-  height: 2px;
-  background: var(--blue);
-  border-radius: 1px;
-  margin-bottom: 4px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--blue), transparent);
+  border-radius: 999px;
+  margin: 3px 0 5px;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--blue) 34%, transparent);
 }
 
 .dropAfter::after {
   content: '';
   display: block;
-  height: 2px;
-  background: var(--blue);
-  border-radius: 1px;
-  margin-top: 4px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--blue), transparent);
+  border-radius: 999px;
+  margin: 5px 0 3px;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--blue) 34%, transparent);
 }
 
 /* Completion banner */
@@ -359,6 +392,16 @@
   margin-top: 4px;
 }
 
+.bannerError {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .mergedBanner {
   background: none;
 }
@@ -411,11 +454,11 @@
   font-family: var(--font);
   font-size: 12px;
   font-weight: 600;
-  border: 1px solid var(--divider);
+  border: none;
   border-radius: 6px;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s;
   line-height: 1.3;
 }
 
@@ -424,11 +467,9 @@
   composes: bannerBtn;
   color: var(--blue);
   background: rgba(37, 99, 235, 0.08);
-  border-color: rgba(37, 99, 235, 0.15);
 }
 .prLink:hover {
   background: rgba(37, 99, 235, 0.14);
-  border-color: rgba(37, 99, 235, 0.25);
   text-decoration: none;
 }
 
@@ -441,7 +482,6 @@
 .archiveBtn:hover {
   background: var(--bg-hover);
   color: var(--text-2);
-  border-color: var(--text-4);
 }
 
 /* Reviewer selector in PR banners — matches bannerBtn sizing */
@@ -453,7 +493,6 @@
   appearance: auto;
 }
 .reviewerSelect:hover {
-  border-color: var(--text-4);
   color: var(--text-2);
 }
 
@@ -502,7 +541,17 @@
 @media (max-width: 768px) {
   .header { padding: 10px 12px; }
   .name { font-size: 13px; }
-  .tasks { padding: 6px 6px; gap: 4px; }
+  .column {
+    box-shadow: 0 8px 24px rgba(20, 20, 18, 0.08);
+  }
+  .column:hover {
+    box-shadow: 0 8px 24px rgba(20, 20, 18, 0.08);
+    transform: none;
+  }
+  .tasks { padding: 7px 7px 8px; gap: 5px; }
   .completeBanner { padding: 8px; font-size: 12px; }
   .statusPill { font-size: 9px; padding: 1px 6px; }
+  .columnDropLine {
+    margin: 8px -8px;
+  }
 }

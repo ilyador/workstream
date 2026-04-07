@@ -116,6 +116,23 @@
   align-items: flex-start;
   justify-content: center;
   background: var(--bg);
+  position: relative;
+}
+
+.error {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 1;
+  transform: translateX(-50%);
+  max-width: min(720px, calc(100% - 32px));
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .loading {

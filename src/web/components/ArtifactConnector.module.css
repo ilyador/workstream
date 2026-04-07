@@ -3,28 +3,34 @@
   flex-direction: column;
   align-items: center;
   padding: 0;
+  position: relative;
 }
 .line {
-  width: 1.5px;
-  height: 8px;
-  background: var(--text-4);
-  opacity: 0.5;
+  width: 1px;
+  height: 10px;
+  background: linear-gradient(180deg, transparent, var(--divider), transparent);
+  opacity: 0.7;
+}
+.lineActive {
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--blue) 24%, var(--divider)), transparent);
+  opacity: 0.55;
 }
 .icon {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: 1.5px solid var(--divider);
-  background: var(--bg);
+  background: var(--surface-strong);
   color: var(--text-4);
   font-family: var(--font);
   font-size: 10px;
   cursor: default;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  box-shadow: 0 2px 8px rgba(20, 20, 18, 0.05);
+  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.12s, box-shadow 0.12s;
 }
 .iconActive {
   cursor: pointer;
@@ -32,12 +38,14 @@
   border-radius: 10px;
   padding: 0 6px;
   color: var(--blue);
-  border-color: rgba(37, 99, 235, 0.2);
+  border-color: color-mix(in srgb, var(--blue) 34%, var(--divider));
   background: var(--blue-bg);
 }
 .iconActive:hover {
-  background: rgba(37, 99, 235, 0.12);
-  border-color: rgba(37, 99, 235, 0.3);
+  background: color-mix(in srgb, var(--blue-bg) 78%, var(--white));
+  border-color: color-mix(in srgb, var(--blue) 48%, var(--divider));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--blue) 16%, transparent);
+  transform: translateY(-1px);
 }
 .count {
   font-weight: 600;
@@ -47,20 +55,27 @@
 .fileList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   margin: 2px 0;
-  padding: 6px 8px;
-  background: var(--bg-hover);
+  padding: 0;
+  background: var(--surface-strong);
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: 12px;
   min-width: 160px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: box-shadow 0.12s, transform 0.12s;
+}
+.fileList:hover {
+  box-shadow: var(--shadow-card), 0 6px 18px color-mix(in srgb, var(--blue) 12%, transparent);
+  transform: translateY(-1px);
 }
 .fileItem {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 4px;
-  border-radius: 4px;
+  padding: 6px 8px;
+  border-radius: 0;
   background: none;
   border: none;
   color: var(--text);

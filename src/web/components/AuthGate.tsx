@@ -23,8 +23,8 @@ export function AuthGate({ onAuth }: Props) {
       } else {
         await onAuth('signIn', email, password);
       }
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -42,6 +42,8 @@ export function AuthGate({ onAuth }: Props) {
           <input
             className={s.input}
             type="text"
+            name="name"
+            autoComplete="name"
             placeholder="Full name"
             value={name}
             onChange={e => setName(e.target.value)}
@@ -51,6 +53,8 @@ export function AuthGate({ onAuth }: Props) {
         <input
           className={s.input}
           type="email"
+          name="email"
+          autoComplete="email"
           placeholder="Email"
           value={email}
           onChange={e => setEmail(e.target.value)}
@@ -59,6 +63,8 @@ export function AuthGate({ onAuth }: Props) {
         <input
           className={s.input}
           type="password"
+          name="password"
+          autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
           placeholder="Password"
           value={password}
           onChange={e => setPassword(e.target.value)}

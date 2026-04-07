@@ -115,6 +115,19 @@
   text-align: center;
   padding: 6px;
 }
+.attachmentNotice {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--amber-bg);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--amber);
+  font-weight: 500;
+}
+.attachmentsEditor {
+  margin-top: 6px;
+}
 
 /* Blocked-by selector */
 .blockerBox {
@@ -186,7 +199,11 @@
   gap: 6px;
   align-items: center;
 }
-.customTypeRow .input { flex: 1; }
+.customTypeRow .input,
+.customTypeRow .select {
+  flex: 1;
+  min-width: 0;
+}
 .customTypeCancel {
   flex-shrink: 0;
   width: 32px;
@@ -210,6 +227,25 @@
 /* Skill autocomplete */
 .descriptionWrap {
   position: relative;
+}
+.descriptionTextarea {
+  padding: 8px 12px;
+  background: var(--white);
+  border: 1.5px solid var(--divider);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.55;
+  width: 100%;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+  overflow-y: auto;
+}
+.descriptionTextarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-bg);
 }
 .skillDropdown {
   position: absolute;

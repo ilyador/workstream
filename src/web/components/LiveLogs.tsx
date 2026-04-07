@@ -20,19 +20,21 @@ export function LiveLogs({ jobId, footer }: { jobId: string; footer?: React.Reac
   const [lines, setLines] = useState<{ text: string; type: 'log' | 'phase' | 'status' }[]>([]);
   const [connState, setConnState] = useState<ConnectionState>('connecting');
   const [connVisible, setConnVisible] = useState(true);
+  const [hasConnected, setHasConnected] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasConnectedRef = useRef(false);
 
   const addLine = useCallback((text: string, type: 'log' | 'phase' | 'status' = 'log') => {
     setLines(prev => [...prev.slice(-200), { text, type }]);
   }, []);
 
   useEffect(() => {
-    setLines([]);
-    setConnState('connecting');
-    setConnVisible(true);
-    hasConnectedRef.current = false;
+    queueMicrotask(() => {
+      setLines([]);
+      setConnState('connecting');
+      setConnVisible(true);
+      setHasConnected(false);
+    });
 
     const unsub = subscribeToJob(jobId, {
       onLog: (text) => addLine(text, 'log'),
@@ -60,7 +62,7 @@ export function LiveLogs({ jobId, footer }: { jobId: string; footer?: React.Reac
       onConnectionChange: (state) => {
         setConnState(state);
         setConnVisible(true);
-        if (state === 'open') hasConnectedRef.current = true;
+        if (state === 'open') setHasConnected(true);
         // Hide "Connected" indicator after 2 seconds
         if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
         if (state === 'open') {
@@ -82,7 +84,7 @@ export function LiveLogs({ jobId, footer }: { jobId: string; footer?: React.Reac
   }, [lines]);
 
   const connLabel = connState === 'connecting'
-    ? (hasConnectedRef.current ? 'Reconnecting...' : 'Connecting...')
+    ? (hasConnected ? 'Reconnecting...' : 'Connecting...')
     : connState === 'open' ? 'Connected'
     : 'Connection lost';
 
@@ -93,7 +95,7 @@ export function LiveLogs({ jobId, footer }: { jobId: string; footer?: React.Reac
     <>
       <div ref={scrollRef} className={s.logBox}>
         {lines.length === 0 && connState === 'connecting' && (
-          <span style={{ color: 'var(--text-4)' }}>Waiting for output...</span>
+          <span className={s.waitingOutput}>Waiting for output...</span>
         )}
         {lines.length === 0 && connState === 'open' && (
           <span className={s.noOutput}>Claude is working... output will appear when the phase completes.</span>
