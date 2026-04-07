@@ -5,9 +5,10 @@ import { elapsed } from '../lib/time';
 import { capTaskCardToken } from './task-card-status';
 import { LiveLogs } from './LiveLogs';
 import { ReplyInput } from './ReplyInput';
-import { TaskAttachments } from './TaskAttachments';
+import { TaskAttachments, TaskAttachmentsView } from './TaskAttachments';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
+import type { ArtifactsData } from '../hooks/useArtifacts';
 import s from './TaskCard.module.css';
 
 interface TaskCardActiveDetailProps {
@@ -19,6 +20,7 @@ interface TaskCardActiveDetailProps {
   onApprove?: (jobId: string) => void;
   onReject?: (jobId: string) => void;
   onRework?: (jobId: string, note: string) => void;
+  reviewArtifactsData?: ArtifactsData;
 }
 
 export function TaskCardActiveDetail({
@@ -30,6 +32,7 @@ export function TaskCardActiveDetail({
   onApprove,
   onReject,
   onRework,
+  reviewArtifactsData,
 }: TaskCardActiveDetailProps) {
   const jobStatus = job.status;
   const [, setElapsedTick] = useState(0);
@@ -107,7 +110,11 @@ export function TaskCardActiveDetail({
 
       {jobStatus === 'review' && (
         <div className={s.reviewSection}>
-          <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
+          {reviewArtifactsData ? (
+            <TaskAttachmentsView artifactsData={reviewArtifactsData} legacyImages={task.images} readOnly />
+          ) : (
+            <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
+          )}
           {job.review?.changedFiles && (
             <div className={s.files}>
               <span className={s.filesLabel}>Changed files</span>

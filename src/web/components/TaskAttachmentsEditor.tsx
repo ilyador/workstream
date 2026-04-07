@@ -4,10 +4,11 @@ import s from './TaskForm.module.css';
 
 interface TaskAttachmentsEditorProps {
   taskId: string;
+  projectId?: string;
 }
 
-export function TaskAttachmentsEditor({ taskId }: TaskAttachmentsEditorProps) {
-  const { artifacts, upload, remove } = useArtifacts(taskId);
+export function TaskAttachmentsEditor({ taskId, projectId }: TaskAttachmentsEditorProps) {
+  const { artifacts, upload, remove } = useArtifacts(taskId, projectId);
 
   return (
     <AttachmentList

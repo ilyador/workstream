@@ -6,6 +6,8 @@ import { TaskDoneDetail } from './TaskDoneDetail';
 import { TaskFlowStepDetail } from './TaskFlowStepDetail';
 import { TaskIdleDetail } from './TaskIdleDetail';
 import type { JobView } from './job-types';
+import { useArtifacts, type ArtifactsData } from '../hooks/useArtifacts';
+import type { TaskFileDependency } from '../lib/file-passing';
 import type { TaskView } from '../lib/task-view';
 import type { MentionMember, TaskCardMetaItem } from './task-card-types';
 import { capTaskCardToken } from './task-card-status';
@@ -42,9 +44,7 @@ export interface TaskCardProps {
   brokenLink?: { up: boolean; down: boolean } | null;
   metaItems?: TaskCardMetaItem[];
   hideComments?: boolean;
-  prevTaskId?: string | null;
-  prevTask?: TaskView | null;
-  prevJobStatus?: JobView['status'] | null;
+  fileDependency?: TaskFileDependency | null;
   mentionMembers?: MentionMember[];
 }
 
@@ -89,14 +89,14 @@ export function TaskCardView({
   brokenLink,
   metaItems,
   hideComments,
-  prevTaskId,
-  prevTask,
-  prevJobStatus,
+  fileDependency,
   mentionMembers,
   viewMode = 'task',
 }: TaskCardViewProps) {
   const jobStatus = job?.status;
   const isActive = jobStatus === 'queued' || jobStatus === 'running' || jobStatus === 'paused' || jobStatus === 'review';
+  const isReview = jobStatus === 'review';
+  const showActiveDetail = isActive && (!isReview || isExpanded);
   const taskDone = task.status === 'done' || jobStatus === 'done';
   const isHumanWaiting = task.mode === 'human' && task.status === 'in_progress' && !isActive;
   const isFlowStep = viewMode === 'flow-step';
@@ -116,7 +116,7 @@ export function TaskCardView({
     : priorityVisible && task.priority === 'upcoming' ? s.priorityUpcomingBorder
     : '';
 
-  return (
+  const renderCard = (reviewArtifactsData?: ArtifactsData) => (
     <div
       data-task-card="true"
       className={`${s.card} ${priorityBgClass} ${priorityBorderClass} ${statusClass} ${isDragging ? s.dragging : ''}`}
@@ -135,8 +135,8 @@ export function TaskCardView({
         brokenLink={brokenLink}
       />
 
-      {/* Active job detail — ALWAYS visible for running/paused/review */}
-      {isActive && job && (
+      {/* Active job detail: running/paused always visible; review follows expansion state */}
+      {showActiveDetail && job && (
         <TaskCardActiveDetail
           task={task}
           job={job}
@@ -146,11 +146,17 @@ export function TaskCardView({
           onApprove={onApprove}
           onReject={onReject}
           onRework={onRework}
+          reviewArtifactsData={reviewArtifactsData}
         />
       )}
 
       {/* Preview: description only (visible when collapsed and NOT active) */}
-      {!isActive && (!isExpanded || taskDone) && <TaskCardPreview task={task} />}
+      {((!isActive && (!isExpanded || taskDone)) || (isReview && !isExpanded)) && (
+        <TaskCardPreview
+          task={task}
+          filePreviewArtifactsData={isReview ? reviewArtifactsData : undefined}
+        />
+      )}
 
       {/* Done section -- no border separator */}
       {!isActive && isExpanded && taskDone && (jobStatus === 'done' || !job) && (
@@ -204,9 +210,8 @@ export function TaskCardView({
               onUpdateTask={onUpdateTask}
               metaItems={metaItems}
               hideComments={hideComments}
-              prevTaskId={prevTaskId}
-              prevTask={prevTask}
-              prevJobStatus={prevJobStatus}
+              jobStatus={jobStatus}
+              fileDependency={fileDependency}
               commentCount={commentCount}
               mentionMembers={mentionMembers}
             />
@@ -215,4 +220,27 @@ export function TaskCardView({
       )}
     </div>
   );
+
+  if (isReview && !isFlowStep) {
+    return (
+      <TaskCardReviewArtifactScope taskId={task.id} projectId={projectId}>
+        {renderCard}
+      </TaskCardReviewArtifactScope>
+    );
+  }
+
+  return renderCard();
+}
+
+function TaskCardReviewArtifactScope({
+  taskId,
+  projectId,
+  children,
+}: {
+  taskId: string;
+  projectId?: string;
+  children: (artifactsData: ArtifactsData) => React.ReactNode;
+}) {
+  const artifactsData = useArtifacts(taskId, projectId);
+  return <>{children(artifactsData)}</>;
 }

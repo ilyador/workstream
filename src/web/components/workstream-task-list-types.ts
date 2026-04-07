@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { TaskCardProps } from './TaskCard';
+import type { TaskFileDependency } from '../lib/file-passing';
 import type { TaskView } from '../lib/task-view';
 
 export interface ChainGroup {
@@ -8,8 +9,7 @@ export interface ChainGroup {
 }
 
 export interface TaskCardDragOptions {
-  prevTaskId?: string | null;
-  prevTask?: TaskView | null;
+  fileDependency?: TaskFileDependency | null;
   isDragging?: boolean;
   dragDisabled?: boolean;
   skipDragGhost?: boolean;

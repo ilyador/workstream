@@ -1,6 +1,7 @@
 import React from 'react';
 import type { TaskCardProps } from './TaskCard';
 import type { JobView } from './job-types';
+import type { TaskFileDependency } from '../lib/file-passing';
 import type { TaskView } from '../lib/task-view';
 import type { BuildTaskCardProps, ChainGroup } from './workstream-task-list-types';
 import { WorkstreamTaskListContent } from './WorkstreamTaskListContent';
@@ -105,8 +106,7 @@ export function WorkstreamTaskList({
     task: TaskView,
     index: number,
     options?: {
-      prevTaskId?: string | null;
-      prevTask?: TaskView | null;
+      fileDependency?: TaskFileDependency | null;
       isDragging?: boolean;
       dragDisabled?: boolean;
       skipDragGhost?: boolean;
@@ -124,9 +124,7 @@ export function WorkstreamTaskList({
     hasUnreadMention: mentionedTaskIds.has(task.id),
     commentCount: commentCounts?.[task.id] || 0,
     brokenLink: brokenLinks.get(task.id) || null,
-    prevTaskId: options?.prevTaskId ?? null,
-    prevTask: options?.prevTask ?? null,
-    prevJobStatus: options?.prevTask ? taskJobMap[options.prevTask.id]?.status ?? null : null,
+    fileDependency: options?.fileDependency ?? null,
     isExpanded: expandedIds.has(task.id),
     onToggleExpand: () => toggleExpanded(task.id),
     onRun: isBacklog || brokenLinks.has(task.id) ? undefined : onRunTask,
@@ -175,6 +173,7 @@ export function WorkstreamTaskList({
       )}
       <WorkstreamTaskListContent
         tasks={tasks}
+        taskJobMap={taskJobMap}
         chainGroups={chainGroups}
         getChainGroup={getChainGroup}
         draggedTaskId={draggedTaskId}

@@ -20,6 +20,7 @@ interface ProjectTaskDialogsProps {
 }
 
 export function ProjectTaskDialogs({
+  projectId,
   localPath,
   workstreams,
   members,
@@ -43,6 +44,7 @@ export function ProjectTaskDialogs({
       {showCreate && (
         <TaskForm
           localPath={localPath}
+          projectId={projectId}
           workstreams={workstreamOptions}
           defaultWorkstreamId={defaultWorkstreamId}
           members={memberOptions}
@@ -57,6 +59,7 @@ export function ProjectTaskDialogs({
       {editingTask && (
         <TaskForm
           localPath={localPath}
+          projectId={projectId}
           workstreams={workstreamOptions}
           members={memberOptions}
           flows={flows}

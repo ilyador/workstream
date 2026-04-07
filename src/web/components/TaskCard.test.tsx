@@ -188,8 +188,7 @@ describe('TaskCard review checks', () => {
         isBacklog
         onToggleExpand={() => {}}
         onUpdateTask={() => {}}
-        prevTaskId="prev-task"
-        prevTask={{ ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'done' }}
+        fileDependency={{ previousTask: { ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'done' }, previousJobStatus: null }}
       />,
     );
 
@@ -212,8 +211,7 @@ describe('TaskCard review checks', () => {
         isBacklog
         onToggleExpand={() => {}}
         onUpdateTask={() => {}}
-        prevTaskId="prev-task"
-        prevTask={{ ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'done' }}
+        fileDependency={{ previousTask: { ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'done' }, previousJobStatus: null }}
       />,
     );
 
@@ -258,9 +256,7 @@ describe('TaskCard review checks', () => {
         isBacklog
         onToggleExpand={() => {}}
         onUpdateTask={() => {}}
-        prevTaskId="prev-task"
-        prevTask={{ ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'review' }}
-        prevJobStatus="review"
+        fileDependency={{ previousTask: { ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'review' }, previousJobStatus: 'review' }}
       />,
     );
 
@@ -295,8 +291,7 @@ describe('TaskCard review checks', () => {
         isBacklog
         onToggleExpand={() => {}}
         onUpdateTask={() => {}}
-        prevTaskId="prev-task"
-        prevTask={{ ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'done' }}
+        fileDependency={{ previousTask: { ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'done' }, previousJobStatus: null }}
       />,
     );
 
@@ -346,5 +341,109 @@ describe('TaskCard review checks', () => {
 
     expect(screen.queryByText('Tests pass')).toBeNull();
     expect(screen.queryByText('Architecture rules pass')).toBeNull();
+  });
+
+  it('allows review cards with files to collapse into a compact file preview', () => {
+    useArtifactsMock.mockReturnValue({
+      artifacts: [{
+        id: 'artifact-1',
+        task_id: 'task-1',
+        job_id: 'job-1',
+        phase: 'implement',
+        filename: 'actions-plan.md',
+        mime_type: 'text/markdown',
+        size_bytes: 42,
+        storage_path: 'actions-plan.md',
+        repo_path: null,
+        url: '/actions-plan.md',
+        created_at: 'now',
+      }],
+      loading: false,
+      loaded: true,
+      error: null as string | null,
+      upload: vi.fn(),
+      remove: vi.fn(),
+      reload: vi.fn(),
+    });
+
+    render(
+      <TaskCard
+        task={{ ...makeTask(), chaining: 'produce' }}
+        job={makeReviewJob({
+          filesChanged: 1,
+          linesAdded: 10,
+          linesRemoved: 2,
+          summary: 'Generated plan',
+          changedFiles: ['actions-plan.md'],
+        })}
+        canRunAi
+        isExpanded={false}
+        onToggleExpand={() => {}}
+        onApprove={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.getByTitle('actions-plan.md')).toBeTruthy();
+  });
+
+  it('uses one review artifact source for expanded detail and collapsed preview', () => {
+    useArtifactsMock.mockReturnValue({
+      artifacts: [{
+        id: 'artifact-1',
+        task_id: 'task-1',
+        job_id: 'job-1',
+        phase: 'implement',
+        filename: 'actions-plan.md',
+        mime_type: 'text/markdown',
+        size_bytes: 42,
+        storage_path: 'actions-plan.md',
+        repo_path: null,
+        url: '/actions-plan.md',
+        created_at: 'now',
+      }],
+      loading: false,
+      loaded: true,
+      error: null as string | null,
+      upload: vi.fn(),
+      remove: vi.fn(),
+      reload: vi.fn(),
+    });
+
+    const reviewJob = makeReviewJob({
+      filesChanged: 1,
+      linesAdded: 10,
+      linesRemoved: 2,
+      summary: 'Generated plan',
+      changedFiles: ['actions-plan.md'],
+    });
+    const { rerender } = render(
+      <TaskCard
+        task={{ ...makeTask(), chaining: 'produce' }}
+        job={reviewJob}
+        canRunAi
+        isExpanded
+        onToggleExpand={() => {}}
+        onApprove={() => {}}
+      />,
+    );
+
+    expect(useArtifactsMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy();
+
+    rerender(
+      <TaskCard
+        task={{ ...makeTask(), chaining: 'produce' }}
+        job={reviewJob}
+        canRunAi
+        isExpanded={false}
+        onToggleExpand={() => {}}
+        onApprove={() => {}}
+      />,
+    );
+
+    expect(useArtifactsMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.getByTitle('actions-plan.md')).toBeTruthy();
   });
 });
