@@ -1,4 +1,4 @@
-import type { TaskRecord, WorkstreamRecord } from './api';
+import type { NotificationRecord, TaskRecord, WorkstreamRecord } from './api';
 import type { JobView } from '../components/job-types';
 
 export interface ProjectTodoItem {
@@ -37,19 +37,36 @@ export function buildReviewItems(
   tasks: TaskRecord[],
   wsNameMap: Record<string, string>,
   currentUserId?: string | null,
+  notifications: NotificationRecord[] = [],
 ): ProjectReviewItem[] {
   const items: ProjectReviewItem[] = [];
+  const addedWorkstreamIds = new Set<string>();
+
+  const addWorkstreamReviewItem = (workstream: WorkstreamRecord) => {
+    if (workstream.status === 'merged' || workstream.status === 'archived') return;
+    if (addedWorkstreamIds.has(workstream.id)) return;
+    addedWorkstreamIds.add(workstream.id);
+    items.push({
+      id: `ws-${workstream.id}`,
+      label: workstream.name,
+      sublabel: 'Workstream review',
+      workstreamId: workstream.id,
+    });
+  };
 
   if (currentUserId) {
     for (const workstream of workstreams) {
-      if (workstream.reviewer_id === currentUserId && workstream.status !== 'merged' && workstream.status !== 'archived') {
-        items.push({
-          id: `ws-${workstream.id}`,
-          label: workstream.name,
-          sublabel: 'Workstream review',
-          workstreamId: workstream.id,
-        });
+      if (workstream.reviewer_id === currentUserId) {
+        addWorkstreamReviewItem(workstream);
       }
+    }
+
+    for (const notification of notifications) {
+      if (notification.type !== 'review_request' || !notification.workstream_id) continue;
+      const workstream = workstreams.find(w => w.id === notification.workstream_id);
+      if (!workstream) continue;
+      if (workstream.reviewer_id && workstream.reviewer_id !== currentUserId) continue;
+      addWorkstreamReviewItem(workstream);
     }
   }
 

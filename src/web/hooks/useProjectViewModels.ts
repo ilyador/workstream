@@ -45,8 +45,8 @@ export function useProjectViewModels({
   const wsNameMap = useMemo(() => buildWorkstreamNameMap(workstreams), [workstreams]);
   const todoItems = useMemo(() => buildTodoItems(tasks, wsNameMap, currentUserId), [tasks, wsNameMap, currentUserId]);
   const reviewItems = useMemo(
-    () => buildReviewItems(workstreams, primaryJobViews, tasks, wsNameMap, currentUserId),
-    [currentUserId, workstreams, primaryJobViews, tasks, wsNameMap],
+    () => buildReviewItems(workstreams, primaryJobViews, tasks, wsNameMap, currentUserId, notifications),
+    [currentUserId, notifications, workstreams, primaryJobViews, tasks, wsNameMap],
   );
   return {
     mentionedTaskIds,
