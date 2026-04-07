@@ -19,6 +19,11 @@
   overflow-y: hidden;
   align-items: flex-start;
   scroll-behavior: smooth;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--divider) 26%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--divider) 24%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: -1px -1px;
 }
 
 .restoreBar {
@@ -33,17 +38,18 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--text-3);
-  background: none;
+  background: color-mix(in srgb, var(--white) 78%, transparent);
   border: 1px solid var(--divider);
-  border-radius: 6px;
-  padding: 3px 10px;
+  border-radius: 999px;
+  padding: 4px 11px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s;
 }
 .restoreBtn:hover {
   color: var(--text-2);
-  background: var(--bg-hover);
+  background: var(--surface-strong);
   border-color: var(--text-4);
+  transform: translateY(-1px);
 }
 
 .archive::-webkit-scrollbar {
@@ -75,5 +81,6 @@
     height: auto;
     scroll-snap-type: x mandatory;
     scroll-padding: 0 12px;
+    background-size: 36px 36px;
   }
 }

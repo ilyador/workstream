@@ -8,6 +8,11 @@
   overflow-y: hidden;
   align-items: flex-start;
   scroll-behavior: smooth;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--divider) 34%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--divider) 30%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: -1px -1px;
 }
 
 .flowBoardDragging {
@@ -22,21 +27,39 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 2px dashed var(--divider);
+  border: 1.5px dashed color-mix(in srgb, var(--divider) 74%, var(--text-4));
   border-radius: 14px;
-  background: none;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--white) 56%, transparent);
   cursor: pointer;
   font-family: var(--font);
   font-size: 14px;
   font-weight: 500;
   color: var(--text-4);
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .addFlowButton:hover {
   color: var(--text-3);
   border-color: var(--text-4);
-  background: var(--bg-hover);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .flowBoard {
+    background-size: 36px 36px;
+  }
+
+  .addFlowButton {
+    height: 70px;
+  }
+
+  .addFlowButton:hover {
+    transform: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--white) 56%, transparent);
+  }
 }
 
 .addFlowButton svg {

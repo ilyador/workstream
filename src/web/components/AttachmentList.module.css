@@ -48,10 +48,11 @@
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border: 1px solid var(--divider);
-  border-radius: 6px;
-  background: var(--white);
+  border: 1px solid color-mix(in srgb, var(--divider) 86%, var(--white));
+  border-radius: 10px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--white) 98%, var(--bg-hover)), var(--white));
   position: relative;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .itemClickable {
@@ -59,14 +60,17 @@
 }
 
 .item:hover {
-  background: var(--bg-hover);
+  background: var(--surface-strong);
+  border-color: color-mix(in srgb, var(--blue) 20%, var(--divider));
+  box-shadow: 0 4px 14px rgba(20, 20, 18, 0.06);
+  transform: translateY(-1px);
 }
 
 .thumb {
   width: 32px;
   height: 32px;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 7px;
   flex-shrink: 0;
 }
 
@@ -78,6 +82,8 @@
   justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--blue-bg);
 }
 
 .info {
@@ -126,16 +132,20 @@
 }
 
 .dropZone {
-  border: 2px dashed var(--divider);
-  border-radius: 8px;
+  border: 1.5px dashed color-mix(in srgb, var(--blue) 24%, var(--divider));
+  border-radius: 12px;
   padding: 16px;
   text-align: center;
   font-size: 12px;
   color: var(--text-4);
+  background: color-mix(in srgb, var(--blue-bg) 34%, transparent);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
 .dropZone:hover {
-  border-color: var(--text-4);
+  border-color: color-mix(in srgb, var(--blue) 40%, var(--divider));
+  color: var(--text-3);
+  background: color-mix(in srgb, var(--blue-bg) 64%, transparent);
 }
 
 .dropMore {
@@ -144,4 +154,12 @@
   text-align: center;
   font-size: 11px;
   color: var(--text-4);
+  border-radius: 8px;
+}
+
+@media (max-width: 768px) {
+  .item:hover {
+    transform: none;
+    box-shadow: none;
+  }
 }
