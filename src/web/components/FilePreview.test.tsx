@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FilePreviewProvider } from './FilePreview';
 import { useFilePreview, type PreviewFile } from './filePreviewContext';
@@ -66,5 +66,32 @@ describe('FilePreviewProvider', () => {
 
     expect(screen.queryByText('Preview not available for this file type')).toBeNull();
     expect(await screen.findByRole('heading', { name: 'Plan' })).not.toBeNull();
+  });
+
+  it('opens markdown artifact edit mode in a rich editor surface', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      text: async () => '# Plan\n\n| Item | Status |\n| --- | --- |\n| Table | visible |\n\n```ts\nconst ok = true\n```',
+    })));
+
+    render(
+      <FilePreviewProvider>
+        <PreviewButton file={{
+          id: 'artifact-3',
+          url: '/api/artifacts/artifact-3/download',
+          filename: 'plan.md',
+          mime_type: 'application/octet-stream',
+          size_bytes: 789,
+        }} />
+      </FilePreviewProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open file' }));
+
+    expect(await screen.findByRole('heading', { name: 'Plan' })).not.toBeNull();
+    fireEvent.click(screen.getByTitle('Edit'));
+
+    await waitFor(() => {
+      expect(document.querySelector('[contenteditable]')).not.toBeNull();
+    });
   });
 });

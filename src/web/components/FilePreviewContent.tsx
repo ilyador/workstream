@@ -1,9 +1,13 @@
-import { useEffect, useEffectEvent, useState } from 'react';
+import { lazy, Suspense, useEffect, useEffectEvent, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { PreviewFile } from './filePreviewContext';
 import { isMdFile } from './file-preview-utils';
 import s from './FilePreview.module.css';
+
+const MarkdownArtifactEditor = lazy(() =>
+  import('./MarkdownArtifactEditor').then(module => ({ default: module.MarkdownArtifactEditor })),
+);
 
 interface FilePreviewContentProps {
   file: PreviewFile;
@@ -84,15 +88,15 @@ export function FilePreviewContent({ file, editing, onTextChange }: FilePreviewC
     if (loading) return <div className={s.loading}>Loading...</div>;
     if (editing) {
       return (
-        <textarea
-          className={s.mdEditor}
-          value={text || ''}
-          onChange={event => {
-            setText(event.target.value);
-            onTextChange?.(event.target.value);
-          }}
-          spellCheck={false}
-        />
+        <Suspense fallback={<div className={s.loading}>Loading editor...</div>}>
+          <MarkdownArtifactEditor
+            markdown={text || ''}
+            onChange={value => {
+              setText(value);
+              onTextChange?.(value);
+            }}
+          />
+        </Suspense>
       );
     }
     return (
