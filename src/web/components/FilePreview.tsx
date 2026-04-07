@@ -3,7 +3,6 @@ import type React from 'react';
 import { updateArtifactContent } from '../lib/api';
 import { FilePreviewContext, type PreviewFile } from './filePreviewContext';
 import { FilePreviewModal } from './FilePreviewModal';
-import { isPreviewable } from './file-preview-utils';
 
 export function FilePreviewProvider({ children }: { children: React.ReactNode }) {
   const [file, setFile] = useState<PreviewFile | null>(null);
@@ -16,15 +15,10 @@ export function FilePreviewProvider({ children }: { children: React.ReactNode })
   const canceledRef = useRef(false);
 
   const preview = useCallback((nextFile: PreviewFile) => {
-    if (isPreviewable(nextFile.mime_type)) {
-      setFile(nextFile);
-      setEditing(false);
-      setDirty(false);
-      setSaveError(null);
-      return;
-    }
-
-    window.open(nextFile.url, '_blank');
+    setFile(nextFile);
+    setEditing(false);
+    setDirty(false);
+    setSaveError(null);
   }, []);
 
   const close = useCallback(() => {

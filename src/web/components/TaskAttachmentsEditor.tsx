@@ -1,5 +1,6 @@
 import { useArtifacts } from '../hooks/useArtifacts';
 import { AttachmentList } from './AttachmentList';
+import { useFilePreview } from './filePreviewContext';
 import s from './TaskForm.module.css';
 
 interface TaskAttachmentsEditorProps {
@@ -9,6 +10,7 @@ interface TaskAttachmentsEditorProps {
 
 export function TaskAttachmentsEditor({ taskId, projectId }: TaskAttachmentsEditorProps) {
   const { artifacts, upload, remove } = useArtifacts(taskId, projectId);
+  const { preview } = useFilePreview();
 
   return (
     <AttachmentList
@@ -18,9 +20,7 @@ export function TaskAttachmentsEditor({ taskId, projectId }: TaskAttachmentsEdit
         for (const file of files) upload(file);
       }}
       onRemoveItem={remove}
-      onOpenItem={(item) => {
-        window.open(item.url, '_blank', 'noopener,noreferrer');
-      }}
+      onOpenItem={preview}
       emptyMessage="Drop files here or click + Add"
       extraDropHint="Drop more files here"
     />

@@ -51,7 +51,7 @@ export function FilePreviewModal({
         />
         <div className={s.body}>
           {error && <div className={s.error}>{error}</div>}
-          {isPreviewable(file.mime_type) ? (
+          {isPreviewable(file.mime_type, file.filename) ? (
             <FilePreviewContent
               key={contentKey}
               file={file}
