@@ -106,6 +106,7 @@ export function WorkstreamTaskList({
     index: number,
     options?: {
       prevTaskId?: string | null;
+      prevTask?: TaskView | null;
       isDragging?: boolean;
       dragDisabled?: boolean;
       skipDragGhost?: boolean;
@@ -124,6 +125,8 @@ export function WorkstreamTaskList({
     commentCount: commentCounts?.[task.id] || 0,
     brokenLink: brokenLinks.get(task.id) || null,
     prevTaskId: options?.prevTaskId ?? null,
+    prevTask: options?.prevTask ?? null,
+    prevJobStatus: options?.prevTask ? taskJobMap[options.prevTask.id]?.status ?? null : null,
     isExpanded: expandedIds.has(task.id),
     onToggleExpand: () => toggleExpanded(task.id),
     onRun: isBacklog || brokenLinks.has(task.id) ? undefined : onRunTask,

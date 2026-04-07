@@ -551,24 +551,24 @@
   display: flex;
   gap: 8px;
 }
-.editAction {
+.actions .editAction {
   color: var(--blue);
 }
-.editAction:hover:not(:disabled) {
+.actions .editAction:hover:not(:disabled) {
   color: var(--blue);
   background: var(--blue-bg);
 }
-.completeAction {
+.actions .completeAction {
   color: var(--green);
 }
-.completeAction:hover:not(:disabled) {
+.actions .completeAction:hover:not(:disabled) {
   color: var(--green);
   background: var(--green-bg);
 }
-.deleteAction {
+.actions .deleteAction {
   color: var(--red);
 }
-.deleteAction:hover:not(:disabled) {
+.actions .deleteAction:hover:not(:disabled) {
   color: var(--red);
   background: var(--red-bg);
 }
@@ -685,12 +685,31 @@
 }
 
 .commentsLoading {
-  min-height: 58px;
   display: flex;
-  align-items: center;
-  padding: 4px 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 2px 0 8px;
   font-size: 12px;
   color: var(--text-4);
+}
+.commentsLoadingOne { min-height: 34px; }
+.commentsLoadingTwo { min-height: 68px; }
+.commentsLoadingThree { min-height: 102px; }
+.commentsLoadingFour { min-height: 136px; }
+
+.commentSkeletonRow {
+  display: block;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--bg-active), var(--bg-hover), var(--bg-active));
+  background-size: 180% 100%;
+  animation: commentSkeletonPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes commentSkeletonPulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
 }
 
 .commentAvatar {

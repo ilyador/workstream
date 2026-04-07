@@ -10,7 +10,7 @@ interface WorkstreamTaskChainGroupProps {
   group: ChainGroup;
   groupTasks: TaskView[];
   index: number;
-  previousTaskId: string | null;
+  previousTask: TaskView | null;
   projectId?: string;
   isDragging: boolean;
   dragDisabled: boolean;
@@ -24,7 +24,7 @@ export function WorkstreamTaskChainGroup({
   group,
   groupTasks,
   index,
-  previousTaskId,
+  previousTask,
   projectId,
   isDragging,
   dragDisabled,
@@ -66,7 +66,10 @@ export function WorkstreamTaskChainGroup({
             {renderCard(buildCardProps(groupTask, index, {
               prevTaskId: groupIndex > 0
                 ? groupTasks[groupIndex - 1].id
-                : previousTaskId,
+                : previousTask?.id || null,
+              prevTask: groupIndex > 0
+                ? groupTasks[groupIndex - 1]
+                : previousTask,
               onDragStart: handleGroupDragStart,
               onDragEnd: handleGroupDragEnd,
               isDragging,

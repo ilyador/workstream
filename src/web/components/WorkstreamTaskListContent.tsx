@@ -52,7 +52,7 @@ export function WorkstreamTaskListContent({
           group={group}
           groupTasks={groupTasks}
           index={index}
-          previousTaskId={index > 0 ? tasks[index - 1]?.id || null : null}
+          previousTask={index > 0 ? tasks[index - 1] || null : null}
           projectId={projectId}
           isDragging={isGroupDragging}
           dragDisabled={dragDisabledGlobal || index <= freezeIndex}

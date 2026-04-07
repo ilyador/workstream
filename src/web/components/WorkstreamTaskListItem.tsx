@@ -39,6 +39,7 @@ export function WorkstreamTaskListItem({
       <div className={s.cardWrap} data-task-id={task.id}>
         {renderCard(buildCardProps(task, index, {
           prevTaskId: prevTask?.id || null,
+          prevTask,
           onDragStart: () => onDragTaskStart(task.id),
           onDragEnd: onDragTaskEnd,
           isDragging: draggedTaskId === task.id,

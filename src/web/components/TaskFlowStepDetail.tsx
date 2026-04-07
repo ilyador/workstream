@@ -29,10 +29,10 @@ export function TaskFlowStepDetail({
         <div className={s.actions}>
           <div className={s.actionsLeft}>
             {onEdit && (
-              <button className="btn btnGhost btnSm" onClick={onEdit}>Edit</button>
+              <button className={`btn btnGhost btnSm ${s.editAction}`} onClick={onEdit}>Edit</button>
             )}
             {onDelete && (
-              <button className="btn btnGhost btnSm" onClick={onDelete}>Delete</button>
+              <button className={`btn btnGhost btnSm ${s.deleteAction}`} onClick={onDelete}>Delete</button>
             )}
           </div>
         </div>

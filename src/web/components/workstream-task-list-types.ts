@@ -9,6 +9,7 @@ export interface ChainGroup {
 
 export interface TaskCardDragOptions {
   prevTaskId?: string | null;
+  prevTask?: TaskView | null;
   isDragging?: boolean;
   dragDisabled?: boolean;
   skipDragGhost?: boolean;

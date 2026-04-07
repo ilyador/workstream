@@ -6,6 +6,7 @@ import { useComments } from '../hooks/useComments';
 import { useModal } from '../hooks/modal-context';
 import { TaskAttachmentsView } from './TaskAttachments';
 import { TaskCommentsView } from './TaskComments';
+import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
 import type { MentionMember, TaskCardMetaItem } from './task-card-types';
 import s from './TaskCard.module.css';
@@ -22,6 +23,9 @@ interface TaskIdleDetailProps {
   metaItems?: TaskCardMetaItem[];
   hideComments?: boolean;
   prevTaskId?: string | null;
+  prevTask?: TaskView | null;
+  prevJobStatus?: JobView['status'] | null;
+  commentCount?: number;
   mentionMembers?: MentionMember[];
 }
 
@@ -37,6 +41,9 @@ export function TaskIdleDetail({
   metaItems,
   hideComments,
   prevTaskId,
+  prevTask,
+  prevJobStatus,
+  commentCount = 0,
   mentionMembers,
 }: TaskIdleDetailProps) {
   const modal = useModal();
@@ -57,16 +64,21 @@ export function TaskIdleDetail({
   const needsAccept = chaining === 'accept' || chaining === 'both';
   const needsProduce = chaining === 'produce' || chaining === 'both';
   const missingPreviousTask = needsAccept && !prevTaskId;
-  const checkingAcceptArtifacts = needsAccept && !!prevTaskId && !prevArtifacts.loaded && !prevArtifacts.error;
+  const previousTaskComplete = !needsAccept || prevTask?.status === 'done' || prevJobStatus === 'done';
+  const previousTaskPending = needsAccept && !!prevTaskId && !previousTaskComplete;
+  const checkingAcceptArtifacts = needsAccept && !!prevTaskId && previousTaskComplete && !prevArtifacts.loaded && !prevArtifacts.error;
   const checkingProduceArtifacts = needsProduce && !ownArtifacts.loaded && !ownArtifacts.error;
-  const acceptCheckFailed = needsAccept && !!prevTaskId && !!prevArtifacts.error;
+  const acceptCheckFailed = needsAccept && !!prevTaskId && previousTaskComplete && !!prevArtifacts.error;
   const produceCheckFailed = needsProduce && !!ownArtifacts.error;
-  const acceptBlocked = missingPreviousTask || acceptCheckFailed || (needsAccept && prevArtifacts.loaded && prevArtifacts.artifacts.length === 0);
+  const acceptBlocked = missingPreviousTask || previousTaskPending || acceptCheckFailed || (
+    needsAccept && previousTaskComplete && prevArtifacts.loaded && prevArtifacts.artifacts.length === 0
+  );
   const produceBlocked = produceCheckFailed || (needsProduce && ownArtifacts.loaded && ownArtifacts.artifacts.length === 0);
   const completionChecking = checkingAcceptArtifacts || checkingProduceArtifacts;
   const completionBlocked = acceptBlocked || produceBlocked || completionChecking;
   let blockReason = '';
   if (missingPreviousTask) blockReason = 'Previous task file is unavailable';
+  else if (previousTaskPending) blockReason = 'Awaiting previous task approval';
   else if (acceptCheckFailed) blockReason = 'Failed to check previous task file';
   else if (produceCheckFailed) blockReason = 'Failed to check required files';
   else if (acceptBlocked) blockReason = 'Awaiting file from previous task';
@@ -179,6 +191,7 @@ export function TaskIdleDetail({
       {!hideComments && (
         <TaskCommentsView
           data={commentsData}
+          expectedCount={commentCount}
           mentionMembers={mentionMembers}
         />
       )}

@@ -43,6 +43,8 @@ export interface TaskCardProps {
   metaItems?: TaskCardMetaItem[];
   hideComments?: boolean;
   prevTaskId?: string | null;
+  prevTask?: TaskView | null;
+  prevJobStatus?: JobView['status'] | null;
   mentionMembers?: MentionMember[];
 }
 
@@ -88,6 +90,8 @@ export function TaskCardView({
   metaItems,
   hideComments,
   prevTaskId,
+  prevTask,
+  prevJobStatus,
   mentionMembers,
   viewMode = 'task',
 }: TaskCardViewProps) {
@@ -158,6 +162,7 @@ export function TaskCardView({
           onRework={onRework}
           onMoveToBacklog={onMoveToBacklog}
           hideComments={hideComments}
+          commentCount={commentCount}
           mentionMembers={mentionMembers}
         />
       )}
@@ -200,6 +205,9 @@ export function TaskCardView({
               metaItems={metaItems}
               hideComments={hideComments}
               prevTaskId={prevTaskId}
+              prevTask={prevTask}
+              prevJobStatus={prevJobStatus}
+              commentCount={commentCount}
               mentionMembers={mentionMembers}
             />
           )}

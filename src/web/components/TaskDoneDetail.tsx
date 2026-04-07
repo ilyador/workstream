@@ -15,6 +15,7 @@ interface TaskDoneDetailProps {
   onRework?: (jobId: string, note: string) => void;
   onMoveToBacklog?: (jobId: string) => void;
   hideComments?: boolean;
+  commentCount?: number;
   mentionMembers?: MentionMember[];
 }
 
@@ -26,6 +27,7 @@ export function TaskDoneDetail({
   onRework,
   onMoveToBacklog,
   hideComments,
+  commentCount = 0,
   mentionMembers,
 }: TaskDoneDetailProps) {
   const [showDoneReject, setShowDoneReject] = useState(false);
@@ -72,7 +74,7 @@ export function TaskDoneDetail({
         )}
         <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
         {!hideComments && (
-          <TaskComments taskId={task.id} projectId={projectId} mentionMembers={mentionMembers} />
+          <TaskComments taskId={task.id} projectId={projectId} expectedCount={commentCount} mentionMembers={mentionMembers} />
         )}
       </div>
     </div>

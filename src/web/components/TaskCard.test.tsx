@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskCard } from './TaskCard';
 import type { JobView } from './job-types';
+import type { Artifact } from '../lib/api';
 import type { TaskView } from '../lib/task-view';
 
 const { useCommentsMock, useArtifactsMock } = vi.hoisted(() => ({
@@ -21,7 +22,7 @@ const { useCommentsMock, useArtifactsMock } = vi.hoisted(() => ({
   useArtifactsMock: vi.fn((...args: [string | null, string?]) => {
     void args;
     return {
-      artifacts: [],
+      artifacts: [] as Artifact[],
       loading: false,
       loaded: true,
       error: null as string | null,
@@ -85,7 +86,7 @@ describe('TaskCard review checks', () => {
       removeComment: vi.fn(),
     });
     useArtifactsMock.mockReturnValue({
-      artifacts: [],
+      artifacts: [] as Artifact[],
       loading: false,
       loaded: true,
       error: null as string | null,
@@ -153,17 +154,18 @@ describe('TaskCard review checks', () => {
         job={null}
         canRunAi
         isExpanded
+        commentCount={3}
         onToggleExpand={() => {}}
       />,
     );
 
-    expect(screen.getByText('Loading comments...')).toBeTruthy();
+    expect(screen.getByLabelText('Loading 3 comments')).toBeTruthy();
     expect(screen.queryByText('No comments yet')).toBeNull();
   });
 
   it('does not show missing-file warnings while required artifacts are loading', () => {
     useArtifactsMock.mockImplementation((taskId: string | null) => ({
-      artifacts: [],
+      artifacts: [] as Artifact[],
       loading: taskId === 'prev-task',
       loaded: taskId !== 'prev-task',
       error: null as string | null,
@@ -187,6 +189,7 @@ describe('TaskCard review checks', () => {
         onToggleExpand={() => {}}
         onUpdateTask={() => {}}
         prevTaskId="prev-task"
+        prevTask={{ ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'done' }}
       />,
     );
 
@@ -210,6 +213,7 @@ describe('TaskCard review checks', () => {
         onToggleExpand={() => {}}
         onUpdateTask={() => {}}
         prevTaskId="prev-task"
+        prevTask={{ ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'done' }}
       />,
     );
 
@@ -217,9 +221,58 @@ describe('TaskCard review checks', () => {
     expect(screen.getByRole('button', { name: 'Complete' }).getAttribute('title')).toBe('Awaiting file from previous task');
   });
 
+  it('keeps completion blocked while the previous producing task is pending review', () => {
+    useArtifactsMock.mockImplementation((taskId: string | null) => ({
+      artifacts: taskId === 'prev-task' ? [{
+        id: 'artifact-1',
+        task_id: 'prev-task',
+        job_id: null,
+        phase: null,
+        filename: 'plan.md',
+        mime_type: 'text/markdown',
+        size_bytes: 12,
+        storage_path: 'plan.md',
+        repo_path: null,
+        url: '/plan.md',
+        created_at: 'now',
+      }] : [],
+      loading: false,
+      loaded: true,
+      error: null as string | null,
+      upload: vi.fn(),
+      remove: vi.fn(),
+      reload: vi.fn(),
+    }));
+
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'backlog',
+          mode: 'ai',
+          chaining: 'accept',
+        }}
+        job={null}
+        canRunAi
+        isExpanded
+        isBacklog
+        onToggleExpand={() => {}}
+        onUpdateTask={() => {}}
+        prevTaskId="prev-task"
+        prevTask={{ ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'review' }}
+        prevJobStatus="review"
+      />,
+    );
+
+    const completeButton = screen.getByRole('button', { name: 'Complete' });
+    expect(screen.getByText('Awaiting previous task approval')).toBeTruthy();
+    expect(completeButton.getAttribute('title')).toBe('Awaiting previous task approval');
+    expect(completeButton).toHaveProperty('disabled', true);
+  });
+
   it('blocks completion when required artifact checks fail', () => {
     useArtifactsMock.mockImplementation((taskId: string | null) => ({
-      artifacts: [],
+      artifacts: [] as Artifact[],
       loading: false,
       loaded: false,
       error: taskId === 'prev-task' ? 'Network error' : null,
@@ -243,6 +296,7 @@ describe('TaskCard review checks', () => {
         onToggleExpand={() => {}}
         onUpdateTask={() => {}}
         prevTaskId="prev-task"
+        prevTask={{ ...makeTask(), id: 'prev-task', title: 'Previous task', status: 'done' }}
       />,
     );
 
