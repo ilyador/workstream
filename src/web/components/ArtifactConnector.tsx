@@ -17,7 +17,7 @@ export function ArtifactConnector({ taskId, projectId }: Props) {
 
   return (
     <div className={s.connector}>
-      <div className={s.line} />
+      <div className={`${s.line} ${hasFiles ? s.lineActive : ''}`} />
       <button
         className={`${s.icon} ${hasFiles ? s.iconActive : ''}`}
         onClick={hasFiles ? () => setExpanded(!expanded) : undefined}
@@ -39,7 +39,7 @@ export function ArtifactConnector({ taskId, projectId }: Props) {
           ))}
         </div>
       )}
-      <div className={s.line} />
+      <div className={`${s.line} ${hasFiles ? s.lineActive : ''}`} />
     </div>
   );
 }

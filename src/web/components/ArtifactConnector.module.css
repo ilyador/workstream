@@ -8,6 +8,10 @@
 .line {
   width: 1px;
   height: 10px;
+  background: linear-gradient(180deg, transparent, var(--divider), transparent);
+  opacity: 0.7;
+}
+.lineActive {
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--blue) 24%, var(--divider)), transparent);
   opacity: 0.55;
 }
@@ -19,7 +23,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1.5px solid color-mix(in srgb, var(--blue) 22%, var(--divider));
+  border: 1.5px solid var(--divider);
   background: var(--surface-strong);
   color: var(--text-4);
   font-family: var(--font);
