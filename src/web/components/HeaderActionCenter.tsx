@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { useExitAnimation } from '../hooks/useExitAnimation';
 import type { ActionItem } from './header-types';
 import s from './Header.module.css';
 
@@ -14,12 +15,14 @@ interface ActionModalProps {
 }
 
 function ActionModal({ title, items, toneClass, emptyLabel, onClose, onSelect }: ActionModalProps) {
+  const { closing, closeWithAnimation } = useExitAnimation(onClose);
+
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className={s.modalOverlay} onClick={onClose}>
+    <div className={`${s.modalOverlay} ${closing ? s.modalOverlayClosing : ''}`} onClick={closeWithAnimation}>
       <div
-        className={`${s.modalCard} ${s.actionModal}`}
+        className={`${s.modalCard} ${s.actionModal} ${closing ? s.modalCardClosing : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -28,7 +31,7 @@ function ActionModal({ title, items, toneClass, emptyLabel, onClose, onSelect }:
         <div className={s.actionModalHeader}>
           <span className={s.actionModalTitle}>{title}</span>
           {items.length > 0 && <span className={`${s.actionCount} ${toneClass}`}>{items.length}</span>}
-          <button className={s.actionClose} onClick={onClose}>
+          <button className={s.actionClose} onClick={closeWithAnimation}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
@@ -44,7 +47,7 @@ function ActionModal({ title, items, toneClass, emptyLabel, onClose, onSelect }:
                 className={s.actionItem}
                 onClick={() => {
                   onSelect(item);
-                  onClose();
+                  closeWithAnimation();
                 }}
               >
                 <span className={s.actionItemLabel}>{item.label}</span>

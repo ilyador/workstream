@@ -21,6 +21,7 @@ interface TaskCardActiveDetailProps {
   onReject?: (jobId: string) => void;
   onRework?: (jobId: string, note: string) => void;
   reviewArtifactsData?: ArtifactsData;
+  collapsing?: boolean;
 }
 
 export function TaskCardActiveDetail({
@@ -33,6 +34,7 @@ export function TaskCardActiveDetail({
   onReject,
   onRework,
   reviewArtifactsData,
+  collapsing,
 }: TaskCardActiveDetailProps) {
   const jobStatus = job.status;
   const [, setElapsedTick] = useState(0);
@@ -47,7 +49,7 @@ export function TaskCardActiveDetail({
   const elapsedText = jobStatus === 'running' && job.startedAt ? elapsed(job.startedAt) : '';
 
   return (
-    <div className={s.detail} onClick={(e) => e.stopPropagation()}>
+    <div className={`${s.detail} ${collapsing ? s.detailClosing : ''}`} onClick={(e) => e.stopPropagation()}>
       {task.description && (
         <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>
       )}

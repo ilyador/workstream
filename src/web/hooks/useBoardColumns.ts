@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import type { TaskRecord } from '../lib/api';
 import { compareByPosition, toTaskView, type TaskView, type WorkstreamView } from '../lib/task-view';
 import { mapPrimaryJobsByTask } from '../lib/job-selection';
+import { buildTaskSectionMap, splitWorkstreamsByBoardSection } from '../lib/board-workstream-sections';
 import type { JobView } from '../components/job-types';
 
 interface UseBoardColumnsArgs {
@@ -57,6 +58,20 @@ export function useBoardColumns({
     [workstreams],
   );
 
+  const {
+    activeWorkstreams,
+    completeWorkstreams,
+    workstreamSectionById,
+  } = useMemo(
+    () => splitWorkstreamsByBoardSection(sortedWorkstreams, tasksByWorkstream, taskJobMap),
+    [sortedWorkstreams, tasksByWorkstream, taskJobMap],
+  );
+
+  const taskSectionById = useMemo(
+    () => buildTaskSectionMap(tasksByWorkstream, workstreamSectionById),
+    [tasksByWorkstream, workstreamSectionById],
+  );
+
   const members = useMemo(
     () => Object.entries(memberMap).map(([id, member]) => ({ id, name: member.name, initials: member.initials })),
     [memberMap],
@@ -67,6 +82,13 @@ export function useBoardColumns({
 
     const idsToMove = draggedGroupIds.length > 0 ? draggedGroupIds : [draggedTaskId];
     const targetKey = targetWsId || '__backlog__';
+    const sourceSection = taskSectionById[draggedTaskId] || 'active';
+    const targetSection = targetWsId ? workstreamSectionById[targetWsId] || 'active' : 'active';
+    if (sourceSection !== targetSection) {
+      clearDraggedTask();
+      return;
+    }
+
     const idsSet = new Set(idsToMove);
     const targetTasks = (tasksByWorkstream[targetKey] || []).filter(task => !idsSet.has(task.id));
 
@@ -106,12 +128,24 @@ export function useBoardColumns({
     }
 
     clearDraggedTask();
-  }, [draggedTaskId, draggedGroupIds, tasksByWorkstream, onMoveTask, clearDraggedTask]);
+  }, [
+    draggedTaskId,
+    draggedGroupIds,
+    tasksByWorkstream,
+    taskSectionById,
+    workstreamSectionById,
+    onMoveTask,
+    clearDraggedTask,
+  ]);
 
   return {
     taskJobMap,
     tasksByWorkstream,
     sortedWorkstreams,
+    activeWorkstreams,
+    completeWorkstreams,
+    workstreamSectionById,
+    taskSectionById,
     members,
     handleDropTask,
   };

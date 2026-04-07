@@ -57,7 +57,10 @@ export function Board({
   const {
     taskJobMap,
     tasksByWorkstream,
-    sortedWorkstreams,
+    activeWorkstreams,
+    completeWorkstreams,
+    workstreamSectionById,
+    taskSectionById,
     members,
     handleDropTask,
   } = useBoardColumns({
@@ -72,6 +75,17 @@ export function Board({
     onMoveTask,
     clearDraggedTask: () => setDraggedTaskId(null),
   });
+  const draggedWorkstreamSection = draggedWsId ? workstreamSectionById[draggedWsId] : null;
+  const draggedTaskSection = draggedTaskId ? taskSectionById[draggedTaskId] || 'active' : null;
+
+  const handleColumnDropWithinSection = (targetWorkstreamId: string) => {
+    if (!draggedWsId) return;
+    if (workstreamSectionById[draggedWsId] !== workstreamSectionById[targetWorkstreamId]) {
+      setDraggedWsId(null);
+      return;
+    }
+    handleColumnDrop(targetWorkstreamId);
+  };
 
   return (
     <div
@@ -89,8 +103,8 @@ export function Board({
         mentionedTaskIds={mentionedTaskIds}
         commentCounts={commentCounts}
         focusTaskId={focusTaskId}
-        draggedTaskId={draggedTaskId}
-        draggedGroupIds={draggedGroupIds}
+        draggedTaskId={draggedTaskSection === 'active' ? draggedTaskId : null}
+        draggedGroupIds={draggedTaskSection === 'active' ? draggedGroupIds : []}
         onDragTaskStart={setDraggedTaskId}
         onDragGroupStart={handleDragGroupStart}
         onDragTaskEnd={handleDragEnd}
@@ -112,7 +126,7 @@ export function Board({
       />
 
       <BoardWorkstreamColumns
-        workstreams={sortedWorkstreams}
+        workstreams={activeWorkstreams}
         tasksByWorkstream={tasksByWorkstream}
         taskJobMap={taskJobMap}
         canRunAi={userRole !== 'manager'}
@@ -122,15 +136,15 @@ export function Board({
         commentCounts={commentCounts}
         focusTaskId={focusTaskId}
         focusWsId={focusWsId}
-        draggedTaskId={draggedTaskId}
-        draggedGroupIds={draggedGroupIds}
-        draggedWsId={draggedWsId}
+        draggedTaskId={draggedTaskSection === 'active' ? draggedTaskId : null}
+        draggedGroupIds={draggedTaskSection === 'active' ? draggedGroupIds : []}
+        draggedWsId={draggedWorkstreamSection === 'active' ? draggedWsId : null}
         onDragTaskStart={setDraggedTaskId}
         onDragGroupStart={handleDragGroupStart}
         onDragTaskEnd={handleDragEnd}
         onDropTask={handleDropTask}
         onColumnDragStart={setDraggedWsId}
-        onColumnDrop={handleColumnDrop}
+        onColumnDrop={handleColumnDropWithinSection}
         onUpdateWorkstream={onUpdateWorkstream}
         onDeleteWorkstream={onDeleteWorkstream}
         onAddTask={onAddTask}
@@ -152,6 +166,54 @@ export function Board({
       />
 
       <AddWorkstreamComposer onCreateWorkstream={onCreateWorkstream} />
+
+      {completeWorkstreams.length > 0 && (
+        <div className={s.completeSeparator} aria-label="Completed streams">
+          <span className={s.completeSeparatorLabel}>Complete</span>
+        </div>
+      )}
+
+      {completeWorkstreams.length > 0 && (
+        <BoardWorkstreamColumns
+          workstreams={completeWorkstreams}
+          tasksByWorkstream={tasksByWorkstream}
+          taskJobMap={taskJobMap}
+          canRunAi={userRole !== 'manager'}
+          projectId={projectId}
+          members={members}
+          mentionedTaskIds={mentionedTaskIds}
+          commentCounts={commentCounts}
+          focusTaskId={focusTaskId}
+          focusWsId={focusWsId}
+          draggedTaskId={draggedTaskSection === 'complete' ? draggedTaskId : null}
+          draggedGroupIds={draggedTaskSection === 'complete' ? draggedGroupIds : []}
+          draggedWsId={draggedWorkstreamSection === 'complete' ? draggedWsId : null}
+          onDragTaskStart={setDraggedTaskId}
+          onDragGroupStart={handleDragGroupStart}
+          onDragTaskEnd={handleDragEnd}
+          onDropTask={handleDropTask}
+          onColumnDragStart={setDraggedWsId}
+          onColumnDrop={handleColumnDropWithinSection}
+          onUpdateWorkstream={onUpdateWorkstream}
+          onDeleteWorkstream={onDeleteWorkstream}
+          onAddTask={onAddTask}
+          onRunWorkstream={onRunWorkstream}
+          onRunTask={onRunTask}
+          onEditTask={onEditTask}
+          onDeleteTask={onDeleteTask}
+          onUpdateTask={onUpdateTask}
+          onTerminate={onTerminate}
+          onReply={onReply}
+          onApprove={onApprove}
+          onReject={onReject}
+          onRework={onRework}
+          onDeleteJob={onDeleteJob}
+          onMoveToBacklog={onMoveToBacklog}
+          onContinue={onContinue}
+          onCreatePr={onCreatePr}
+          currentUserId={currentUserId}
+        />
+      )}
 
     </div>
   );

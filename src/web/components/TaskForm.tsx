@@ -5,6 +5,7 @@ import { TaskAttachmentsEditor } from './TaskAttachmentsEditor';
 import { TaskFormOptions } from './TaskFormOptions';
 import { type CustomTypeOption, type MemberOption, type WorkstreamOption } from './task-form-shared';
 import type { EditTaskData, TaskFormData } from './task-form-types';
+import { useExitAnimation } from '../hooks/useExitAnimation';
 import { useTaskFormState } from '../hooks/useTaskFormState';
 import s from './TaskForm.module.css';
 
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function TaskForm({ workstreams, members, flows = [], customTypes = [], onSaveCustomType, localPath, projectId, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
+  const { closing, closeWithAnimation } = useExitAnimation(onClose);
   const {
     isEdit,
     title,
@@ -67,7 +69,7 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
     editTask,
     onSaveCustomType,
     onSubmit,
-    onClose,
+    onClose: closeWithAnimation,
   });
 
   const {
@@ -82,9 +84,9 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
   } = imagesState;
 
   return (
-    <div className={s.overlay} onClick={onClose}>
+    <div className={`${s.overlay} ${closing ? s.overlayClosing : ''}`} onClick={closeWithAnimation}>
       <div
-        className={`${s.modal} ${s.modalBody} ${dragOver ? s.modalDragOver : ''}`}
+        className={`${s.modal} ${s.modalBody} ${dragOver ? s.modalDragOver : ''} ${closing ? s.modalClosing : ''}`}
         onClick={e => e.stopPropagation()}
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={e => { if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
@@ -165,7 +167,7 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
             <button className="btn btnPrimary" type="submit" disabled={submitDisabled}>
               {submitLabel}
             </button>
-            <button className="btn btnSecondary" type="button" onClick={onClose}>Cancel</button>
+            <button className="btn btnSecondary" type="button" onClick={closeWithAnimation}>Cancel</button>
           </div>
         </form>
       </div>

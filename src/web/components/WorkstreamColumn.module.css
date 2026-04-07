@@ -15,6 +15,7 @@
   box-shadow: var(--shadow-soft);
   transition: box-shadow 0.2s, background 0.2s, border-color 0.2s, transform 0.2s;
   position: relative;
+  animation: columnSettle 0.2s ease-out;
 }
 
 @media (max-width: 768px) {
@@ -59,6 +60,7 @@
   align-self: stretch;
   margin: 12px -12px;
   box-shadow: 0 0 18px color-mix(in srgb, var(--blue) 34%, transparent);
+  animation: columnDropIn 0.12s ease-out;
 }
 
 /* ─── Column header ─── */
@@ -304,6 +306,7 @@
 /* Card wrapper */
 .cardWrap {
   position: relative;
+  transition: transform 0.16s ease, opacity 0.16s ease;
 }
 
 /* Chain group: wraps consecutive producer→consumer tasks */
@@ -327,6 +330,7 @@
   border-radius: 999px;
   margin: 3px 0 5px;
   box-shadow: 0 0 14px color-mix(in srgb, var(--blue) 34%, transparent);
+  animation: dropLineIn 0.12s ease-out;
 }
 
 .dropAfter::after {
@@ -337,6 +341,40 @@
   border-radius: 999px;
   margin: 5px 0 3px;
   box-shadow: 0 0 14px color-mix(in srgb, var(--blue) 34%, transparent);
+  animation: dropLineIn 0.12s ease-out;
+}
+
+@keyframes columnSettle {
+  from {
+    opacity: 0.96;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes columnDropIn {
+  from {
+    opacity: 0;
+    transform: scaleY(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes dropLineIn {
+  from {
+    opacity: 0;
+    transform: scaleX(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
 }
 
 /* Completion banner */
@@ -553,5 +591,25 @@
   .statusPill { font-size: 9px; padding: 1px 6px; }
   .columnDropLine {
     margin: 8px -8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .column,
+  .columnDropLine,
+  .cardWrap,
+  .chainGroup,
+  .dropBefore::before,
+  .dropAfter::after,
+  .progressLineFill,
+  .progressLine--reviewing,
+  .reviewingBanner,
+  .cardHighlight,
+  .columnHighlight {
+    animation: none;
+    transition: none;
+  }
+  .column:hover {
+    transform: none;
   }
 }

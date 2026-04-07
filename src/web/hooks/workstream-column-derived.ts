@@ -92,8 +92,7 @@ export function getWorkstreamStatus({
   if (isBacklog) return null;
   if (workstreamStatus === 'reviewing') return 'reviewing' as const;
   if (workstreamStatus === 'review_failed') return 'review failed' as const;
-  if (workstreamStatus === 'complete') return 'done' as const;
-  if (workstreamStatus === 'merged' || workstreamStatus === 'archived') return 'merged' as const;
+  if (workstreamStatus === 'archived') return 'merged' as const;
   if (totalTasks === 0) return 'open' as const;
 
   const hasRunningTask = tasks.some(task => {
@@ -109,6 +108,8 @@ export function getWorkstreamStatus({
 
   const hasFailedTask = tasks.some(task => taskJobMap[task.id]?.status === 'failed');
   if (hasFailedTask) return 'failed' as const;
+  if (workstreamStatus === 'complete' && allDone) return 'done' as const;
+  if (workstreamStatus === 'merged' && allDone) return 'merged' as const;
   if (allDone) return 'pending review' as const;
   if (doneTasks > 0) return 'in progress' as const;
 

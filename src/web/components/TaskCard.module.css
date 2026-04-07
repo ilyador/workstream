@@ -9,6 +9,7 @@
   transition: box-shadow 0.16s, border-color 0.16s, opacity 0.2s, transform 0.2s cubic-bezier(0.2, 0, 0, 1), background 0.16s;
   overflow: hidden;
   position: relative;
+  animation: cardSettle 0.16s ease-out;
 }
 .card:hover {
   box-shadow: var(--shadow-card);
@@ -80,6 +81,11 @@
 /* Preview section below title row — description + thumbnails */
 .preview {
   padding: 0 12px 11px 12px;
+}
+.previewReveal {
+  overflow: hidden;
+  transform-origin: top center;
+  animation: previewReveal 0.12s cubic-bezier(0.2, 0, 0, 1);
 }
 .previewDesc {
   font-size: 13px;
@@ -332,10 +338,61 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden;
+  transform-origin: top center;
+  will-change: opacity, transform, max-height;
+  animation: detailOpen 0.16s cubic-bezier(0.2, 0, 0, 1);
 }
-@keyframes slideDown {
-  from { opacity: 0; max-height: 0; }
-  to { opacity: 1; max-height: 800px; }
+.detailClosing {
+  pointer-events: none;
+  overflow: hidden;
+  animation: detailClose 0.16s cubic-bezier(0.32, 0, 0.2, 1) forwards;
+}
+@keyframes cardSettle {
+  from {
+    opacity: 0.92;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes detailOpen {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scaleY(0.985);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 900px;
+  }
+}
+@keyframes detailClose {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 900px;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-3px) scaleY(0.985);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+@keyframes previewReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ─── Phase progress pills ─── */
@@ -517,6 +574,7 @@
 }
 .doneWrap {
   padding: 0 12px 10px;
+  animation: detailOpen 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
 .doneHeader {
   display: flex;
@@ -540,6 +598,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transform-origin: top center;
+  animation: detailOpen 0.16s cubic-bezier(0.2, 0, 0, 1);
 }
 .doneSummary {
   font-size: 12px;
@@ -714,6 +774,7 @@
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--divider);
+  animation: detailOpen 0.16s ease-out;
 }
 
 .commentsHeader {
@@ -918,5 +979,23 @@
   }
   .previewFile {
     max-width: 120px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .card:hover,
+  .detail,
+  .previewReveal,
+  .doneWrap,
+  .detailClosing,
+  .doneRejectPanel,
+  .commentsSection,
+  .dotQueued,
+  .dotRunning,
+  .commentsSkeleton {
+    animation: none;
+    transition: none;
+    transform: none;
   }
 }

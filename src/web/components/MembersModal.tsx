@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMembers } from '../hooks/useMembers';
 import { useModal } from '../hooks/modal-context';
+import { useExitAnimation } from '../hooks/useExitAnimation';
 import { inviteMember, removeMember } from '../lib/api';
 import s from './MembersModal.module.css';
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function MembersModal({ projectId, currentUserId, onClose }: Props) {
+  const { closing, closeWithAnimation } = useExitAnimation(onClose);
   const { members, reload } = useMembers(projectId);
   const modal = useModal();
   const [email, setEmail] = useState('');
@@ -21,14 +23,14 @@ export function MembersModal({ projectId, currentUserId, onClose }: Props) {
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeWithAnimation();
     }
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
+  }, [closeWithAnimation]);
 
   function handleOverlayClick(e: React.MouseEvent) {
-    if (e.target === overlayRef.current) onClose();
+    if (e.target === overlayRef.current) closeWithAnimation();
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -59,8 +61,8 @@ export function MembersModal({ projectId, currentUserId, onClose }: Props) {
   }
 
   return (
-    <div className={s.overlay} ref={overlayRef} onClick={handleOverlayClick}>
-      <div className={s.modal}>
+    <div className={`${s.overlay} ${closing ? s.overlayClosing : ''}`} ref={overlayRef} onClick={handleOverlayClick}>
+      <div className={`${s.modal} ${closing ? s.modalClosing : ''}`}>
         <h2 className={s.title}>Manage Members</h2>
         <p className={s.subtitle}>Invite people to collaborate on this project.</p>
         {error && <div className={s.error}>{error}</div>}
@@ -109,7 +111,7 @@ export function MembersModal({ projectId, currentUserId, onClose }: Props) {
         </form>
 
         <div className={s.actions}>
-          <button className="btn btnSecondary" type="button" onClick={onClose}>
+          <button className="btn btnSecondary" type="button" onClick={closeWithAnimation}>
             Close
           </button>
         </div>
