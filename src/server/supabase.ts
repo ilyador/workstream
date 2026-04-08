@@ -8,6 +8,20 @@ if (!supabaseServiceRoleKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
+const ACTIVE_JOB_STATUSES = ['queued', 'running', 'paused', 'review', 'canceling'];
+
+/** Check if a task already has an active job. */
+export async function hasActiveTaskJob(taskId: string): Promise<{ id: string; status: string } | null> {
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('id, status')
+    .eq('task_id', taskId)
+    .in('status', ACTIVE_JOB_STATUSES)
+    .limit(1);
+  if (error) throw new Error(`Failed to check active task jobs: ${error.message}`);
+  return data && data.length > 0 ? { id: data[0].id, status: data[0].status as string } : null;
+}
+
 /** Check if a workstream already has an active job. */
 export async function hasActiveWorkstreamJob(workstreamId: string, statuses = ['queued', 'running', 'paused', 'review']): Promise<string | null> {
   const { data, error } = await supabase

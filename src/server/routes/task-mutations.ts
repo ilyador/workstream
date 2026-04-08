@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth-middleware.js';
 import { requireTaskAccess, routeParam } from '../authz.js';
-import { supabase } from '../supabase.js';
+import { hasActiveTaskJob, supabase } from '../supabase.js';
 import { maybeQueueTaskAutoContinue } from './task-auto-continue.js';
 import { validateTaskReferences, validateTaskScalars, validateTaskShape } from './task-validation.js';
 
@@ -23,6 +23,14 @@ taskMutationsRouter.patch('/api/tasks/:id', requireAuth, async (req, res) => {
   const referenceError = await validateTaskReferences(updates, access.projectId);
   if (referenceError) return res.status(400).json({ error: referenceError });
   if (typeof updates.title === 'string') updates.title = updates.title.trim();
+  if (typeof updates.status === 'string') {
+    try {
+      const active = await hasActiveTaskJob(taskId);
+      if (active) return res.status(409).json({ error: `Cannot change task status while job ${active.id} is ${active.status}` });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to check active jobs' });
+    }
+  }
   if (updates.status === 'done' && !updates.completed_at) {
     updates.completed_at = new Date().toISOString();
   } else if (typeof updates.status === 'string' && updates.status !== 'done') {

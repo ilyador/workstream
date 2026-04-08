@@ -35,15 +35,17 @@ export function ReplyInput({ onReply, localPath, placeholder }: { onReply: (answ
     slash.handleTextChange(text, cursor);
   }, [slash]);
 
+  const [error, setError] = useState('');
   const handleReply = useCallback(async () => {
     if (!val.trim() || sending) return;
     setSending(true);
+    setError('');
     try {
       await onReply(val.trim());
       setVal('');
       slash.dismiss();
-    } catch {
-      // Error handled by parent.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send reply');
     }
     finally { setSending(false); }
   }, [onReply, sending, slash, val]);
@@ -55,6 +57,7 @@ export function ReplyInput({ onReply, localPath, placeholder }: { onReply: (answ
 
   return (
     <div className={s.replyWrap}>
+      {error && <div className={s.replyError}>{error}</div>}
       <div className={s.replyRow}>
         <input
           ref={inputRef}
