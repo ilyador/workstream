@@ -3,6 +3,7 @@ import { useMembers } from '../hooks/useMembers';
 import { useModal } from '../hooks/modal-context';
 import { useExitAnimation } from '../hooks/useExitAnimation';
 import { inviteMember, removeMember } from '../lib/api';
+import { ModalCloseButton } from './ModalCloseButton';
 import s from './MembersModal.module.css';
 
 interface Props {
@@ -63,6 +64,7 @@ export function MembersModal({ projectId, currentUserId, onClose }: Props) {
   return (
     <div className={`${s.overlay} ${closing ? s.overlayClosing : ''}`} ref={overlayRef} onClick={handleOverlayClick}>
       <div className={`${s.modal} ${closing ? s.modalClosing : ''}`}>
+        <ModalCloseButton onClick={closeWithAnimation} />
         <h2 className={s.title}>Manage Members</h2>
         <p className={s.subtitle}>Invite people to collaborate on this project.</p>
         {error && <div className={s.error}>{error}</div>}

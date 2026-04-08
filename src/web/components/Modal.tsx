@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useExitAnimation } from '../hooks/useExitAnimation';
+import { ModalCloseButton } from './ModalCloseButton';
 import s from './Modal.module.css';
 
 export interface ModalProps {
@@ -41,6 +42,7 @@ export function Modal({
   return (
     <div className={`${s.overlay} ${isClosing ? s.overlayClosing : ''}`} onClick={closeWithAnimation}>
       <div className={`${s.modal} ${isClosing ? s.modalClosing : ''}`} onClick={(e) => e.stopPropagation()}>
+        <ModalCloseButton onClick={closeWithAnimation} />
         <div className={s.title}>{title}</div>
         <div className={s.message}>{message}</div>
         <div className={s.buttons}>

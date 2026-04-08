@@ -12,6 +12,7 @@
 }
 
 .modal {
+  position: relative;
   background: var(--white);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
@@ -32,6 +33,7 @@
   font-weight: 700;
   color: var(--text);
   margin-bottom: 8px;
+  padding-right: 36px;
 }
 
 .message {

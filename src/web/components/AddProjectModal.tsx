@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useExitAnimation } from '../hooks/useExitAnimation';
+import { ModalCloseButton } from './ModalCloseButton';
 import s from './AddProjectModal.module.css';
 
 interface Props {
@@ -50,6 +51,7 @@ export function AddProjectModal({ onClose, onCreate }: Props) {
   return (
     <div className={`${s.overlay} ${closing ? s.overlayClosing : ''}`} ref={overlayRef} onClick={handleOverlayClick}>
       <div className={`${s.modal} ${closing ? s.modalClosing : ''}`}>
+        <ModalCloseButton onClick={closeWithAnimation} />
         <h2 className={s.title}>New Project</h2>
         <p className={s.subtitle}>Add another project to WorkStream.</p>
         {error && <div className={s.error}>{error}</div>}

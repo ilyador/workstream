@@ -7,6 +7,7 @@ import { type CustomTypeOption, type MemberOption, type WorkstreamOption } from 
 import type { EditTaskData, TaskFormData } from './task-form-types';
 import { useExitAnimation } from '../hooks/useExitAnimation';
 import { useTaskFormState } from '../hooks/useTaskFormState';
+import { ModalCloseButton } from './ModalCloseButton';
 import s from './TaskForm.module.css';
 
 interface Props {
@@ -92,6 +93,7 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
         onDragLeave={e => { if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
         onDrop={e => { handleImageDrop(e); setDragOver(false); }}
       >
+        <ModalCloseButton onClick={closeWithAnimation} />
         <h2 className={s.heading}>{isEdit ? 'Edit task' : 'New task'}</h2>
         <form onSubmit={handleSubmit} className={s.form}>
           <input

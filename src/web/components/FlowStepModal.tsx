@@ -3,6 +3,7 @@ import type { FlowStepInput } from '../lib/flow-editor';
 import { useExitAnimation } from '../hooks/useExitAnimation';
 import { useFlowStepEditor } from '../hooks/useFlowStepEditor';
 import { FlowStepFormFields } from './FlowStepFormFields';
+import { ModalCloseButton } from './ModalCloseButton';
 import s from './FlowEditor.module.css';
 
 interface FlowStepModalProps {
@@ -36,6 +37,7 @@ export function FlowStepModal({ flow, stepIndex, onSaveSteps, onClose }: FlowSte
   return (
     <div className={`${s.modalOverlay} ${closing ? s.modalOverlayClosing : ''}`} onClick={closeWithAnimation}>
       <div className={`${s.modalCard} ${s.modalBody} ${closing ? s.modalCardClosing : ''}`} onClick={event => event.stopPropagation()}>
+        <ModalCloseButton onClick={closeWithAnimation} />
         <h2 className={s.modalHeading}>
           {isNew ? 'New step' : (step.name ? `Edit: ${step.name}` : `Edit step ${activeIndex + 1}`)}
         </h2>

@@ -11,6 +11,7 @@
   animation: fadeIn 0.15s ease;
 }
 .modal {
+  position: relative;
   background: var(--bg);
   border-radius: 12px;
   width: 100%;
@@ -78,6 +79,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   margin-bottom: 24px;
+  padding-right: 36px;
 }
 .form { display: flex; flex-direction: column; gap: 16px; }
 .input, .textarea, .select {

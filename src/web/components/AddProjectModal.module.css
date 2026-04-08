@@ -9,6 +9,7 @@
   animation: modalFadeIn 0.16s ease-out;
 }
 .modal {
+  position: relative;
   background: var(--white);
   border-radius: 14px;
   padding: 36px 32px 32px;
@@ -28,6 +29,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   margin-bottom: 4px;
+  padding-right: 36px;
 }
 .subtitle {
   font-size: 14px;
