@@ -49,7 +49,6 @@ describe('resolveFlowStepProviderConfigs', () => {
       on_fail_jump_to: null,
       max_retries: 0,
       on_max_retries: 'pause',
-      include_agents_md: true,
     }]);
 
     expect(resolved[0].provider_config_id).toBeNull();
@@ -70,7 +69,6 @@ describe('resolveFlowStepProviderConfigs', () => {
       on_fail_jump_to: null,
       max_retries: 0,
       on_max_retries: 'pause',
-      include_agents_md: true,
     }]);
 
     expect(resolved[0].provider_config_id).toBe('provider-2');
@@ -91,7 +89,6 @@ describe('resolveFlowStepProviderConfigs', () => {
       on_fail_jump_to: null,
       max_retries: 0,
       on_max_retries: 'pause',
-      include_agents_md: true,
     }])).rejects.toThrow(/multiple configs match/i);
   });
 });

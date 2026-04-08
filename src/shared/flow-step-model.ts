@@ -4,7 +4,7 @@ import {
   type ProviderKind,
 } from './provider-model';
 
-export type TaskModelProfile = 'selected' | 'fast' | 'balanced' | 'strong';
+export type TaskModelProfile = 'selected' | 'balanced' | 'strong';
 
 export interface TaskModelProfileOption {
   value: TaskModelProfile;
@@ -19,11 +19,6 @@ export const TASK_MODEL_PROFILE_OPTIONS: TaskModelProfileOption[] = [
     description: 'Use the task-level model, if this flow supports model selection.',
   },
   {
-    value: 'fast',
-    label: 'Fast',
-    description: 'Use a lighter model profile for quick supporting steps.',
-  },
-  {
     value: 'balanced',
     label: 'Balanced',
     description: 'Use a general-purpose model profile for standard steps.',
@@ -36,13 +31,11 @@ export const TASK_MODEL_PROFILE_OPTIONS: TaskModelProfileOption[] = [
 ];
 
 const CLAUDE_MODEL_PROFILES: Record<Exclude<TaskModelProfile, 'selected'>, string> = {
-  fast: 'sonnet',
   balanced: 'sonnet',
   strong: 'opus',
 };
 
 const CODEX_MODEL_PROFILES: Record<Exclude<TaskModelProfile, 'selected'>, string> = {
-  fast: 'gpt-5.4-mini',
   balanced: 'gpt-5.4-mini',
   strong: 'gpt-5.4',
 };
@@ -64,12 +57,6 @@ const BALANCED_MODEL_IDS = new Set([
   'codex:gpt-5.2',
 ]);
 
-const FAST_MODEL_IDS = new Set([
-  'codex:gpt-5.4-mini',
-  'codex:gpt-5.1-codex-mini',
-  'codex:gpt-5-codex-mini',
-]);
-
 export function formatTaskModelSelector(profile: TaskModelProfile): string {
   return `task:${profile}`;
 }
@@ -79,7 +66,9 @@ export function parseTaskModelSelector(value: string | null | undefined): TaskMo
   if (!trimmed.startsWith('task:')) return null;
   switch (trimmed.slice('task:'.length)) {
     case 'selected':
+      return 'selected';
     case 'fast':
+      return 'balanced';
     case 'balanced':
     case 'strong':
       return trimmed.slice('task:'.length) as TaskModelProfile;
@@ -98,7 +87,6 @@ export function inferTaskModelProfile(value: string | null | undefined): TaskMod
 
   const parsed = parseModelId(value);
   const normalized = `${parsed.provider}:${parsed.model}`.toLowerCase();
-  if (FAST_MODEL_IDS.has(normalized)) return 'fast';
   if (BALANCED_MODEL_IDS.has(normalized)) return 'balanced';
   if (STRONG_MODEL_IDS.has(normalized)) return 'strong';
   return null;
@@ -146,8 +134,6 @@ export function describeTaskStepModel(value: string | null | undefined): string 
   switch (profile) {
     case 'selected':
       return 'task model';
-    case 'fast':
-      return 'fast profile';
     case 'balanced':
       return 'balanced profile';
     case 'strong':

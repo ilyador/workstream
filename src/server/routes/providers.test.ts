@@ -61,14 +61,14 @@ vi.mock('../providers/registry.js', () => ({
   getProviderConfigById: vi.fn(async (_projectId: string, providerId: string) => state.providerById[providerId] ?? null),
   normalizeProviderInput: vi.fn((value: string) => value),
   providerLabel: vi.fn((value: string) => value),
-  publicProviderRecord: vi.fn((config: ProviderConfigRecord, status: { status: string; message: string; models: string[]; embedding_dimensions?: number | null }) => ({
+  publicProviderRecord: vi.fn((config: ProviderConfigRecord, status?: { status: string; message: string; models: string[]; embedding_dimensions?: number | null }) => ({
     ...config,
-    status: status.status,
-    status_message: status.message,
-    models: status.models,
+    status: status?.status ?? 'offline',
+    status_message: status?.message ?? 'Unavailable',
+    models: status?.models ?? [],
     model_suggestions: [],
     has_api_key: false,
-    embedding_dimensions: status.embedding_dimensions ?? null,
+    embedding_dimensions: status?.embedding_dimensions ?? null,
   })),
   testProviderConfig: vi.fn(async () => state.testResult),
 }));
@@ -181,6 +181,7 @@ vi.mock('../supabase.js', () => ({
 }));
 
 import { providersRouter } from './providers.js';
+import { detectDefaultLocalProviders, testProviderConfig } from '../providers/registry.js';
 
 function makeProvider(id: string, overrides: Partial<ProviderConfigRecord> = {}): ProviderConfigRecord {
   return {
@@ -252,6 +253,31 @@ describe('providersRouter provider safety', () => {
       body: text ? JSON.parse(text) as Record<string, unknown> : null,
     };
   }
+
+  it('loads provider configs without running diagnostics by default', async () => {
+    const response = await request('/api/providers?project_id=project-1');
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(testProviderConfig)).not.toHaveBeenCalled();
+    expect(vi.mocked(detectDefaultLocalProviders)).not.toHaveBeenCalled();
+    expect(response.body?.providers).toHaveLength(2);
+    expect(response.body?.detected_local_providers).toEqual([]);
+  });
+
+  it('loads provider diagnostics only when explicitly requested', async () => {
+    vi.mocked(detectDefaultLocalProviders).mockResolvedValueOnce([
+      { provider: 'ollama', label: 'Ollama', base_url: 'http://localhost:11434' },
+    ]);
+
+    const response = await request('/api/providers?project_id=project-1&include_status=1&include_detected=1');
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(testProviderConfig)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(detectDefaultLocalProviders)).toHaveBeenCalledWith('project-1');
+    expect(response.body?.detected_local_providers).toEqual([
+      { provider: 'ollama', label: 'Ollama', base_url: 'http://localhost:11434' },
+    ]);
+  });
 
   it('does not persist a mismatched embedding-provider switch until reindex is confirmed', async () => {
     const response = await request('/api/projects/project-1/embedding-provider', {

@@ -19,7 +19,7 @@ export const DEFAULT_FLOWS: DefaultFlow[] = [
     description: 'Plan and implement features, verify with tests, review.',
     provider_binding: 'task_selected',
     steps: [
-      { name: 'implement', position: 1, model: 'task:strong', tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
+      { name: 'implement', position: 1, model: 'task:strong', tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', instructions: `RULES:
 - You are implementing a task. Plan your approach first, then implement it.
 - Do NOT fix unrelated issues you discover.
 - Do NOT refactor code outside the scope of this task.
@@ -37,7 +37,7 @@ Read the codebase to understand the relevant files and architecture. Create a pl
     description: 'Analyze bugs, fix them, verify and review.',
     provider_binding: 'task_selected',
     steps: [
-      { name: 'fix', position: 1, model: 'task:strong', tools: ['Read', 'Edit', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
+      { name: 'fix', position: 1, model: 'task:strong', tools: ['Read', 'Edit', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', instructions: `RULES:
 - You are fixing a bug. Analyze the problem first, then fix it.
 - Do NOT fix unrelated issues you discover.
 - Do NOT refactor code outside the scope of this fix.
@@ -55,7 +55,7 @@ Analyze the codebase to understand the bug. Identify the root cause and location
     description: 'Plan and execute refactors, verify nothing broke, review.',
     provider_binding: 'task_selected',
     steps: [
-      { name: 'refactor', position: 1, model: 'task:strong', tools: ['Read', 'Edit', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
+      { name: 'refactor', position: 1, model: 'task:strong', tools: ['Read', 'Edit', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', instructions: `RULES:
 - You are refactoring code. Plan the refactor first, then execute it.
 - Maintain all existing behavior. Do NOT change functionality.
 - Do NOT fix unrelated issues or add features.
@@ -72,7 +72,7 @@ Read the codebase to understand the current structure. Plan the refactor, then e
     description: 'Plan and write tests, verify they pass, review.',
     provider_binding: 'task_selected',
     steps: [
-      { name: 'write-tests', position: 1, model: 'task:strong', tools: ['Read', 'Write', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', include_agents_md: true, instructions: `RULES:
+      { name: 'write-tests', position: 1, model: 'task:strong', tools: ['Read', 'Write', 'Bash', 'Grep', 'Glob'], context_sources: EXECUTE_CONTEXT, is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'pause', instructions: `RULES:
 - You are writing tests. Plan what to test first, then write the tests.
 - Follow existing test patterns in the project.
 - Do NOT modify production code -- only test files.
@@ -89,7 +89,7 @@ Read the codebase to understand what needs testing. Follow existing test pattern
     description: 'Search project documents and answer questions based on the results.',
     provider_binding: 'flow_locked',
     steps: [
-      { name: 'answer', position: 1, model: 'claude:sonnet', tools: ['Read', 'Grep', 'Glob', 'Bash'], context_sources: ['task_description', 'rag'], is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'skip', include_agents_md: false, instructions: `Answer the user's question based on the document search results provided above. Cite which documents you're referencing. If the results don't contain enough information to answer fully, say so clearly.` },
+      { name: 'answer', position: 1, model: 'claude:sonnet', tools: ['Read', 'Grep', 'Glob', 'Bash'], context_sources: ['task_description', 'rag'], is_gate: false, on_fail_jump_to: null, max_retries: 0, on_max_retries: 'skip', instructions: `Answer the user's question based on the document search results provided above. Cite which documents you're referencing. If the results don't contain enough information to answer fully, say so clearly.` },
     ],
   },
 ];

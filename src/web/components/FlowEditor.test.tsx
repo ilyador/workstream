@@ -41,6 +41,7 @@ function makeFlow(): Flow {
     is_builtin: false,
     agents_md: null,
     default_types: ['feature'],
+    provider_binding: 'task_selected',
     position: 1,
     created_at: '2026-04-06T00:00:00.000Z',
     flow_steps: [
@@ -56,7 +57,6 @@ function makeFlow(): Flow {
         on_fail_jump_to: null,
         max_retries: 0,
         on_max_retries: 'pause',
-        include_agents_md: true,
       },
     ],
   };
@@ -74,6 +74,7 @@ describe('FlowEditor flow step rendering', () => {
         <FlowEditor
           flows={[makeFlow()]}
           setFlows={vi.fn()}
+          providers={[]}
           onSave={vi.fn().mockResolvedValue(undefined)}
           onSaveSteps={vi.fn().mockResolvedValue(undefined)}
           onCreateFlow={vi.fn()}

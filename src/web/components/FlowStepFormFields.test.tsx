@@ -20,7 +20,6 @@ function makeStep(overrides: Partial<FlowStep> = {}): FlowStep {
     on_fail_jump_to: null,
     max_retries: 0,
     on_max_retries: 'pause',
-    include_agents_md: true,
     ...overrides,
   };
 }

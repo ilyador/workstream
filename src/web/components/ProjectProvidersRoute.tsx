@@ -7,6 +7,7 @@ type ProjectProvidersRouteProps = Pick<
   | 'embeddingProviderConfigId'
   | 'embeddingDimensions'
   | 'detectedLocalProviders'
+  | 'onLoadProviderDiagnostics'
   | 'onCreateProvider'
   | 'onUpdateProvider'
   | 'onDeleteProvider'
@@ -17,5 +18,6 @@ type ProjectProvidersRouteProps = Pick<
 >;
 
 export function ProjectProvidersRoute(props: ProjectProvidersRouteProps) {
-  return <ProviderSettingsPage {...props} />;
+  const { onLoadProviderDiagnostics, ...rest } = props;
+  return <ProviderSettingsPage {...rest} onLoadDiagnostics={onLoadProviderDiagnostics} />;
 }

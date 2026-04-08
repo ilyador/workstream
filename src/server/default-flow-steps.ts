@@ -10,7 +10,6 @@ export const VERIFY_STEP: FlowStepRow = {
   on_fail_jump_to: 1,
   max_retries: 2,
   on_max_retries: 'pause',
-  include_agents_md: false,
   instructions: `RULES:
 - Run the test suite. Do nothing else.
 - Do NOT modify any files.
@@ -50,7 +49,6 @@ export const REVIEW_STEP: FlowStepRow = {
   on_fail_jump_to: 1,
   max_retries: 1,
   on_max_retries: 'pause',
-  include_agents_md: false,
   instructions: `RULES:
 - Review the git diff only. Do NOT modify files.
 - Check: code quality, architecture alignment, completeness.
@@ -69,4 +67,4 @@ or if issues found:
 \`\`\``,
 };
 
-export const EXECUTE_CONTEXT = ['claude_md', 'agents_md', 'task_description', 'skills', 'task_images', 'followup_notes', 'gate_feedback'];
+export const EXECUTE_CONTEXT = ['agents', 'task_description', 'skills', 'task_images', 'followup_notes', 'gate_feedback'];

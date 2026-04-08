@@ -30,6 +30,10 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function queryFlag(value: unknown): boolean {
+  return value === '1' || value === 'true';
+}
+
 function hasEmbeddingReindexSensitiveUpdate(body: Record<string, unknown>): boolean {
   return [...EMBEDDING_REINDEX_FIELDS].some(field => field in body);
 }
@@ -68,13 +72,15 @@ providersRouter.get('/api/providers', requireAuth, async (req, res) => {
   const projectId = typeof req.query.project_id === 'string' ? req.query.project_id : '';
   if (!projectId) return res.status(400).json({ error: 'project_id required' });
   if (!await requireProjectMember(req, res, projectId)) return;
+  const includeStatus = queryFlag(req.query.include_status);
+  const includeDetected = queryFlag(req.query.include_detected);
 
   const [configs, projectSettings] = await Promise.all([
     getProjectProviderConfigs(projectId),
     supabase.from('projects').select('embedding_provider_config_id, embedding_dimensions').eq('id', projectId).single(),
   ]);
-  const statuses = await Promise.all(configs.map(config => testProviderConfig(config)));
-  const detected = await detectDefaultLocalProviders(projectId);
+  const statuses = includeStatus ? await Promise.all(configs.map(config => testProviderConfig(config))) : [];
+  const detected = includeDetected ? await detectDefaultLocalProviders(projectId) : [];
 
   res.json({
     providers: configs.map((config, index) => publicProviderRecord(config, statuses[index])),

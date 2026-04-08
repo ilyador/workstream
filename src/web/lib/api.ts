@@ -523,7 +523,6 @@ export interface FlowStep {
   on_fail_jump_to: number | null;
   max_retries: number;
   on_max_retries: string;
-  include_agents_md: boolean;
 }
 
 export interface Flow {
@@ -621,8 +620,14 @@ export function isProviderUpdateEmbeddingResponse(value: ProviderUpdateResponse)
     && 'requires_reindex' in value;
 }
 
-export async function getProviders(projectId: string): Promise<ProviderListResponse> {
-  return apiFetch(`/api/providers?project_id=${projectId}`);
+export async function getProviders(
+  projectId: string,
+  options: { includeStatus?: boolean; includeDetected?: boolean } = {},
+): Promise<ProviderListResponse> {
+  const params = new URLSearchParams({ project_id: projectId });
+  if (options.includeStatus) params.set('include_status', '1');
+  if (options.includeDetected) params.set('include_detected', '1');
+  return apiFetch(`/api/providers?${params.toString()}`);
 }
 
 export async function createProvider(projectId: string, data: {

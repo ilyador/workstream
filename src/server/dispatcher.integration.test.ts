@@ -255,7 +255,6 @@ function makeStep(overrides: Partial<FlowStepConfig> = {}): FlowStepConfig {
     on_fail_jump_to: null,
     max_retries: 0,
     on_max_retries: 'pause',
-    include_agents_md: false,
     ...overrides,
   };
 }
@@ -264,6 +263,7 @@ function makeFlow(overrides: Partial<FlowConfig> = {}): FlowConfig {
   return {
     flow_name: 'Test Flow',
     agents_md: null,
+    provider_binding: 'task_selected',
     steps: [makeStep()],
     ...overrides,
   };
@@ -502,10 +502,10 @@ describe('dispatcher integration', () => {
   // agents_md always injected
   // -------------------------------------------------------------------------
   describe('agents_md always injected (fix #1)', () => {
-    it('injects agents_md regardless of include_agents_md flag', async () => {
+    it('injects agents_md for every step in the flow', async () => {
       // This is already tested in runner.test.ts but verify it still holds
       const { buildStepPrompt } = await import('./runner.js');
-      const step = makeStep({ include_agents_md: false });
+      const step = makeStep();
       const flow = makeFlow({ agents_md: 'Always apply these rules.' });
       const task = { id: 't1', title: 'T', description: 'D', chaining: 'none', multiagent: 'auto', images: [] };
 

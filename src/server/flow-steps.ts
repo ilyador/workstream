@@ -24,7 +24,6 @@ export function normalizeFlowStep(step: unknown, index: number): FlowStepRow {
     on_fail_jump_to: typeof record.on_fail_jump_to === 'number' ? record.on_fail_jump_to : null,
     max_retries: typeof record.max_retries === 'number' ? record.max_retries : 0,
     on_max_retries: typeof record.on_max_retries === 'string' ? record.on_max_retries : 'pause',
-    include_agents_md: record.include_agents_md !== false,
   };
 }
 

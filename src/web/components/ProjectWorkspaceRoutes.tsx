@@ -21,6 +21,7 @@ export interface ProjectWorkspaceRoutesProps {
   embeddingProviderConfigId: string | null;
   embeddingDimensions: number | null;
   detectedLocalProviders: Array<{ provider: ProviderConfig['provider']; label: string; base_url: string }>;
+  onLoadProviderDiagnostics: () => Promise<unknown>;
   memberMap: Record<string, { name: string; initials: string }>;
   flowMap: Record<string, string>;
   typeFlowMap: Record<string, string>;
@@ -205,6 +206,7 @@ export function ProjectWorkspaceRoutes({
             embeddingProviderConfigId={embeddingProviderConfigId}
             embeddingDimensions={embeddingDimensions}
             detectedLocalProviders={detectedLocalProviders}
+            onLoadProviderDiagnostics={onLoadProviderDiagnostics}
             onCreateProvider={onCreateProvider}
             onUpdateProvider={onUpdateProvider}
             onDeleteProvider={onDeleteProvider}

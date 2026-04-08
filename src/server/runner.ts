@@ -164,11 +164,13 @@ export async function buildStepPrompt(
 
   for (const source of step.context_sources) {
     switch (source) {
-      case 'claude_md': {
-        const claudeMdPath = join(localPath, 'CLAUDE.md');
-        if (existsSync(claudeMdPath)) {
-          const content = readFileSync(claudeMdPath, 'utf-8');
-          prompt += `## Project Context (from CLAUDE.md)\n${content.substring(0, 8000)}\n\n`;
+      case 'agents': {
+        const agentsMdPath = join(localPath, 'AGENTS.md');
+        const legacyClaudeMdPath = join(localPath, 'CLAUDE.md');
+        const instructionsPath = existsSync(agentsMdPath) ? agentsMdPath : legacyClaudeMdPath;
+        if (existsSync(instructionsPath)) {
+          const content = readFileSync(instructionsPath, 'utf-8');
+          prompt += `## Project Context (from ${instructionsPath.endsWith('AGENTS.md') ? 'AGENTS.md' : 'CLAUDE.md'})\n${content.substring(0, 8000)}\n\n`;
         }
         break;
       }

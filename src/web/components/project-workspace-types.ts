@@ -48,6 +48,7 @@ export interface CurrentProjectWorkspaceProps {
   embeddingProviderConfigId: string | null;
   embeddingDimensions: number | null;
   detectedLocalProviders: Array<{ provider: ProviderConfig['provider']; label: string; base_url: string }>;
+  onLoadProviderDiagnostics: () => Promise<unknown>;
   customTypes: CustomTaskType[];
   jobs: JobView[];
   memberMap: Record<string, { name: string; initials: string }>;

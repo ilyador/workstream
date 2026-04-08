@@ -66,7 +66,6 @@ function makeStep(overrides: Partial<FlowStepConfig> = {}): FlowStepConfig {
     on_fail_jump_to: null,
     max_retries: 0,
     on_max_retries: 'pause',
-    include_agents_md: false,
     ...overrides,
   };
 }
@@ -75,6 +74,7 @@ function makeFlow(overrides: Partial<FlowConfig> = {}): FlowConfig {
   return {
     flow_name: 'Test Flow',
     agents_md: null,
+    provider_binding: 'task_selected',
     steps: [makeStep()],
     ...overrides,
   };
@@ -147,11 +147,49 @@ describe('buildStepPrompt', () => {
     const task = makeTask();
     const flow = makeFlow({ agents_md: 'Use the project agent rules.' });
 
-    const withFlag = await buildStepPrompt(makeStep({ include_agents_md: true }), flow, task, [], '/tmp/fake');
-    const withoutFlag = await buildStepPrompt(makeStep({ include_agents_md: false }), flow, task, [], '/tmp/fake');
+    const firstPrompt = await buildStepPrompt(makeStep(), flow, task, [], '/tmp/fake');
+    const secondPrompt = await buildStepPrompt(makeStep(), flow, task, [], '/tmp/fake');
 
-    expect(withFlag).toContain('Use the project agent rules.');
-    expect(withoutFlag).toContain('Use the project agent rules.');
+    expect(firstPrompt).toContain('Use the project agent rules.');
+    expect(secondPrompt).toContain('Use the project agent rules.');
+  });
+
+  it('reads repo agent instructions from AGENTS.md when requested', async () => {
+    const dir = makeTempDir();
+    writeFileSync(join(dir, 'AGENTS.md'), 'Repository agent instructions');
+
+    try {
+      const prompt = await buildStepPrompt(
+        makeStep({ context_sources: ['agents'] }),
+        makeFlow(),
+        makeTask(),
+        [],
+        dir,
+      );
+      expect(prompt).toContain('Repository agent instructions');
+      expect(prompt).toContain('AGENTS.md');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to CLAUDE.md when AGENTS.md is absent', async () => {
+    const dir = makeTempDir();
+    writeFileSync(join(dir, 'CLAUDE.md'), 'Legacy agent instructions');
+
+    try {
+      const prompt = await buildStepPrompt(
+        makeStep({ context_sources: ['agents'] }),
+        makeFlow(),
+        makeTask(),
+        [],
+        dir,
+      );
+      expect(prompt).toContain('Legacy agent instructions');
+      expect(prompt).toContain('CLAUDE.md');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

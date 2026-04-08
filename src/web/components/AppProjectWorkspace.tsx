@@ -79,6 +79,7 @@ export function AppProjectWorkspace({
       embeddingProviderConfigId={resources.providers.embeddingProviderConfigId}
       embeddingDimensions={resources.providers.embeddingDimensions}
       detectedLocalProviders={resources.providers.detectedLocalProviders}
+      onLoadProviderDiagnostics={resources.providers.loadDiagnostics}
       customTypes={resources.customTypes.types}
       jobs={viewModels.jobViews}
       memberMap={viewModels.memberMap}

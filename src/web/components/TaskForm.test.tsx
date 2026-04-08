@@ -246,7 +246,6 @@ describe('TaskForm flow selection', () => {
           on_fail_jump_to: null,
           max_retries: 0,
           on_max_retries: 'pause',
-          include_agents_md: true,
         },
         {
           id: 'step-2',
@@ -260,7 +259,6 @@ describe('TaskForm flow selection', () => {
           on_fail_jump_to: null,
           max_retries: 0,
           on_max_retries: 'pause',
-          include_agents_md: true,
         },
       ],
     });
@@ -286,7 +284,6 @@ describe('TaskForm flow selection', () => {
           on_fail_jump_to: null,
           max_retries: 0,
           on_max_retries: 'pause',
-          include_agents_md: true,
         },
       ],
     });
@@ -312,7 +309,6 @@ describe('TaskForm flow selection', () => {
           on_fail_jump_to: null,
           max_retries: 0,
           on_max_retries: 'pause',
-          include_agents_md: true,
         },
       ],
     });
@@ -341,7 +337,6 @@ describe('TaskForm flow selection', () => {
           on_fail_jump_to: null,
           max_retries: 0,
           on_max_retries: 'pause',
-          include_agents_md: true,
         },
       ],
     });
@@ -376,7 +371,6 @@ describe('TaskForm flow selection', () => {
           on_fail_jump_to: null,
           max_retries: 0,
           on_max_retries: 'pause',
-          include_agents_md: true,
         },
       ],
     });

@@ -16,15 +16,14 @@ export function makeBlankStep(position: number, providerBinding: Flow['provider_
     name: '',
     position,
     instructions: '',
-    model: isTaskSelectedFlow(providerBinding) ? 'task:balanced' : 'claude:sonnet',
+    model: isTaskSelectedFlow(providerBinding) ? 'task:selected' : 'claude:sonnet',
     provider_config_id: null,
     tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'],
-    context_sources: ['claude_md', 'task_description'],
+    context_sources: ['agents', 'task_description'],
     is_gate: false,
     on_fail_jump_to: null,
     max_retries: 1,
     on_max_retries: 'pause',
-    include_agents_md: true,
   };
 }
 
@@ -41,7 +40,6 @@ export function stepsPayload(steps: FlowStep[]): FlowStepInput[] {
     on_fail_jump_to: step.is_gate ? step.on_fail_jump_to : null,
     max_retries: step.is_gate ? step.max_retries : 0,
     on_max_retries: step.is_gate ? step.on_max_retries : 'pause',
-    include_agents_md: step.include_agents_md,
   }));
 }
 

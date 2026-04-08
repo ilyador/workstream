@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import {
   type EmbeddingProviderUpdateResponse,
   createProvider as apiCreateProvider,
@@ -18,6 +18,7 @@ import {
 import { useProjectResource } from './useProjectResource';
 
 export function useProviders(projectId: string | null) {
+  const includeDiagnosticsRef = useRef(false);
   const {
     data,
     setData,
@@ -25,7 +26,10 @@ export function useProviders(projectId: string | null) {
     error,
     ready,
     reload: load,
-  } = useProjectResource(projectId, async (id) => getProviders(id), {
+  } = useProjectResource(projectId, async (id) => getProviders(id, {
+    includeStatus: includeDiagnosticsRef.current,
+    includeDetected: includeDiagnosticsRef.current,
+  }), {
     createInitialValue: (): ProviderListResponse => ({
       providers: [],
       embedding_provider_config_id: null,
@@ -36,7 +40,17 @@ export function useProviders(projectId: string | null) {
   });
 
   useEffect(() => {
+    includeDiagnosticsRef.current = false;
+  }, [projectId]);
+
+  useEffect(() => {
     void load();
+  }, [load, projectId]);
+
+  const loadDiagnostics = useCallback(async () => {
+    if (!projectId) throw new Error('projectId is required');
+    includeDiagnosticsRef.current = true;
+    return load();
   }, [load, projectId]);
 
   const createProvider = useCallback(async (input: {
@@ -121,6 +135,7 @@ export function useProviders(projectId: string | null) {
     error,
     ready,
     reload: load,
+    loadDiagnostics,
     createProvider,
     updateProvider,
     deleteProvider,

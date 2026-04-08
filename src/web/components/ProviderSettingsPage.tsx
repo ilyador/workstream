@@ -22,6 +22,7 @@ interface ProviderSettingsPageProps {
   embeddingProviderConfigId: string | null;
   embeddingDimensions: number | null;
   detectedLocalProviders: Array<{ provider: ProviderConfig['provider']; label: string; base_url: string }>;
+  onLoadDiagnostics?: () => Promise<unknown>;
   onCreateProvider: (data: {
     provider: ProviderConfig['provider'];
     label?: string;
@@ -55,6 +56,7 @@ export function ProviderSettingsPage({
   embeddingProviderConfigId,
   embeddingDimensions,
   detectedLocalProviders,
+  onLoadDiagnostics,
   onCreateProvider,
   onUpdateProvider,
   onDeleteProvider,
@@ -82,6 +84,11 @@ export function ProviderSettingsPage({
   useEffect(() => {
     setSelectedEmbeddingId(embeddingProviderConfigId);
   }, [embeddingProviderConfigId]);
+
+  useEffect(() => {
+    if (!onLoadDiagnostics) return;
+    void onLoadDiagnostics().catch(() => {});
+  }, [onLoadDiagnostics]);
 
   const embeddingProviders = useMemo(
     () => providers.filter(provider => provider.supports_embeddings && provider.is_enabled),
@@ -211,7 +218,7 @@ export function ProviderSettingsPage({
     <div className={s.page}>
       <div className={s.section}>
         <div className={s.heading}>Providers</div>
-        <p className={s.muted}>Configure Claude, Codex, and OpenAI-compatible local or custom endpoints for flow execution and embeddings.</p>
+        <p className={s.muted}>Configure Claude, Codex, and local or custom OpenAI-compatible endpoints for flow execution and embeddings.</p>
       </div>
 
       <div className={s.section}>

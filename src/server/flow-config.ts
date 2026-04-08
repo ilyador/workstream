@@ -12,7 +12,6 @@ export interface FlowStepConfig {
   on_fail_jump_to: number | null;
   max_retries: number;
   on_max_retries: 'pause' | 'fail' | 'skip';
-  include_agents_md: boolean;
 }
 
 export interface FlowConfig {
@@ -47,7 +46,7 @@ export function buildFlowSnapshot(flow: unknown): FlowConfig {
   const providerBinding = normalizeFlowProviderBinding(
     typeof flowRecord.provider_binding === 'string' ? flowRecord.provider_binding : null,
   );
-  const fallbackModel = providerBinding === 'task_selected' ? 'task:balanced' : 'claude:sonnet';
+  const fallbackModel = providerBinding === 'task_selected' ? 'task:selected' : 'claude:sonnet';
   const rawSteps = Array.isArray(flowRecord.flow_steps) ? flowRecord.flow_steps : [];
   const steps = rawSteps
     .map(step => record(step))
@@ -64,7 +63,6 @@ export function buildFlowSnapshot(flow: unknown): FlowConfig {
       on_fail_jump_to: typeof step.on_fail_jump_to === 'number' ? step.on_fail_jump_to : null,
       max_retries: numberValue(step.max_retries, 0),
       on_max_retries: onMaxRetries(step.on_max_retries),
-      include_agents_md: step.include_agents_md !== false,
     }));
 
   return {
