@@ -6,7 +6,7 @@ import {
   requireTaskAccess,
   stringField,
 } from '../authz.js';
-import { supabase } from '../supabase.js';
+import { hasActiveTaskJob } from '../supabase.js';
 import { activeWorkstreamJobId, createQueuedRunJob } from './run-queue.js';
 import { runBody } from './run-validation.js';
 
@@ -29,16 +29,11 @@ runRouter.post('/api/run', requireAuth, async (req, res) => {
   if (taskAccess.projectId !== projectId) return res.status(400).json({ error: 'Task does not belong to projectId' });
   if (stringField(task, 'mode') !== 'ai') return res.status(400).json({ error: 'Only AI tasks can be run' });
 
-  const { data: existingJobs, error: existingJobsError } = await supabase
-    .from('jobs')
-    .select('id')
-    .eq('task_id', taskId)
-    .in('status', ['queued', 'running', 'paused', 'review'])
-    .limit(1);
-  if (existingJobsError) return res.status(500).json({ error: existingJobsError.message });
-
-  if (existingJobs && existingJobs.length > 0) {
-    return res.status(409).json({ error: 'A job is already queued, running, or paused for this task', jobId: existingJobs[0].id });
+  try {
+    const active = await hasActiveTaskJob(taskId);
+    if (active) return res.status(409).json({ error: 'A job is already queued, running, or paused for this task', jobId: active.id });
+  } catch (err) {
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to check active jobs' });
   }
 
   const workstreamId = stringField(task, 'workstream_id');

@@ -8,6 +8,7 @@ import {
   stringField,
 } from '../authz.js';
 import { errorMessage } from './execution-helpers.js';
+import { activeWorkstreamJobId } from './run-queue.js';
 import { completeOriginalJobForRework, markTaskInProgressForRework, reworkTaskRollback } from './job-rework-finalize.js';
 import { queueReworkJob } from './job-rework-queue.js';
 import { loadReworkTask } from './job-rework-task.js';
@@ -30,6 +31,16 @@ jobReworkStartRouter.post('/api/jobs/:id/rework', requireAuth, async (req, res) 
   const taskResult = await loadReworkTask(taskId);
   if ('error' in taskResult) return res.status(taskResult.status).json({ error: taskResult.error });
   const { task } = taskResult;
+
+  // Check for active workstream job to prevent concurrent execution
+  const workstreamId = stringField(task, 'workstream_id');
+  if (workstreamId) {
+    const active = await activeWorkstreamJobId(workstreamId);
+    if (!('error' in active) && active.jobId && active.jobId !== jobId) {
+      return res.status(409).json({ error: 'Another task in this workstream is already running' });
+    }
+  }
+
   const queued = await queueReworkJob({ task, taskId, projectId: access.projectId, localPath: reworkLocalPath });
   if ('error' in queued) return res.status(queued.status).json({ error: queued.error });
   const newJob = queued.job;

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   approveJob,
   continueJob,
@@ -24,79 +24,83 @@ export function useJobLifecycleActions({
   jobs,
   reloadTaskState,
 }: UseJobLifecycleActionsParams) {
+  const busyRef = useRef(false);
+
+  async function guarded<T>(fn: () => Promise<T>, errorLabel: string): Promise<T | undefined> {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      return await fn();
+    } catch (err) {
+      await modal.alert('Error', getErrorMessage(err, errorLabel));
+    } finally {
+      busyRef.current = false;
+    }
+  }
+
   const terminate = useCallback(async (jobId: string) => {
     if (!(await modal.confirm('Terminate job', 'Terminate this running job?', { label: 'Terminate', danger: true }))) {
       return;
     }
-
-    await terminateJob(jobId);
-    await reloadTaskState();
+    await guarded(async () => {
+      await terminateJob(jobId);
+      await reloadTaskState();
+    }, 'Failed to terminate');
   }, [modal, reloadTaskState]);
 
   const reply = useCallback(async (jobId: string, answer: string) => {
-    try {
-      await replyToJob(jobId, answer, localPath || '');
-      await reloadTaskState();
-    } catch (err) {
-      await modal.alert('Error', getErrorMessage(err, 'Failed to send reply'));
+    if (!localPath) {
+      await modal.alert('Error', 'Project local path is not configured');
+      return;
     }
+    await guarded(async () => {
+      await replyToJob(jobId, answer, localPath);
+      await reloadTaskState();
+    }, 'Failed to send reply');
   }, [localPath, modal, reloadTaskState]);
 
   const approve = useCallback(async (jobId: string) => {
-    try {
+    await guarded(async () => {
       await approveJob(jobId);
       await reloadTaskState();
-    } catch (err) {
-      await modal.alert('Error', getErrorMessage(err, 'Failed to approve'));
-    }
+    }, 'Failed to approve');
   }, [modal, reloadTaskState]);
 
   const reject = useCallback(async (jobId: string) => {
-    try {
+    await guarded(async () => {
       await rejectJob(jobId);
       await reloadTaskState();
-    } catch (err) {
-      await modal.alert('Error', getErrorMessage(err, 'Failed to reject'));
-    }
+    }, 'Failed to reject');
   }, [modal, reloadTaskState]);
 
   const rework = useCallback(async (jobId: string, note: string) => {
     const context = await requireExecutionContext({ projectId, localPath, modal });
     if (!context) return;
-
-    try {
+    await guarded(async () => {
       await reworkJob(jobId, note, context.projectId, context.localPath);
       await reloadTaskState();
-    } catch (err) {
-      await modal.alert('Error', getErrorMessage(err, 'Failed to rework'));
-    }
+    }, 'Failed to rework');
   }, [localPath, modal, projectId, reloadTaskState]);
 
   const dismissJob = useCallback(async (jobId: string) => {
-    try {
+    await guarded(async () => {
       await deleteJob(jobId);
       await jobs.reload();
-    } catch (err) {
-      await modal.alert('Error', getErrorMessage(err, 'Failed to dismiss job'));
-    }
+    }, 'Failed to dismiss job');
   }, [jobs, modal]);
 
   const sendToBacklog = useCallback(async (jobId: string) => {
-    try {
+    await guarded(async () => {
       await moveToBacklog(jobId);
       await reloadTaskState();
-    } catch (err) {
-      await modal.alert('Error', getErrorMessage(err, 'Failed to move to backlog'));
-    }
+    }, 'Failed to move to backlog');
   }, [modal, reloadTaskState]);
 
   const continueExecution = useCallback(async (jobId: string) => {
-    try {
+    await guarded(async () => {
       await continueJob(jobId);
       await reloadTaskState();
-    } catch (err) {
-      await modal.alert('Error', getErrorMessage(err, 'Failed to continue job'));
-    }
+    }, 'Failed to continue job');
   }, [modal, reloadTaskState]);
 
   return {

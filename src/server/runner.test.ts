@@ -19,7 +19,7 @@ vi.mock('./supabase.js', () => {
           };
         }
         if (table === 'task_artifacts') {
-          return { insert: mockInsert };
+          return { insert: mockInsert, upsert: mockInsert };
         }
         return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
       }),
@@ -138,6 +138,17 @@ describe('buildStepPrompt', () => {
     expect(prompt).toContain('Write a markdown report');
     // And still has file output instruction
     expect(prompt).toContain('## File Output');
+  });
+
+  it('always injects agents_md when the flow has it', async () => {
+    const task = makeTask();
+    const flow = makeFlow({ agents_md: 'Use the project agent rules.' });
+
+    const withFlag = await buildStepPrompt(makeStep({ include_agents_md: true }), flow, task, [], '/tmp/fake');
+    const withoutFlag = await buildStepPrompt(makeStep({ include_agents_md: false }), flow, task, [], '/tmp/fake');
+
+    expect(withFlag).toContain('Use the project agent rules.');
+    expect(withoutFlag).toContain('Use the project agent rules.');
   });
 });
 
@@ -424,7 +435,7 @@ describe('artifact production without code changes', () => {
     writeFileSync(join(artifactsDir, 'also-good.txt'), 'more content');
 
     // Get the upload mock by invoking the factory and make it fail for 'bad.md'
-    const uploadFn = (supabase.storage.from('task-artifacts') as any).upload as ReturnType<typeof vi.fn>;
+    const uploadFn = (supabase.storage.from('task-artifacts') as { upload: ReturnType<typeof vi.fn> }).upload;
     uploadFn.mockImplementation((path: string) => {
       if (path.includes('bad.md')) return Promise.reject(new Error('Upload failed'));
       return Promise.resolve({ data: {}, error: null });
@@ -438,6 +449,25 @@ describe('artifact production without code changes', () => {
     expect(logs.some(l => l.includes('Captured: also-good.txt'))).toBe(true);
     // The bad file should have a failure log
     expect(logs.some(l => l.includes('Failed to capture bad.md'))).toBe(true);
+    expect(existsSync(join(artifactsDir, 'bad.md'))).toBe(true);
+    expect(existsSync(join(artifactsDir, 'good.md'))).toBe(false);
+    expect(existsSync(join(artifactsDir, 'also-good.txt'))).toBe(false);
+  });
+
+  it('treats Supabase upload error results as failures and keeps artifacts for retry', async () => {
+    const artifactsDir = join(tempDir, '.artifacts');
+    mkdirSync(artifactsDir, { recursive: true });
+    writeFileSync(join(artifactsDir, 'report.md'), '# Report');
+
+    const uploadFn = (supabase.storage.from('task-artifacts') as { upload: ReturnType<typeof vi.fn> }).upload;
+    uploadFn.mockResolvedValueOnce({ data: null, error: { message: 'Storage unavailable' } });
+
+    const logs: string[] = [];
+    await scanAndUploadArtifacts(tempDir, 'task-001', 'job-001', 'implement', (t) => logs.push(t));
+
+    expect(logs.some(l => l.includes('Failed to capture report.md: Storage unavailable'))).toBe(true);
+    expect(logs.some(l => l.includes('Leaving .artifacts/ in place'))).toBe(true);
+    expect(existsSync(artifactsDir)).toBe(true);
   });
 
   it('captures artifacts in a git repo with a clean working tree', async () => {

@@ -95,7 +95,7 @@ export function TaskCardActiveDetail({
           <LiveLogs
             jobId={job.id}
             footer={onTerminate ? (
-              <button className="btn btnDanger btnSm" onClick={() => onTerminate(job.id)}>Terminate</button>
+              <button className="btn btnDanger btnSm" onClick={() => onTerminate(job.id)} disabled={busy}>Terminate</button>
             ) : undefined}
           />
         </>
@@ -139,7 +139,7 @@ export function TaskCardActiveDetail({
                 className="btn btnWarning btnSm"
                 onClick={() => setShowRework(value => !value)}
                 title="Give feedback and re-run the task"
-              >
+                             >
                 Rework
               </button>
             )}
