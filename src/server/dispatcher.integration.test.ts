@@ -84,7 +84,10 @@ let spawnDelay = 0;
 
 function makeFakeProcess(): ChildProcess {
   const proc = new EventEmitter() as any;
-  proc.stdin = { write: vi.fn(), end: vi.fn() };
+  const stdin = new EventEmitter() as any;
+  stdin.write = vi.fn();
+  stdin.end = vi.fn();
+  proc.stdin = stdin;
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
   proc.pid = Math.floor(Math.random() * 10000);
@@ -323,7 +326,10 @@ describe('dispatcher integration', () => {
         spawnCount++;
         // All spawns succeed with output, but gate steps get a fail verdict
         const proc = new EventEmitter() as any;
-        proc.stdin = { write: vi.fn(), end: vi.fn() };
+        const stdin = new EventEmitter() as any;
+        stdin.write = vi.fn();
+        stdin.end = vi.fn();
+        proc.stdin = stdin;
         proc.stdout = new EventEmitter();
         proc.stderr = new EventEmitter();
         proc.pid = spawnCount;

@@ -14,5 +14,6 @@ jobTerminateRouter.post('/api/jobs/:id/terminate', requireAuth, async (req, res)
   }
   const { error } = await supabase.from('jobs').update({ status: 'canceling' }).eq('id', jobId);
   if (error) return res.status(400).json({ error: error.message });
+  await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: '[terminate] Cancellation requested' } });
   res.json({ ok: true });
 });

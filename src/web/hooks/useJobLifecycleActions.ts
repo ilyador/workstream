@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
   approveJob,
   continueJob,
@@ -24,39 +24,60 @@ export function useJobLifecycleActions({
   jobs,
   reloadTaskState,
 }: UseJobLifecycleActionsParams) {
+  const [busy, setBusy] = useState(false);
+
   const terminate = useCallback(async (jobId: string) => {
     if (!(await modal.confirm('Terminate job', 'Terminate this running job?', { label: 'Terminate', danger: true }))) {
       return;
     }
-
-    await terminateJob(jobId);
-    await reloadTaskState();
+    try {
+      setBusy(true);
+      await terminateJob(jobId);
+      await reloadTaskState();
+    } catch (err) {
+      await modal.alert('Error', getErrorMessage(err, 'Failed to terminate'));
+    } finally {
+      setBusy(false);
+    }
   }, [modal, reloadTaskState]);
 
   const reply = useCallback(async (jobId: string, answer: string) => {
+    if (!localPath) {
+      await modal.alert('Error', 'Project local path is not configured');
+      return;
+    }
     try {
-      await replyToJob(jobId, answer, localPath || '');
+      setBusy(true);
+      await replyToJob(jobId, answer, localPath);
       await reloadTaskState();
     } catch (err) {
       await modal.alert('Error', getErrorMessage(err, 'Failed to send reply'));
+    } finally {
+      setBusy(false);
     }
   }, [localPath, modal, reloadTaskState]);
 
   const approve = useCallback(async (jobId: string) => {
     try {
+      setBusy(true);
       await approveJob(jobId);
       await reloadTaskState();
     } catch (err) {
       await modal.alert('Error', getErrorMessage(err, 'Failed to approve'));
+    } finally {
+      setBusy(false);
     }
   }, [modal, reloadTaskState]);
 
   const reject = useCallback(async (jobId: string) => {
     try {
+      setBusy(true);
       await rejectJob(jobId);
       await reloadTaskState();
     } catch (err) {
       await modal.alert('Error', getErrorMessage(err, 'Failed to reject'));
+    } finally {
+      setBusy(false);
     }
   }, [modal, reloadTaskState]);
 
@@ -100,6 +121,7 @@ export function useJobLifecycleActions({
   }, [modal, reloadTaskState]);
 
   return {
+    busy,
     terminate,
     reply,
     approve,

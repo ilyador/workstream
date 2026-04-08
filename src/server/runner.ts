@@ -1537,7 +1537,10 @@ async function updateTaskStatus(taskId: string, status: string, extra: Record<st
   if (error) {
     console.error(`[runner] Failed to update task ${taskId} to ${status}, retrying:`, error.message);
     const { error: retryError } = await supabase.from('tasks').update({ status, ...extra }).eq('id', taskId);
-    if (retryError) console.error(`[runner] Retry also failed for task ${taskId}:`, retryError.message);
+    if (retryError) {
+      console.error(`[runner] Retry also failed for task ${taskId}:`, retryError.message);
+      throw new Error(`Failed to update task ${taskId} to ${status}: ${retryError.message}`);
+    }
   }
 }
 
@@ -1671,6 +1674,9 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
     let lineBuffer = '';
 
     // Pipe prompt via stdin to avoid arg length limits
+    proc.stdin.on('error', (err) => {
+      console.error(`[runner] stdin write error for job ${jobId}:`, err.message);
+    });
     if (prompt) {
       proc.stdin.write(prompt);
       proc.stdin.end();

@@ -23,6 +23,18 @@ taskMutationsRouter.patch('/api/tasks/:id', requireAuth, async (req, res) => {
   const referenceError = await validateTaskReferences(updates, access.projectId);
   if (referenceError) return res.status(400).json({ error: referenceError });
   if (typeof updates.title === 'string') updates.title = updates.title.trim();
+  // Prevent status changes that conflict with active jobs
+  if (typeof updates.status === 'string') {
+    const { data: activeJobs } = await supabase
+      .from('jobs')
+      .select('id, status')
+      .eq('task_id', taskId)
+      .in('status', ['queued', 'running', 'paused', 'review', 'canceling'])
+      .limit(1);
+    if (activeJobs && activeJobs.length > 0) {
+      return res.status(409).json({ error: `Cannot change task status while job ${activeJobs[0].id} is ${activeJobs[0].status}` });
+    }
+  }
   if (updates.status === 'done' && !updates.completed_at) {
     updates.completed_at = new Date().toISOString();
   } else if (typeof updates.status === 'string' && updates.status !== 'done') {
