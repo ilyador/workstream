@@ -1,25 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { applyPositionUpdates, applyTaskMove, replaceItemById } from './optimistic-updates';
+import { applyPositionUpdates, applyTaskMove, buildRelativeMovePositionUpdates, replaceItemById } from './optimistic-updates';
 
 describe('optimistic updates', () => {
-  it('swaps workstream positions and keeps the result sorted for column rollback paths', () => {
+  it('moves a column to the separator represented by the target side', () => {
     const workstreams = [
       { id: 'ws-1', position: 1, name: 'Backlog' },
       { id: 'ws-2', position: 2, name: 'Build' },
       { id: 'ws-3', position: 3, name: 'Review' },
+      { id: 'ws-4', position: 4, name: 'Ship' },
     ];
 
-    const swapped = applyPositionUpdates(workstreams, { 'ws-1': 3, 'ws-3': 1 }, { sort: true });
+    const moved = applyPositionUpdates(
+      workstreams,
+      buildRelativeMovePositionUpdates(workstreams, 'ws-1', 'ws-3', 'left'),
+      { sort: true },
+    );
 
-    expect(swapped.map(workstream => [workstream.id, workstream.position])).toEqual([
-      ['ws-3', 1],
-      ['ws-2', 2],
-      ['ws-1', 3],
+    expect(moved.map(workstream => workstream.id)).toEqual([
+      'ws-2',
+      'ws-1',
+      'ws-3',
+      'ws-4',
     ]);
+  });
 
-    const rolledBack = applyPositionUpdates(swapped, { 'ws-1': 1, 'ws-3': 3 }, { sort: true });
+  it('treats right-of-left-column and left-of-right-column as the same separator', () => {
+    const workstreams = [
+      { id: 'ws-1', position: 1, name: 'Backlog' },
+      { id: 'ws-2', position: 2, name: 'Build' },
+      { id: 'ws-3', position: 3, name: 'Review' },
+      { id: 'ws-4', position: 4, name: 'Ship' },
+    ];
 
-    expect(rolledBack).toEqual(workstreams);
+    const moveAfterBuild = buildRelativeMovePositionUpdates(workstreams, 'ws-1', 'ws-2', 'right');
+    const moveBeforeReview = buildRelativeMovePositionUpdates(workstreams, 'ws-1', 'ws-3', 'left');
+
+    expect(moveAfterBuild).toEqual(moveBeforeReview);
+    expect(moveAfterBuild).toEqual({ 'ws-1': 2.5 });
   });
 
   it('applies and rolls back a task move without mutating unrelated tasks', () => {

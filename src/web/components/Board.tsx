@@ -4,6 +4,7 @@ import { BoardWorkstreamColumns } from './BoardWorkstreamColumns';
 import { useBoardDrag } from '../hooks/useBoardDrag';
 import { useBoardColumns } from '../hooks/useBoardColumns';
 import type { BoardProps } from './board-types';
+import type { RelativeDropSide } from '../lib/optimistic-updates';
 import s from './Board.module.css';
 
 export function Board({
@@ -53,7 +54,7 @@ export function Board({
     handleDragEnd,
     handleBoardDragOver,
     isDragging,
-  } = useBoardDrag({ onSwapColumns });
+  } = useBoardDrag({ onSwapColumns: handleMoveColumnsWithinSection });
   const {
     taskJobMap,
     tasksByWorkstream,
@@ -75,16 +76,29 @@ export function Board({
     onMoveTask,
     clearDraggedTask: () => setDraggedTaskId(null),
   });
+  function handleMoveColumnsWithinSection(
+    draggedId: string,
+    targetId: string,
+    side: RelativeDropSide,
+  ) {
+    const draggedSection = workstreamSectionById[draggedId];
+    const targetSection = workstreamSectionById[targetId];
+    if (!draggedSection || draggedSection !== targetSection) return;
+
+    const orderedIds = (draggedSection === 'complete' ? completeWorkstreams : activeWorkstreams)
+      .map(workstream => workstream.id);
+    onSwapColumns(draggedId, targetId, side, orderedIds);
+  }
   const draggedWorkstreamSection = draggedWsId ? workstreamSectionById[draggedWsId] : null;
   const draggedTaskSection = draggedTaskId ? taskSectionById[draggedTaskId] || 'active' : null;
 
-  const handleColumnDropWithinSection = (targetWorkstreamId: string) => {
+  const handleColumnDropWithinSection = (targetWorkstreamId: string, side: RelativeDropSide) => {
     if (!draggedWsId) return;
     if (workstreamSectionById[draggedWsId] !== workstreamSectionById[targetWorkstreamId]) {
       setDraggedWsId(null);
       return;
     }
-    handleColumnDrop(targetWorkstreamId);
+    handleColumnDrop(targetWorkstreamId, side);
   };
 
   return (

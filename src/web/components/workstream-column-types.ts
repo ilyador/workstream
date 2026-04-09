@@ -2,6 +2,7 @@ import type React from 'react';
 import type { JobView } from './job-types';
 import type { TaskCardProps } from './TaskCard';
 import type { TaskView, WorkstreamView } from '../lib/task-view';
+import type { RelativeDropSide } from '../lib/optimistic-updates';
 
 export interface WorkstreamColumnProps {
   workstream: WorkstreamView | null;
@@ -23,7 +24,7 @@ export interface WorkstreamColumnProps {
   onDropTask: (workstreamId: string | null, dropBeforeTaskId: string | null) => void;
   draggedWsId?: string | null;
   onColumnDragStart?: (wsId: string) => void;
-  onColumnDrop?: (targetWsId: string) => void;
+  onColumnDrop?: (targetWsId: string, side: RelativeDropSide) => void;
   onRenameWorkstream?: (id: string, name: string) => void;
   onDeleteWorkstream?: (id: string) => void;
   onUpdateWorkstream?: (id: string, data: Record<string, unknown>) => Promise<void>;

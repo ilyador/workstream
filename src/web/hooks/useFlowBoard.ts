@@ -5,6 +5,7 @@ import { getErrorMessage, getStepMetaItems, sortedSteps, stepToTask, stepsPayloa
 import { useBoardDrag } from './useBoardDrag';
 import { useModal } from './modal-context';
 import type { TaskCardMetaItem } from '../components/task-card-types';
+import type { RelativeDropSide } from '../lib/optimistic-updates';
 
 interface UseFlowBoardArgs {
   flows: Flow[];
@@ -12,7 +13,7 @@ interface UseFlowBoardArgs {
   projectId: string;
   onSaveSteps: (flowId: string, steps: ReturnType<typeof stepsPayload>) => Promise<void>;
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: ReturnType<typeof stepsPayload> }) => Promise<Flow>;
-  onSwapColumns: (draggedId: string, targetId: string) => void;
+  onSwapColumns: (draggedId: string, targetId: string, side: RelativeDropSide) => void;
 }
 
 export function useFlowBoard({

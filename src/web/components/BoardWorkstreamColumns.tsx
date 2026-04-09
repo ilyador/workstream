@@ -1,6 +1,7 @@
 import { BoardWorkstreamColumn } from './BoardWorkstreamColumn';
 import type { BoardColumnDataProps, BoardColumnDragProps, BoardProps, BoardTaskActionProps } from './board-types';
 import type { TaskView, WorkstreamView } from '../lib/task-view';
+import type { RelativeDropSide } from '../lib/optimistic-updates';
 
 interface BoardWorkstreamColumnsProps extends BoardColumnDataProps, BoardColumnDragProps, BoardTaskActionProps {
   workstreams: WorkstreamView[];
@@ -8,7 +9,7 @@ interface BoardWorkstreamColumnsProps extends BoardColumnDataProps, BoardColumnD
   focusWsId?: string | null;
   draggedWsId?: string | null;
   onColumnDragStart: (workstreamId: string) => void;
-  onColumnDrop: (targetWorkstreamId: string) => void;
+  onColumnDrop: (targetWorkstreamId: string, side: RelativeDropSide) => void;
   onUpdateWorkstream: BoardProps['onUpdateWorkstream'];
   onDeleteWorkstream: BoardProps['onDeleteWorkstream'];
   onAddTask: BoardProps['onAddTask'];
