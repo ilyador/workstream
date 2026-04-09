@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import type React from 'react';
+import type { RelativeDropSide } from '../lib/optimistic-updates';
 
 interface UseBoardDragOptions {
-  onSwapColumns: (draggedId: string, targetId: string) => void;
+  onSwapColumns: (draggedId: string, targetId: string, side: RelativeDropSide) => void;
 }
 
 export function useBoardDrag({ onSwapColumns }: UseBoardDragOptions) {
@@ -22,9 +23,9 @@ export function useBoardDrag({ onSwapColumns }: UseBoardDragOptions) {
     setDraggedGroupIds(taskIds);
   };
 
-  const handleColumnDrop = (targetId: string) => {
+  const handleColumnDrop = (targetId: string, side: RelativeDropSide) => {
     if (!draggedWsId || draggedWsId === targetId) return;
-    onSwapColumns(draggedWsId, targetId);
+    onSwapColumns(draggedWsId, targetId, side);
     setDraggedWsId(null);
   };
 

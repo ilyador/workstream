@@ -1,6 +1,7 @@
 import type { JobView } from './job-types';
 import type { TaskRecord } from '../lib/api';
 import type { TaskView, WorkstreamView } from '../lib/task-view';
+import type { RelativeDropSide } from '../lib/optimistic-updates';
 
 export interface BoardProps {
   workstreams: WorkstreamView[];
@@ -18,7 +19,7 @@ export interface BoardProps {
   onCreateWorkstream: (name: string, description?: string, has_code?: boolean) => Promise<void>;
   onUpdateWorkstream: (id: string, data: Record<string, unknown>) => Promise<void>;
   onDeleteWorkstream: (id: string) => Promise<void>;
-  onSwapColumns: (draggedId: string, targetId: string) => void;
+  onSwapColumns: (draggedId: string, targetId: string, side: RelativeDropSide, orderedIds: string[]) => void;
   onAddTask: (workstreamId: string | null) => void;
   onRunTask: (taskId: string) => void;
   onRunWorkstream: (workstreamId: string) => void;

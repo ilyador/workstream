@@ -30,7 +30,7 @@ export function useFlows(projectId: string | null) {
           if (idx >= 0) {
             const next = [...prev];
             next[idx] = { ...prev[idx], ...event.flow };
-            return next;
+            return next.sort((a, b) => a.position - b.position);
           }
           return [...prev, event.flow].sort((a, b) => a.position - b.position);
         });

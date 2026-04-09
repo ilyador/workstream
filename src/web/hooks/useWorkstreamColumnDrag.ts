@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { useTaskDropIndicator } from './useTaskDropIndicator';
+import type { RelativeDropSide } from '../lib/optimistic-updates';
 
 interface UseWorkstreamColumnDragArgs {
   tasksRef: React.RefObject<HTMLDivElement | null>;
@@ -11,7 +12,7 @@ interface UseWorkstreamColumnDragArgs {
   draggedWsId?: string | null;
   isBacklog: boolean;
   onDropTask: (workstreamId: string | null, dropBeforeTaskId: string | null) => void;
-  onColumnDrop?: (targetWsId: string) => void;
+  onColumnDrop?: (targetWsId: string, side: RelativeDropSide) => void;
   classes: {
     chainGroup: string;
     cardWrap: string;
@@ -59,14 +60,18 @@ export function useWorkstreamColumnDrag({
     }
   }, []);
 
-  const handleColumnDragOver = useCallback((event: React.DragEvent) => {
-    if (!draggedWsId || !workstreamId || draggedWsId === workstreamId) return;
+  const getColumnDropSide = useCallback((clientX: number): RelativeDropSide | null => {
+    if (!draggedWsId || !workstreamId || draggedWsId === workstreamId) return null;
     const column = columnRef.current;
-    if (!column) return;
+    if (!column) return null;
     const rect = column.getBoundingClientRect();
     const midX = rect.left + rect.width / 2;
-    setColumnDropSide(event.clientX < midX ? 'left' : 'right');
+    return clientX < midX ? 'left' : 'right';
   }, [draggedWsId, workstreamId, columnRef]);
+
+  const handleColumnDragOver = useCallback((event: React.DragEvent) => {
+    setColumnDropSide(getColumnDropSide(event.clientX));
+  }, [getColumnDropSide]);
 
   const handleDragEnter = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -115,7 +120,8 @@ export function useWorkstreamColumnDrag({
     if (draggedWsId && workstreamId && onColumnDrop && draggedWsId !== workstreamId) {
       colDragCountRef.current = 0;
       setColumnDropSide(null);
-      onColumnDrop(workstreamId);
+      const dropSide = getColumnDropSide(event.clientX);
+      if (dropSide) onColumnDrop(workstreamId, dropSide);
     }
   }, [
     draggedTaskId,
@@ -125,6 +131,7 @@ export function useWorkstreamColumnDrag({
     onDropTask,
     clearColumnScroll,
     clearDropIndicator,
+    getColumnDropSide,
     dropBeforeTaskIdRef,
   ]);
 

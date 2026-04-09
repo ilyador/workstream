@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import type { Flow, FlowStep, TaskRecord, WorkstreamRecord } from '../lib/api';
 import type { JobView } from './job-types';
+import type { RelativeDropSide } from '../lib/optimistic-updates';
 import { ProjectArchiveRoute } from './ProjectArchiveRoute';
 import { ProjectBoardRoute } from './ProjectBoardRoute';
 import { ProjectFlowsRoute } from './ProjectFlowsRoute';
@@ -27,7 +28,7 @@ export interface ProjectWorkspaceRoutesProps {
   onCreateWorkstream: (name: string, description?: string, hasCode?: boolean) => Promise<void>;
   onUpdateWorkstream: (id: string, data: Record<string, unknown>) => Promise<void>;
   onDeleteWorkstream: (id: string) => Promise<void>;
-  onSwapColumns: (draggedId: string, targetId: string) => void;
+  onSwapColumns: (draggedId: string, targetId: string, side: RelativeDropSide, orderedIds: string[]) => void;
   onAddTask: (workstreamId: string | null) => void;
   onRunWorkstream: (workstreamId: string) => void;
   onRunTask: (taskId: string) => void;
@@ -49,7 +50,7 @@ export interface ProjectWorkspaceRoutesProps {
   onSaveFlowSteps: (flowId: string, steps: Array<Omit<FlowStep, 'id'>>) => Promise<void>;
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: Array<Omit<FlowStep, 'id'>> }) => Promise<Flow>;
   onDeleteFlow: (flowId: string) => Promise<void>;
-  onSwapFlows: (draggedId: string, targetId: string) => void;
+  onSwapFlows: (draggedId: string, targetId: string, side: RelativeDropSide, orderedIds: string[]) => void;
 }
 
 export function ProjectWorkspaceRoutes({

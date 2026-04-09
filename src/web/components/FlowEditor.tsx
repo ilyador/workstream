@@ -7,6 +7,7 @@ import { FlowAgentsMdSection } from './FlowAgentsMdSection';
 import { FlowStepModal } from './FlowStepModal';
 import { flowToWorkstream, type FlowStepInput } from '../lib/flow-editor';
 import { useFlowBoard } from '../hooks/useFlowBoard';
+import type { RelativeDropSide } from '../lib/optimistic-updates';
 import s from './FlowEditor.module.css';
 
 interface FlowEditorProps {
@@ -16,7 +17,7 @@ interface FlowEditorProps {
   onSaveSteps: (flowId: string, steps: FlowStepInput[]) => Promise<void>;
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: FlowStepInput[] }) => Promise<Flow>;
   onDeleteFlow: (flowId: string) => Promise<void>;
-  onSwapColumns: (draggedId: string, targetId: string) => void;
+  onSwapColumns: (draggedId: string, targetId: string, side: RelativeDropSide, orderedIds: string[]) => void;
   projectId: string;
   taskTypes?: string[];
 }
@@ -43,7 +44,7 @@ export function FlowEditor({ flows, setFlows, onSave, onSaveSteps, onCreateFlow,
     projectId,
     onSaveSteps,
     onCreateFlow,
-    onSwapColumns,
+    onSwapColumns: (draggedId, targetId, side) => onSwapColumns(draggedId, targetId, side, flows.map(flow => flow.id)),
   });
   const {
     boardRef,

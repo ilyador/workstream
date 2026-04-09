@@ -1,6 +1,6 @@
 import type React from 'react';
 import { updateTask, updateWorkstream as apiUpdateWorkstream, updateFlow as apiUpdateFlow, type Flow, type TaskRecord, type WorkstreamRecord } from '../lib/api';
-import { applyPositionUpdates, applyTaskMove, replaceItemById } from '../lib/optimistic-updates';
+import { applyPositionUpdates, applyTaskMove, buildRelativeMovePositionUpdates, replaceItemById, type RelativeDropSide } from '../lib/optimistic-updates';
 
 function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
@@ -35,30 +35,33 @@ export function useProjectOrderingMutations({
   setFlows,
   reloadFlows,
 }: UseProjectOrderingMutationsArgs) {
-  const handleSwapWorkstreams = (draggedId: string, targetId: string) => {
-    const dragged = workstreams.find(workstream => workstream.id === draggedId);
-    const target = workstreams.find(workstream => workstream.id === targetId);
-    if (!dragged || !target) return;
+  const handleSwapWorkstreams = (
+    draggedId: string,
+    targetId: string,
+    side: RelativeDropSide,
+    orderedIds: string[],
+  ) => {
+    const scopedWorkstreams = workstreams
+      .filter(workstream => orderedIds.includes(workstream.id))
+      .sort((a, b) => a.position - b.position);
+    const updates = buildRelativeMovePositionUpdates(scopedWorkstreams, draggedId, targetId, side);
+    const entries = Object.entries(updates);
+    if (entries.length === 0) return;
 
-    const draggedPosition = dragged.position;
-    const targetPosition = target.position;
+    const originalPositions = Object.fromEntries(
+      entries.map(([id]) => {
+        const workstream = workstreams.find(candidate => candidate.id === id);
+        return [id, workstream?.position ?? 0];
+      }),
+    );
 
-    setWorkstreams(prev => applyPositionUpdates(prev, {
-      [draggedId]: targetPosition,
-      [targetId]: draggedPosition,
-    }));
+    setWorkstreams(prev => applyPositionUpdates(prev, updates, { sort: true }));
 
     void (async () => {
       try {
-        await Promise.all([
-          apiUpdateWorkstream(draggedId, { position: targetPosition }),
-          apiUpdateWorkstream(targetId, { position: draggedPosition }),
-        ]);
+        await Promise.all(entries.map(([id, position]) => apiUpdateWorkstream(id, { position })));
       } catch (err) {
-        setWorkstreams(prev => applyPositionUpdates(prev, {
-          [draggedId]: draggedPosition,
-          [targetId]: targetPosition,
-        }));
+        setWorkstreams(prev => applyPositionUpdates(prev, originalPositions, { sort: true }));
         await reloadWorkstreams();
         await modal.alert('Error', getErrorMessage(err, 'Failed to reorder workstreams'));
       }
@@ -82,30 +85,33 @@ export function useProjectOrderingMutations({
     })();
   };
 
-  const handleSwapFlows = (draggedId: string, targetId: string) => {
-    const dragged = flows.find(flow => flow.id === draggedId);
-    const target = flows.find(flow => flow.id === targetId);
-    if (!dragged || !target) return;
+  const handleSwapFlows = (
+    draggedId: string,
+    targetId: string,
+    side: RelativeDropSide,
+    orderedIds: string[],
+  ) => {
+    const scopedFlows = flows
+      .filter(flow => orderedIds.includes(flow.id))
+      .sort((a, b) => a.position - b.position);
+    const updates = buildRelativeMovePositionUpdates(scopedFlows, draggedId, targetId, side);
+    const entries = Object.entries(updates);
+    if (entries.length === 0) return;
 
-    const draggedPosition = dragged.position;
-    const targetPosition = target.position;
+    const originalPositions = Object.fromEntries(
+      entries.map(([id]) => {
+        const flow = flows.find(candidate => candidate.id === id);
+        return [id, flow?.position ?? 0];
+      }),
+    );
 
-    setFlows(prev => applyPositionUpdates(prev, {
-      [draggedId]: targetPosition,
-      [targetId]: draggedPosition,
-    }, { sort: true }));
+    setFlows(prev => applyPositionUpdates(prev, updates, { sort: true }));
 
     void (async () => {
       try {
-        await Promise.all([
-          apiUpdateFlow(draggedId, { position: targetPosition }),
-          apiUpdateFlow(targetId, { position: draggedPosition }),
-        ]);
+        await Promise.all(entries.map(([id, position]) => apiUpdateFlow(id, { position })));
       } catch (err) {
-        setFlows(prev => applyPositionUpdates(prev, {
-          [draggedId]: draggedPosition,
-          [targetId]: targetPosition,
-        }, { sort: true }));
+        setFlows(prev => applyPositionUpdates(prev, originalPositions, { sort: true }));
         await reloadFlows();
         await modal.alert('Error', getErrorMessage(err, 'Failed to reorder flows'));
       }
