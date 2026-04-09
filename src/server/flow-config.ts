@@ -57,12 +57,18 @@ export function buildFlowSnapshot(flow: unknown): FlowConfig {
       if (!model) {
         throw new Error(`Flow step '${stepName}' is missing a concrete model`);
       }
+      const providerConfigId = typeof step.provider_config_id === 'string'
+        ? step.provider_config_id.trim()
+        : '';
+      if (providerBinding === 'flow_locked' && !providerConfigId) {
+        throw new Error(`Flow step '${stepName}' is missing a provider config`);
+      }
       return {
         position: numberValue(step.position, 0),
         name: stepName,
         instructions: stringValue(step.instructions, ''),
         model,
-        provider_config_id: typeof step.provider_config_id === 'string' ? step.provider_config_id : null,
+        provider_config_id: providerConfigId || null,
         tools: stringArray(step.tools, []),
         context_sources: stringArray(step.context_sources, ['task_description', 'previous_step']),
         is_gate: step.is_gate === true,

@@ -105,7 +105,9 @@ vi.mock('./providers/registry.js', () => ({
 
 import {
   ensureTaskExecutionJobOwnership,
+  isQueueableTask,
   lockTaskExecutionSettings,
+  resolveFreshFlowSnapshotForTask,
   resolveTaskExecutionSelection,
 } from './task-execution.js';
 
@@ -168,6 +170,28 @@ describe('task execution lock ownership', () => {
     await expect(ensureTaskExecutionJobOwnership('task-1', 'job-1')).rejects.toThrow(
       'This task was reset after the job started. Start a new run instead of continuing the old job.',
     );
+  });
+
+  it('does not consider AI tasks without an assigned flow queueable', () => {
+    expect(isQueueableTask({
+      mode: 'ai',
+      status: 'todo',
+      assignee: null,
+      flow_id: null,
+    })).toBe(false);
+  });
+
+  it('fails fast when trying to resolve a fresh snapshot for a task without a flow', async () => {
+    await expect(resolveFreshFlowSnapshotForTask({
+      projectId: 'project-1',
+      task: {
+        id: 'task-1',
+        mode: 'ai',
+        status: 'todo',
+        assignee: null,
+        flow_id: null,
+      },
+    })).rejects.toThrow('AI tasks require an assigned flow');
   });
 
   it('does not lock tasks that are no longer queueable', async () => {

@@ -37,7 +37,7 @@ vi.mock('./routes/data.js', () => ({
   discoverSkills: vi.fn().mockReturnValue([]),
 }));
 
-import { scanAndUploadArtifacts, buildStepPrompt } from './runner.js';
+import { scanAndUploadArtifacts, buildStepPrompt, summaryEffortForFlow } from './runner.js';
 import type { FlowStepConfig, FlowConfig } from './runner.js';
 import { supabase } from './supabase.js';
 
@@ -205,6 +205,22 @@ describe('buildStepPrompt', () => {
 
     expect(prompt).toContain('npx tsx src/server/rag-cli.ts proj-999 "your search query"');
     expect(prompt).not.toContain('undefined "your search query"');
+  });
+});
+
+describe('summaryEffortForFlow', () => {
+  it('allows task-level effort for task-selected flows', () => {
+    expect(summaryEffortForFlow(
+      makeFlow({ provider_binding: 'task_selected' }),
+      makeTask({ effort: 'high' }),
+    )).toBe('high');
+  });
+
+  it('ignores task-level effort for flow-locked flows', () => {
+    expect(summaryEffortForFlow(
+      makeFlow({ provider_binding: 'flow_locked' }),
+      makeTask({ effort: 'high' }),
+    )).toBeUndefined();
   });
 });
 

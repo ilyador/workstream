@@ -11,8 +11,6 @@ export interface ParsedModelId {
   isLegacy: boolean;
 }
 
-const LEGACY_CLAUDE_MODELS = new Set(['opus', 'sonnet']);
-
 export function normalizeProviderKind(provider: string): ProviderKind {
   switch (provider) {
     case 'claude':
@@ -52,7 +50,7 @@ export function parseModelId(value: string | null | undefined): ParsedModelId {
     return {
       provider: 'claude',
       model: raw,
-      raw: LEGACY_CLAUDE_MODELS.has(raw) ? `claude:${raw}` : `claude:${raw}`,
+      raw: `claude:${raw}`,
       isLegacy: true,
     };
   }

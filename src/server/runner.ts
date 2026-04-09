@@ -55,6 +55,12 @@ export interface RunnerTask extends Record<string, unknown> {
   _ragResults?: SearchResult[];
 }
 
+export function summaryEffortForFlow(flow: FlowConfig, task: RunnerTask): string | undefined {
+  return flow.provider_binding === 'task_selected'
+    ? (typeof task.effort === 'string' && task.effort.length > 0 ? task.effort : undefined)
+    : undefined;
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -622,7 +628,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
       localPath,
       flow.steps[flow.steps.length - 1]?.model || 'claude:sonnet',
       flow.steps[flow.steps.length - 1]?.provider_config_id ?? null,
-      task.effort,
+      summaryEffortForFlow(flow, task),
     );
   } catch (err: unknown) {
     if (errorMessage(err) === 'Job canceled') return;

@@ -5,6 +5,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FilePreviewProvider } from './FilePreview';
 import { useFilePreview, type PreviewFile } from './filePreviewContext';
 
+vi.mock('./MarkdownArtifactEditor', () => ({
+  MarkdownArtifactEditor: ({
+    markdown,
+    onChange,
+  }: {
+    markdown: string;
+    onChange: (markdown: string) => void;
+  }) => (
+    <div
+      contentEditable
+      suppressContentEditableWarning
+      onInput={event => onChange(event.currentTarget.textContent || '')}
+    >
+      {markdown}
+    </div>
+  ),
+}));
+
 function PreviewButton({ file }: { file: PreviewFile }) {
   const { preview } = useFilePreview();
   return (

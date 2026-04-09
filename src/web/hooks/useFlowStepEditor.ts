@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { Flow, FlowStep } from '../lib/api';
 import { useModal } from './modal-context';
 import {
@@ -31,15 +31,15 @@ export function useFlowStepEditor({
   const activeIndex = isNew ? steps.length - 1 : stepIndex;
   const step = steps[activeIndex];
 
-  const updateStep = (patch: Partial<FlowStep>) => {
+  const updateStep = useCallback((patch: Partial<FlowStep>) => {
     setSteps(current =>
       current.map((candidate, candidateIndex) => (
         candidateIndex === activeIndex ? { ...candidate, ...patch } : candidate
       ))
     );
-  };
+  }, [activeIndex]);
 
-  const toggleTool = (tool: string) => {
+  const toggleTool = useCallback((tool: string) => {
     setSteps(current =>
       current.map((candidate, candidateIndex) => {
         if (candidateIndex !== activeIndex) return candidate;
@@ -51,9 +51,9 @@ export function useFlowStepEditor({
         };
       })
     );
-  };
+  }, [activeIndex]);
 
-  const toggleContext = (source: string) => {
+  const toggleContext = useCallback((source: string) => {
     setSteps(current =>
       current.map((candidate, candidateIndex) => {
         if (candidateIndex !== activeIndex) return candidate;
@@ -65,18 +65,18 @@ export function useFlowStepEditor({
         };
       })
     );
-  };
+  }, [activeIndex]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     try {
       await onSaveSteps(flow.id, stepsPayload(steps));
       onClose();
     } catch (err) {
       await modal.alert('Error', getErrorMessage(err, 'Failed to save flow steps'));
     }
-  };
+  }, [flow.id, modal, onClose, onSaveSteps, steps]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     const nextSteps = steps
       .filter((_, candidateIndex) => candidateIndex !== activeIndex)
       .map((candidate, candidateIndex) => ({ ...candidate, position: candidateIndex + 1 }));
@@ -86,7 +86,7 @@ export function useFlowStepEditor({
     } catch (err) {
       await modal.alert('Error', getErrorMessage(err, 'Failed to delete flow step'));
     }
-  };
+  }, [activeIndex, flow.id, modal, onClose, onSaveSteps, steps]);
 
   return {
     isNew,

@@ -55,7 +55,9 @@ export function isAiRunnableTask(task: DbRecord | null | undefined): boolean {
 }
 
 export function isQueueableTask(task: DbRecord | null | undefined): boolean {
-  return isAiRunnableTask(task) && QUEUEABLE_TASK_STATUSES.has(stringField(task, 'status') || 'backlog');
+  return isAiRunnableTask(task)
+    && nullableString(task?.flow_id) !== null
+    && QUEUEABLE_TASK_STATUSES.has(stringField(task, 'status') || 'backlog');
 }
 
 export function taskExecutionGeneration(task: DbRecord | null | undefined): number {
@@ -397,6 +399,9 @@ export async function resolveFreshFlowSnapshotForTask(args: {
   maxAttempts: number;
 }> {
   const flowId = nullableString(args.task.flow_id);
+  if (!flowId) {
+    throw new Error('AI tasks require an assigned flow');
+  }
   const resolved = await resolveFlowForTask({
     flow_id: flowId,
   }, args.projectId);

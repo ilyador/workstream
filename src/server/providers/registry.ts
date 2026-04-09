@@ -179,19 +179,34 @@ async function discoverHttpModels(config: ProviderConfigRecord): Promise<string[
   return [...new Set((payload.data || []).map(item => item.id).filter((item): item is string => typeof item === 'string' && item.length > 0))].sort();
 }
 
-async function detectEmbeddingDimensions(config: ProviderConfigRecord): Promise<number | null> {
-  if (!config.supports_embeddings || !config.embedding_model || !config.base_url) return null;
-  const client = createOpenAI({
-    baseURL: config.base_url.endsWith('/v1') ? config.base_url : `${config.base_url.replace(/\/+$/, '')}/v1`,
-    apiKey: config.api_key || 'local-provider',
-    name: `${config.provider}-embedding`,
-  });
-  const result = await embed({
-    model: client.embedding(config.embedding_model),
-    value: 'healthcheck',
-    abortSignal: AbortSignal.timeout(10000),
-  });
-  return Array.isArray(result.embedding) ? result.embedding.length : null;
+async function detectEmbeddingDimensions(config: ProviderConfigRecord): Promise<{
+  dimensions: number | null;
+  error: Error | null;
+}> {
+  if (!config.supports_embeddings || !config.embedding_model || !config.base_url) {
+    return { dimensions: null, error: null };
+  }
+  try {
+    const client = createOpenAI({
+      baseURL: config.base_url.endsWith('/v1') ? config.base_url : `${config.base_url.replace(/\/+$/, '')}/v1`,
+      apiKey: config.api_key || 'local-provider',
+      name: `${config.provider}-embedding`,
+    });
+    const result = await embed({
+      model: client.embedding(config.embedding_model),
+      value: 'healthcheck',
+      abortSignal: AbortSignal.timeout(10000),
+    });
+    return {
+      dimensions: Array.isArray(result.embedding) ? result.embedding.length : null,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      dimensions: null,
+      error: error instanceof Error ? error : new Error('Embedding probe failed'),
+    };
+  }
 }
 
 export async function discoverProviderModels(config: ProviderConfigRecord): Promise<string[]> {
@@ -216,13 +231,16 @@ export async function testProviderConfig(config: ProviderConfigRecord): Promise<
     }
 
     const models = await discoverHttpModels(config);
-    const embeddingDimensions = await detectEmbeddingDimensions(config);
+    const embeddingProbe = await detectEmbeddingDimensions(config);
+    if (embeddingProbe?.error) {
+      throw embeddingProbe.error;
+    }
     return {
       ok: true,
       status: 'online',
       message: `${config.label} responded successfully`,
       models,
-      embedding_dimensions: embeddingDimensions,
+      embedding_dimensions: embeddingProbe?.dimensions ?? null,
     };
   } catch (error: unknown) {
     return {

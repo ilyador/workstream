@@ -267,7 +267,7 @@ export function TaskTypeAssignmentSection({
             disabled={executionSettingsLocked}
             onChange={event => setEffort(event.target.value)}
           >
-            {(flowCapabilities?.supportedReasoningLevels || ['low']).map(level => (
+            {(flowCapabilities?.supportedReasoningLevels ?? []).map(level => (
               <option key={level} value={level}>{level}</option>
             ))}
           </select>

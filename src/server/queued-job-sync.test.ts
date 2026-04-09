@@ -136,4 +136,20 @@ describe('syncQueuedJobsForTask', () => {
     expect(state.deletedQueuedJobs).toBe(true);
     expect(state.updatedJobs).toEqual([]);
   });
+
+  it('discards queued jobs when an AI task no longer has an assigned flow', async () => {
+    await syncQueuedJobsForTask({
+      projectId: 'project-1',
+      task: {
+        id: 'task-1',
+        mode: 'ai',
+        status: 'todo',
+        assignee: null,
+        flow_id: null,
+      },
+    });
+
+    expect(state.deletedQueuedJobs).toBe(true);
+    expect(state.updatedJobs).toEqual([]);
+  });
 });
