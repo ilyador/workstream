@@ -85,6 +85,7 @@ export function ProjectWorkspaceRoutes({
   embeddingProviderConfigId,
   embeddingDimensions,
   detectedLocalProviders,
+  onLoadProviderDiagnostics,
   memberMap,
   flowMap,
   typeFlowMap,

@@ -191,6 +191,21 @@ describe('buildStepPrompt', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('uses the explicit project id for the RAG CLI hint', async () => {
+    const prompt = await buildStepPrompt(
+      makeStep({ context_sources: ['rag'] }),
+      makeFlow(),
+      makeTask({ project_id: undefined }),
+      [],
+      '/tmp/fake',
+      undefined,
+      'proj-999',
+    );
+
+    expect(prompt).toContain('npx tsx src/server/rag-cli.ts proj-999 "your search query"');
+    expect(prompt).not.toContain('undefined "your search query"');
+  });
 });
 
 // ---------------------------------------------------------------------------

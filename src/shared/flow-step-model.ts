@@ -82,6 +82,7 @@ export function isTaskModelSelector(value: string | null | undefined): boolean {
 }
 
 export function inferTaskModelProfile(value: string | null | undefined): TaskModelProfile | null {
+  if (!(value || '').trim()) return null;
   const selector = parseTaskModelSelector(value);
   if (selector) return selector;
 

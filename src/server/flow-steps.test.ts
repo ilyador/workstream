@@ -91,4 +91,25 @@ describe('resolveFlowStepProviderConfigs', () => {
       on_max_retries: 'pause',
     }])).rejects.toThrow(/multiple configs match/i);
   });
+
+  it('rejects disabled explicit provider configs for flow-locked steps', async () => {
+    state.configs = [
+      makeConfig('provider-1', 'custom'),
+      { ...makeConfig('provider-2', 'custom'), is_enabled: false },
+    ];
+
+    await expect(resolveFlowStepProviderConfigs('project-1', 'flow_locked', [{
+      name: 'Implement',
+      position: 1,
+      instructions: '',
+      model: 'custom:gpt-4.1',
+      provider_config_id: 'provider-2',
+      tools: [],
+      context_sources: [],
+      is_gate: false,
+      on_fail_jump_to: null,
+      max_retries: 0,
+      on_max_retries: 'pause',
+    }])).rejects.toThrow(/disabled/i);
+  });
 });

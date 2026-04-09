@@ -10,13 +10,20 @@ function stringArray(value: unknown, fallback: string[] = []): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : fallback;
 }
 
-export function normalizeFlowStep(step: unknown, index: number): FlowStepRow {
+export function normalizeFlowStep(
+  step: unknown,
+  index: number,
+  providerBinding: FlowProviderBinding | string | null | undefined = null,
+): FlowStepRow {
   const record = asRecord(step) || {};
+  const normalizedBinding = normalizeFlowProviderBinding(providerBinding);
+  const fallbackModel = normalizedBinding === 'task_selected' ? 'task:selected' : '';
+  const rawModel = typeof record.model === 'string' ? record.model.trim() : '';
   return {
     name: typeof record.name === 'string' ? record.name.trim() : '',
     position: typeof record.position === 'number' ? record.position : index + 1,
     instructions: typeof record.instructions === 'string' ? record.instructions : '',
-    model: typeof record.model === 'string' ? record.model : 'claude:sonnet',
+    model: rawModel || fallbackModel,
     provider_config_id: typeof record.provider_config_id === 'string' ? record.provider_config_id : null,
     tools: stringArray(record.tools),
     context_sources: stringArray(record.context_sources, ['task_description', 'previous_step']),
@@ -52,9 +59,13 @@ export async function resolveFlowStepProviderConfigs(
 
   const configs = await getProjectProviderConfigs(projectId);
   const byId = new Map(configs.map(config => [config.id, config]));
-  const byProvider = configsByProvider(configs);
+  const enabledConfigs = configs.filter(config => config.is_enabled);
+  const byProvider = configsByProvider(enabledConfigs);
 
   return steps.map((step, index) => {
+    if (!(step.model || '').trim()) {
+      throw new Error(`${stepLabel(step, index)} is missing a concrete provider model`);
+    }
     const parsed = parseModelId(typeof step.model === 'string' ? step.model : '');
     const explicitConfigId = typeof step.provider_config_id === 'string' && step.provider_config_id.length > 0
       ? step.provider_config_id
@@ -64,6 +75,9 @@ export async function resolveFlowStepProviderConfigs(
       const explicitConfig = byId.get(explicitConfigId);
       if (!explicitConfig) {
         throw new Error(`${stepLabel(step, index)} references a provider config that no longer exists`);
+      }
+      if (!explicitConfig.is_enabled) {
+        throw new Error(`${stepLabel(step, index)} references provider '${explicitConfig.label}', but that provider is disabled`);
       }
       if (explicitConfig.provider !== parsed.provider) {
         throw new Error(`${stepLabel(step, index)} uses model '${parsed.raw}' but is linked to provider '${explicitConfig.label}'`);
@@ -114,6 +128,7 @@ export async function createDefaultFlows(projectId: string): Promise<void> {
   for (const def of DEFAULT_FLOWS) {
     if (existingNames.has(def.name)) continue;
 
+    const preparedSteps = await resolveFlowStepProviderConfigs(projectId, def.provider_binding, def.steps);
     const { data: flow, error } = await supabase
       .from('flows')
       .insert({
@@ -132,7 +147,6 @@ export async function createDefaultFlows(projectId: string): Promise<void> {
     const flowId = flowRecord ? stringField(flowRecord, 'id') : null;
     if (!flowId) throw new Error(`Failed to seed flow ${def.name}: missing flow id`);
 
-    const preparedSteps = await resolveFlowStepProviderConfigs(projectId, def.provider_binding, def.steps);
     const { error: stepsError } = await supabase.from('flow_steps').insert(
       preparedSteps.map(s => ({ ...s, flow_id: flowId }))
     );

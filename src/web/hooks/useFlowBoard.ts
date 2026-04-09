@@ -11,7 +11,13 @@ interface UseFlowBoardArgs {
   setFlows: React.Dispatch<React.SetStateAction<Flow[]>>;
   projectId: string;
   onSaveSteps: (flowId: string, steps: ReturnType<typeof stepsPayload>) => Promise<void>;
-  onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: ReturnType<typeof stepsPayload> }) => Promise<Flow>;
+  onCreateFlow: (data: {
+    project_id: string;
+    name: string;
+    description?: string;
+    provider_binding?: Flow['provider_binding'];
+    steps?: ReturnType<typeof stepsPayload>;
+  }) => Promise<Flow>;
   onSwapColumns: (draggedId: string, targetId: string) => void;
 }
 

@@ -51,7 +51,7 @@ flowCreateRouter.post('/api/flows', requireAuth, async (req, res) => {
   if (error) return res.status(400).json({ error: error.message });
 
   if (Array.isArray(steps) && steps.length > 0) {
-    const normalizedSteps = steps.map((step, i: number) => normalizeFlowStep(step, i));
+    const normalizedSteps = steps.map((step, i: number) => normalizeFlowStep(step, i, normalizedBinding));
     let resolvedSteps;
     try {
       resolvedSteps = await resolveFlowStepProviderConfigs(project_id, normalizedBinding, normalizedSteps);

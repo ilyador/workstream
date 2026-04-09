@@ -23,7 +23,11 @@ flowStepRoutes.put('/api/flows/:id/steps', requireAuth, async (req, res) => {
     .eq('id', flowId)
     .single();
   if (flowError) return res.status(400).json({ error: flowError.message });
-  const normalizedStepRows = (steps as unknown[]).map((step, i) => normalizeFlowStep(step, i));
+  const normalizedStepRows = (steps as unknown[]).map((step, i) => normalizeFlowStep(
+    step,
+    i,
+    typeof flowRow?.provider_binding === 'string' ? flowRow.provider_binding : null,
+  ));
   let stepRows;
   try {
     stepRows = await resolveFlowStepProviderConfigs(

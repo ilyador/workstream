@@ -50,13 +50,14 @@ flowUpdateRouter.patch('/api/flows/:id', requireAuth, async (req, res) => {
       .eq('id', flowId)
       .single();
     if (flowError) return res.status(400).json({ error: flowError.message });
+    const nextBinding = normalizeFlowProviderBinding(updates.provider_binding);
     const currentSteps = Array.isArray(flowRows?.flow_steps)
-      ? flowRows.flow_steps.map((step, index) => normalizeFlowStep(step, index))
+      ? flowRows.flow_steps.map((step, index) => normalizeFlowStep(step, index, nextBinding))
       : [];
-    const validationError = validateStepsForBinding(updates.provider_binding, currentSteps);
+    const validationError = validateStepsForBinding(nextBinding, currentSteps);
     if (validationError) return res.status(400).json({ error: validationError });
     try {
-      resolvedSteps = await resolveFlowStepProviderConfigs(access.projectId, updates.provider_binding, currentSteps);
+      resolvedSteps = await resolveFlowStepProviderConfigs(access.projectId, nextBinding, currentSteps);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to resolve flow step providers';
       return res.status(400).json({ error: message });

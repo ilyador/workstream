@@ -1,12 +1,10 @@
-import { spawn } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
 import { join } from 'path';
 import { supabase } from './supabase.js';
 import { stagedDiff, stagedDiffStat } from './git-utils.js';
 import type { SearchResult } from './rag/service.js';
 import { discoverSkills } from './routes/data.js';
-import { claudeEnv } from './claude-env.js';
-import { cancelAllJobHandles, cancelJobHandles, hasActiveJobHandles, registerChildProcess, unregisterJobHandle, wasJobCanceled } from './providers/process-control.js';
+import { cancelAllJobHandles, cancelJobHandles, hasActiveJobHandles } from './providers/process-control.js';
 import { getProviderDriver, resolveProviderConfig } from './providers/registry.js';
 import type { FlowConfig, FlowStepConfig } from './flow-config.js';
 import { toProviderReasoningLevel } from './providers/model-id.js';
@@ -155,6 +153,7 @@ export async function buildStepPrompt(
   previousOutputs: PhaseRunRecord[],
   localPath: string,
   answer?: string,
+  projectId?: string,
 ): Promise<string> {
   let prompt = 'You are working on a task in this project\'s codebase.\n\n';
 
@@ -276,7 +275,7 @@ export async function buildStepPrompt(
         break;
       case 'rag':
         if (task._ragResults?.length > 0) prompt += formatRagResults(task._ragResults);
-        prompt += `## Document Search Tool\nUse the RagSearch tool to search project documents when it is available. If Bash is also available, you can run:\n\`\`\`\nnpx tsx src/server/rag-cli.ts ${task.project_id} "your search query"\n\`\`\`\nUse targeted queries to find rules, lore, specs, and project documentation.\n\n`;
+        prompt += `## Document Search Tool\nUse the RagSearch tool to search project documents when it is available. If Bash is also available, you can run:\n\`\`\`\nnpx tsx src/server/rag-cli.ts ${projectId || task.project_id || '<project-id>'} "your search query"\n\`\`\`\nUse targeted queries to find rules, lore, specs, and project documentation.\n\n`;
         break;
       case 'gate_feedback':
         if (task._gateFeedback) {
@@ -425,7 +424,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         question: null,
       }) !== 'updated') return;
 
-      const prompt = await buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer);
+      const prompt = await buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer, ctx.projectId);
 
       onLog(`\n--- Step: ${step.name} (attempt ${displayAttempt}/${maxAttempts}) ---\n`);
 
@@ -847,37 +846,6 @@ async function savePhases(jobId: string, phasesCompleted: unknown[]): Promise<vo
   }
 }
 
-/** Quick claude call for generating summaries. No tools, no streaming, just text in/out. */
-function generateSummary(jobId: string, prompt: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('claude', ['-p', '--output-format', 'text', '--max-turns', '1', '--model', 'sonnet'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: claudeEnv,
-      timeout: 30000,
-    });
-
-    const handle = registerChildProcess(jobId, proc);
-    let stdout = '';
-    proc.stdin.write(prompt);
-    proc.stdin.end();
-    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-    proc.on('close', (code) => {
-      const canceled = wasJobCanceled(jobId);
-      unregisterJobHandle(jobId, handle);
-      if (canceled) {
-        reject(new Error('Job canceled'));
-        return;
-      }
-      if (code === 0 || code === null) resolve(stdout.trim() || 'Completed');
-      else reject(new Error(`summary claude exited with code ${code}`));
-    });
-    proc.on('error', (err) => {
-      unregisterJobHandle(jobId, handle);
-      reject(err);
-    });
-  });
-}
-
 async function generateFlowSummary(
   jobId: string,
   projectId: string,
@@ -887,24 +855,18 @@ async function generateFlowSummary(
   providerConfigId: string | null,
   effort?: string,
 ): Promise<string> {
-  try {
-    const { parsed, config } = await resolveProviderConfig(projectId, modelId, providerConfigId);
-    const driver = getProviderDriver(parsed.provider);
-    const output = await driver.run({
-      jobId,
-      projectId,
-      prompt,
-      model: parsed.model,
-      cwd,
-      tools: [],
-      effort: effort ? toProviderReasoningLevel(parsed.provider, effort as 'low' | 'medium' | 'high' | 'max') : undefined,
-      providerConfig: config,
-      onLog: () => {},
-    });
-    return output.trim() || 'Completed';
-  } catch (error) {
-    const legacy = await generateSummary(jobId, prompt).catch(() => '');
-    if (legacy.trim()) return legacy.trim();
-    throw error;
-  }
+  const { parsed, config } = await resolveProviderConfig(projectId, modelId, providerConfigId);
+  const driver = getProviderDriver(parsed.provider);
+  const output = await driver.run({
+    jobId,
+    projectId,
+    prompt,
+    model: parsed.model,
+    cwd,
+    tools: [],
+    effort: effort ? toProviderReasoningLevel(parsed.provider, effort as 'low' | 'medium' | 'high' | 'max') : undefined,
+    providerConfig: config,
+    onLog: () => {},
+  });
+  return output.trim() || 'Completed';
 }

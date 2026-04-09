@@ -24,6 +24,12 @@ export function validateStepPayload(steps: unknown): string | null {
 }
 
 export function validateStepsForBinding(binding: string | null | undefined, steps: readonly FlowCapabilityStep[]): string | null {
+  for (const step of steps) {
+    if (!(step.model || '').trim()) {
+      return 'Each step requires a model.';
+    }
+  }
+
   if (binding === 'task_selected') {
     return validateTaskSelectedStepModels(steps);
   }
