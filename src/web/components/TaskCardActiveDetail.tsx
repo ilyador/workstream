@@ -95,7 +95,7 @@ export function TaskCardActiveDetail({
           <LiveLogs
             jobId={job.id}
             footer={onTerminate ? (
-              <button className="btn btnDanger btnSm" onClick={() => onTerminate(job.id)} disabled={busy}>Terminate</button>
+              <button className="btn btnDanger btnSm" onClick={() => onTerminate(job.id)}>Terminate</button>
             ) : undefined}
           />
         </>

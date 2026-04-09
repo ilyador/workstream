@@ -2,7 +2,6 @@ import type { Flow } from '../lib/api';
 import { BUILT_IN_TYPES } from '../lib/constants';
 import {
   getFlowIdForType,
-  PIPELINE_OPTIONS,
   type CustomTypeOption,
   type MemberOption,
 } from './task-form-shared';
@@ -14,14 +13,12 @@ interface TaskTypeAssignmentSectionProps {
   customTypes: CustomTypeOption[];
   type: string;
   customType: string;
-  customPipeline: string;
   isCustomType: boolean;
   assignee: string;
   flowId: string;
   effort: string;
   setType: (value: string) => void;
   setCustomType: (value: string) => void;
-  setCustomPipeline: (value: string) => void;
   setIsCustomType: (value: boolean) => void;
   setAssignee: (value: string) => void;
   setFlowId: (value: string) => void;
@@ -36,14 +33,12 @@ export function TaskTypeAssignmentSection({
   customTypes,
   type,
   customType,
-  customPipeline,
   isCustomType,
   assignee,
   flowId,
   effort,
   setType,
   setCustomType,
-  setCustomPipeline,
   setIsCustomType,
   setAssignee,
   setFlowId,
@@ -64,18 +59,6 @@ export function TaskTypeAssignmentSection({
               onChange={event => setCustomType(event.target.value)}
               autoFocus
             />
-            <select
-              className={s.select}
-              value={customPipeline}
-              onChange={event => setCustomPipeline(event.target.value)}
-              aria-label="Custom type pipeline"
-            >
-              {PIPELINE_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
             <button
               type="button"
               className={s.customTypeCancel}
@@ -95,9 +78,6 @@ export function TaskTypeAssignmentSection({
             value={type}
             onChange={event => {
               if (event.target.value === '__custom__') {
-                setCustomPipeline(
-                  PIPELINE_OPTIONS.some(option => option.value === type) ? type : 'feature'
-                );
                 setIsCustomType(true);
                 return;
               }

@@ -1,8 +1,7 @@
 import { supabase } from '../supabase.js';
 import { embed } from './embeddings.js';
 export { ingestDocument } from './ingest.js';
-
-const TOP_K = parseInt(process.env.RAG_TOP_K || '5');
+import { loadProjectDataSettings } from '../project-data-settings.js';
 
 export interface SearchResult {
   content: string;
@@ -22,8 +21,10 @@ function stringValue(record: Record<string, unknown>, key: string): string {
 }
 
 export async function search(projectId: string, query: string, limit?: number): Promise<SearchResult[]> {
-  const k = limit ?? TOP_K;
-  const [queryEmbedding] = await embed(query);
+  const settings = await loadProjectDataSettings(projectId);
+  if (!settings.enabled) throw new Error('Project Data is not enabled for this project');
+  const k = limit ?? settings.topK;
+  const [queryEmbedding] = await embed(query, settings);
   const embeddingStr = `[${queryEmbedding.join(',')}]`;
 
   const { data, error } = await supabase.rpc('search_rag_chunks', {

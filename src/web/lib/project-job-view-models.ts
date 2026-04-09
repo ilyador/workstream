@@ -2,16 +2,6 @@ import { pickPrimaryJobs } from './job-selection';
 import { timeAgo } from './time';
 import type { CompletedPhaseRecord, FlowSnapshotRecord, JobRecord, JobView } from '../components/job-types';
 
-const TASK_TYPE_PHASES: Record<string, string[]> = {
-  'bug-fix': ['plan', 'analyze', 'fix', 'verify', 'review'],
-  feature: ['plan', 'implement', 'verify', 'review'],
-  refactor: ['plan', 'analyze', 'refactor', 'verify', 'review'],
-  test: ['plan', 'write-tests', 'verify', 'review'],
-  'ui-fix': ['plan', 'implement', 'verify', 'review'],
-  design: ['plan', 'implement', 'verify', 'review'],
-  chore: ['plan', 'implement', 'verify', 'review'],
-};
-
 function cleanSummary(raw: string): string {
   return raw
     .split('\n')
@@ -25,24 +15,45 @@ function cleanSummary(raw: string): string {
     .trim();
 }
 
+function phaseName(phase: string | CompletedPhaseRecord): string {
+  if (typeof phase === 'string') return phase;
+  return phase.name || phase.phase || '';
+}
+
+function phaseList(
+  phasesCompleted: Array<string | CompletedPhaseRecord>,
+  currentPhase: string | null,
+  flowSnapshot?: FlowSnapshotRecord | null,
+): string[] {
+  if (flowSnapshot?.steps?.length) return flowSnapshot.steps.map(step => step.name);
+
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const phase of phasesCompleted) {
+    const name = phaseName(phase);
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  if (currentPhase && !seen.has(currentPhase)) names.push(currentPhase);
+  return names;
+}
+
 function buildPhases(
   phasesCompleted: Array<string | CompletedPhaseRecord>,
   currentPhase: string | null,
-  taskType: string,
   flowSnapshot?: FlowSnapshotRecord | null,
 ): { name: string; status: string; summary?: string }[] {
   const completedMap = new Map<string, string>();
 
   for (const phase of phasesCompleted) {
-    const name = typeof phase === 'string' ? phase : phase.name || phase.phase || '';
+    const name = phaseName(phase);
     if (!name) continue;
     const summary = typeof phase === 'string' ? '' : phase.summary || '';
     completedMap.set(name, summary);
   }
 
-  const allPhases = flowSnapshot?.steps?.map(step => step.name)
-    || TASK_TYPE_PHASES[taskType]
-    || TASK_TYPE_PHASES.feature;
+  const allPhases = phaseList(phasesCompleted, currentPhase, flowSnapshot);
 
   return allPhases.map(name => {
     if (completedMap.has(name)) {
@@ -60,7 +71,6 @@ function buildPhases(
 export function buildJobViews(
   jobs: JobRecord[],
   taskTitleMap: Record<string, string>,
-  taskTypeMap: Record<string, string>,
 ) {
   const order: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
   const sorted = [...jobs].sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5));
@@ -78,7 +88,6 @@ export function buildJobViews(
     phases: buildPhases(
       job.phases_completed || [],
       job.current_phase,
-      taskTypeMap[job.task_id] || 'feature',
       job.flow_snapshot,
     ),
     question: job.question || undefined,

@@ -1,4 +1,6 @@
 import type { JobRecord } from '../components/job-types';
+import type { ProjectDataReindexResult } from '../../shared/project-data.js';
+export type { ProjectDataReindexResult } from '../../shared/project-data.js';
 
 const BASE = '';
 
@@ -65,6 +67,7 @@ export interface TaskRecord {
   multiagent: string;
   status: string;
   auto_continue: boolean;
+  allow_project_data: boolean;
   assignee: string | null;
   workstream_id: string | null;
   position: number;
@@ -239,6 +242,18 @@ export interface ProjectSummary {
   local_path: string | null;
 }
 
+export interface ProjectDataSettings {
+  enabled: boolean;
+  backend: 'lmstudio' | 'ollama' | 'openai_compatible';
+  baseUrl: string;
+  embeddingModel: string;
+  topK: number;
+}
+
+export interface ProjectDataSettingsUpdateResponse extends ProjectDataSettings {
+  reindex?: ProjectDataReindexResult | null;
+}
+
 export async function createProject(name: string, supabaseConfig?: SupabaseConfig, localPath?: string): Promise<ProjectSummary> {
   return apiFetch('/api/projects', {
     method: 'POST',
@@ -250,6 +265,21 @@ export async function updateProjectLocalPath(projectId: string, localPath: strin
   return apiFetch(`/api/projects/${projectId}/local-path`, {
     method: 'PATCH',
     body: JSON.stringify({ local_path: localPath }),
+  });
+}
+
+export async function getProjectDataSettings(projectId: string): Promise<ProjectDataSettings> {
+  return apiFetch(`/api/projects/${projectId}/project-data`);
+}
+
+export async function updateProjectDataSettings(
+  projectId: string,
+  data: ProjectDataSettings,
+  options?: { reindex?: boolean },
+): Promise<ProjectDataSettingsUpdateResponse> {
+  return apiFetch(`/api/projects/${projectId}/project-data`, {
+    method: 'PATCH',
+    body: JSON.stringify({ ...data, reindex: options?.reindex === true }),
   });
 }
 
@@ -295,6 +325,7 @@ export async function createTask(data: {
   assignee?: string | null;
   flow_id?: string | null;
   auto_continue?: boolean;
+  allow_project_data?: boolean;
   images?: string[];
   workstream_id?: string | null;
   priority?: string;
@@ -485,7 +516,6 @@ export interface CustomTaskType {
   project_id: string;
   name: string;
   description: string;
-  pipeline: string;
   created_at: string;
 }
 
@@ -493,10 +523,10 @@ export async function getCustomTypes(projectId: string): Promise<CustomTaskType[
   return apiFetch(`/api/custom-types?project_id=${projectId}`);
 }
 
-export async function createCustomType(projectId: string, name: string, pipeline?: string, description?: string): Promise<CustomTaskType> {
+export async function createCustomType(projectId: string, name: string, description?: string): Promise<CustomTaskType> {
   return apiFetch('/api/custom-types', {
     method: 'POST',
-    body: JSON.stringify({ project_id: projectId, name, pipeline, description }),
+    body: JSON.stringify({ project_id: projectId, name, description }),
   });
 }
 
@@ -510,14 +540,16 @@ export interface FlowStep {
   name: string;
   position: number;
   instructions: string;
-  model: string;
+  runtime_kind: 'coding' | 'image';
+  runtime_id: string;
+  runtime_variant: string | null;
   tools: string[];
   context_sources: string[];
+  use_project_data: boolean;
   is_gate: boolean;
   on_fail_jump_to: number | null;
   max_retries: number;
   on_max_retries: string;
-  include_agents_md: boolean;
 }
 
 export interface Flow {
@@ -552,6 +584,74 @@ export async function deleteFlow(id: string) {
 
 export async function updateFlowSteps(flowId: string, steps: Array<Omit<FlowStep, 'id'>>) {
   return apiFetch(`/api/flows/${flowId}/steps`, { method: 'PUT', body: JSON.stringify({ steps }) });
+}
+
+// --- Project Data documents ---
+export interface ProjectDocumentRecord {
+  id: string;
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  chunk_count: number;
+  status: string;
+  error: string | null;
+  created_at: string;
+}
+
+export interface ProjectDataSearchResult {
+  content: string;
+  file_name: string;
+  document_id: string;
+  chunk_index: number;
+  similarity: number;
+}
+
+export async function getProjectDocuments(projectId: string): Promise<ProjectDocumentRecord[]> {
+  return apiFetch(`/api/documents?project_id=${projectId}`);
+}
+
+export async function createProjectTextDocument(projectId: string, name: string, content: string) {
+  return apiFetch(`/api/projects/${projectId}/documents/text`, {
+    method: 'POST',
+    body: JSON.stringify({ name, content }),
+  });
+}
+
+export async function searchProjectData(projectId: string, query: string, limit?: number): Promise<ProjectDataSearchResult[]> {
+  return apiFetch('/api/documents/search', {
+    method: 'POST',
+    body: JSON.stringify({ project_id: projectId, query, limit }),
+  });
+}
+
+export async function deleteProjectDocument(documentId: string) {
+  return apiFetch(`/api/documents/${documentId}`, { method: 'DELETE' });
+}
+
+export async function uploadProjectDocument(projectId: string, file: File) {
+  const headers: Record<string, string> = {};
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/api/projects/${projectId}/documents`, {
+    method: 'POST',
+    headers,
+    body: form,
+  });
+  if (res.status === 401 && refreshToken) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      return parseResponse(await fetch(`${BASE}/api/projects/${projectId}/documents`, {
+        method: 'POST',
+        headers,
+        body: form,
+      }));
+    }
+    clearSession();
+    throw new Error('Session expired');
+  }
+  return parseResponse(res);
 }
 
 // --- Skills ---

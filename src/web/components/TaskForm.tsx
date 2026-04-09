@@ -15,7 +15,8 @@ interface Props {
   members: MemberOption[];
   flows?: Flow[];
   customTypes?: CustomTypeOption[];
-  onSaveCustomType?: (name: string, pipeline: string) => Promise<void>;
+  projectDataEnabled: boolean;
+  onSaveCustomType?: (name: string) => Promise<void>;
   localPath?: string;
   projectId?: string;
   defaultWorkstreamId?: string | null;
@@ -24,7 +25,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function TaskForm({ workstreams, members, flows = [], customTypes = [], onSaveCustomType, localPath, projectId, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
+export function TaskForm({ workstreams, members, flows = [], customTypes = [], projectDataEnabled, onSaveCustomType, localPath, projectId, defaultWorkstreamId, editTask, onSubmit, onClose }: Props) {
   const { closing, closeWithAnimation } = useExitAnimation(onClose);
   const {
     isEdit,
@@ -36,8 +37,6 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
     setType,
     customType,
     setCustomType,
-    customPipeline,
-    setCustomPipeline,
     isCustomType,
     setIsCustomType,
     assignee,
@@ -54,6 +53,8 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
     setMultiagent,
     autoContinue,
     setAutoContinue,
+    allowProjectData,
+    setAllowProjectData,
     chaining,
     setChaining,
     mode,
@@ -118,7 +119,6 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
             customTypes={customTypes}
             type={type}
             customType={customType}
-            customPipeline={customPipeline}
             isCustomType={isCustomType}
             assignee={assignee}
             flowId={flowId}
@@ -127,10 +127,11 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
             priority={priority}
             multiagent={multiagent}
             autoContinue={autoContinue}
+            allowProjectData={allowProjectData}
             chaining={chaining}
+            projectDataEnabled={projectDataEnabled}
             setType={setType}
             setCustomType={setCustomType}
-            setCustomPipeline={setCustomPipeline}
             setIsCustomType={setIsCustomType}
             setAssignee={setAssignee}
             setFlowId={setFlowId}
@@ -140,6 +141,7 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], o
             setPriority={setPriority}
             setMultiagent={setMultiagent}
             setAutoContinue={setAutoContinue}
+            setAllowProjectData={setAllowProjectData}
             setChaining={setChaining}
           />
 

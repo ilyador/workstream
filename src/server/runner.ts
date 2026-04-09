@@ -4,6 +4,8 @@ import { join } from 'path';
 import { supabase } from './supabase.js';
 import { stagedDiff, stagedDiffStat } from './git-utils.js';
 import { discoverSkills } from './routes/data.js';
+import type { FlowConfig, FlowStepConfig } from './flow-config.js';
+import { getAvailableAiRuntime } from '../shared/ai-runtimes.js';
 
 const MIME_MAP: Record<string, string> = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
@@ -68,64 +70,10 @@ export async function scanAndUploadArtifacts(
   try { rmSync(artifactsDir, { recursive: true, force: true }); } catch { /* best effort */ }
 }
 
-interface PhaseConfig {
-  skill: string | null;
-  tools: string[];
-  prompt: string;
-  model: string;
-}
-
-interface TaskTypeConfig {
-  phases: string[];
-  on_verify_fail: string;
-  verify_retries: number;
-  final: string;
-  on_review_fail: string;
-  review_retries: number;
-  on_max_retries: string;
-  phase_config: Record<string, PhaseConfig>;
-}
-
-interface JobContext {
-  jobId: string;
-  taskId: string;
-  projectId: string;
-  localPath: string;
-  task: any;
-  taskType: TaskTypeConfig;
-  phasesAlreadyCompleted: any[];
-  onLog: (text: string) => void;
-  onPhaseStart: (phase: string, attempt: number) => void;
-  onPhaseComplete: (phase: string, output: any) => void;
-  onPause: (question: string) => void;
-  onReview: (result: any) => Promise<void> | void;
-  onDone: () => Promise<void> | void;
-  onFail: (error: string) => void;
-}
-
 // ---------------------------------------------------------------------------
 // Flow-based execution (new system — composable AI flows)
 // ---------------------------------------------------------------------------
-
-export interface FlowStepConfig {
-  position: number;
-  name: string;
-  instructions: string;
-  model: string;
-  tools: string[];
-  context_sources: string[];
-  is_gate: boolean;
-  on_fail_jump_to: number | null;
-  max_retries: number;
-  on_max_retries: 'pause' | 'fail' | 'skip';
-  include_agents_md: boolean;
-}
-
-export interface FlowConfig {
-  flow_name: string;
-  agents_md: string | null;
-  steps: FlowStepConfig[];
-}
+export type { FlowConfig, FlowStepConfig } from './flow-config.js';
 
 export interface FlowJobContext {
   jobId: string;
@@ -142,30 +90,6 @@ export interface FlowJobContext {
   onReview: (result: any) => Promise<void> | void;
   onDone: () => Promise<void> | void;
   onFail: (error: string) => void;
-}
-
-/** Build a flow_snapshot from a flow + its steps (called at queue time). */
-export function buildFlowSnapshot(flow: any): FlowConfig {
-  const steps = (flow.flow_steps || [])
-    .sort((a: any, b: any) => a.position - b.position)
-    .map((s: any) => ({
-      position: s.position,
-      name: s.name,
-      instructions: s.instructions || '',
-      model: s.model || 'opus',
-      tools: s.tools || [],
-      context_sources: s.context_sources || ['task_description', 'previous_step'],
-      is_gate: s.is_gate || false,
-      on_fail_jump_to: s.on_fail_jump_to ?? null,
-      max_retries: s.max_retries ?? 0,
-      on_max_retries: s.on_max_retries || 'pause',
-      include_agents_md: s.include_agents_md !== false,
-    }));
-  return {
-    flow_name: flow.name,
-    agents_md: flow.agents_md || null,
-    steps,
-  };
 }
 
 function formatRagResults(results: any[]): string {
@@ -194,11 +118,13 @@ export async function buildStepPrompt(
 
   for (const source of step.context_sources) {
     switch (source) {
-      case 'claude_md': {
-        const claudeMdPath = join(localPath, 'CLAUDE.md');
-        if (existsSync(claudeMdPath)) {
-          const content = readFileSync(claudeMdPath, 'utf-8');
-          prompt += `## Project Context (from CLAUDE.md)\n${content.substring(0, 8000)}\n\n`;
+      case 'agents': {
+        const agentPaths = [join(localPath, 'AGENTS.md'), join(localPath, 'CLAUDE.md')];
+        for (const agentPath of agentPaths) {
+          if (!existsSync(agentPath)) continue;
+          const content = readFileSync(agentPath, 'utf-8');
+          prompt += `## Repository Instructions\n${content.substring(0, 8000)}\n\n`;
+          break;
         }
         break;
       }
@@ -302,10 +228,6 @@ export async function buildStepPrompt(
           prompt += `## Previous Step: ${last.phase}\n${typeof last.output === 'string' ? last.output : JSON.stringify(last.output, null, 2)}\n\n`;
         }
         break;
-      case 'rag':
-        if (task._ragResults?.length > 0) prompt += formatRagResults(task._ragResults);
-        prompt += `## Document Search Tool\nYou can search project documents for specific information using the Bash tool:\n\`\`\`\nnpx tsx src/server/rag-cli.ts ${task.project_id} "your search query"\n\`\`\`\nUse targeted queries to find rules, lore, specs, or any project documentation. You can run multiple searches.\n\n`;
-        break;
       case 'gate_feedback':
         if (task._gateFeedback) {
           prompt += `## Previous Step Feedback (retry reason)\n${task._gateFeedback}\n\n`;
@@ -378,6 +300,11 @@ export async function buildStepPrompt(
     }
   }
 
+  if (step.use_project_data && task.allow_project_data) {
+    if (task._projectDataResults?.length > 0) prompt += formatRagResults(task._projectDataResults);
+    prompt += `## Project Data Search Tool\nYou can search indexed project documents using the Bash tool:\n\`\`\`\nnpx tsx src/server/rag-cli.ts ${task.project_id} "your search query"\n\`\`\`\nUse targeted queries to find architecture, specs, docs, lore, or any other indexed project knowledge.\n\n`;
+  }
+
   // Multi-agent injection
   if (task.multiagent === 'yes') {
     prompt += '## Multi-Agent Mode\nUse subagents to parallelize this work. Dispatch separate agents for independent subtasks.\n\n';
@@ -408,6 +335,53 @@ export async function buildStepPrompt(
   prompt += '\nAt the very end of your response, write a one-line summary of what you did in this step using this exact format:\n[summary] Your short summary here\n';
 
   return prompt;
+}
+
+function buildClaudeArgs(step: FlowStepConfig, task: { effort?: string | null }): string[] {
+  const args = ['-p', '--verbose', '--output-format', 'stream-json'];
+  if (step.tools.length > 0) {
+    args.push('--allowedTools', step.tools.join(','));
+    const writeTools = ['Edit', 'Write', 'NotebookEdit'];
+    const blocked = writeTools.filter(tool => !step.tools.includes(tool));
+    if (blocked.length > 0) args.push('--disallowedTools', blocked.join(','));
+  }
+  if (step.runtime_variant) args.push('--model', step.runtime_variant);
+  if (task.effort) args.push('--effort', task.effort);
+  return args;
+}
+
+function buildRuntimeStepArgs(step: FlowStepConfig, task: { effort?: string | null }): string[] {
+  const runtime = getAvailableAiRuntime(step.runtime_id);
+  if (!runtime) throw new Error(`Unsupported runtime: ${step.runtime_id}`);
+  switch (runtime.id) {
+    case 'claude_code':
+      return buildClaudeArgs(step, task);
+    default:
+      throw new Error(`Runtime driver not implemented: ${runtime.id}`);
+  }
+}
+
+async function runStepWithRuntime(
+  jobId: string,
+  step: FlowStepConfig,
+  task: { effort?: string | null },
+  localPath: string,
+  onLog: (text: string) => void,
+  prompt: string,
+): Promise<string> {
+  const runtime = getAvailableAiRuntime(step.runtime_id);
+  if (!runtime) throw new Error(`Unsupported runtime: ${step.runtime_id}`);
+  const args = buildRuntimeStepArgs(step, task);
+  switch (runtime.id) {
+    case 'claude_code':
+      return spawnClaude(jobId, args, localPath, onLog, prompt);
+    default:
+      throw new Error(`Runtime driver not implemented: ${runtime.id}`);
+  }
+}
+
+function summaryRuntimeStep(flow: FlowConfig): FlowStepConfig {
+  return [...flow.steps].reverse().find(step => step.runtime_kind === 'coding') ?? flow.steps[0];
 }
 
 /** Execute a job using the flow-based system. */
@@ -455,22 +429,11 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
       const prompt = await buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer);
 
-      // Build claude args
-      const args = ['-p', '--verbose', '--output-format', 'stream-json'];
-      if (step.tools.length > 0) {
-        args.push('--allowedTools', step.tools.join(','));
-        const writeTools = ['Edit', 'Write', 'NotebookEdit'];
-        const blocked = writeTools.filter(t => !step.tools.includes(t));
-        if (blocked.length > 0) args.push('--disallowedTools', blocked.join(','));
-      }
-      if (step.model) args.push('--model', step.model);
-      if (task.effort) args.push('--effort', task.effort);
-
       onLog(`\n--- Step: ${step.name} (attempt ${displayAttempt}/${maxAttempts}) ---\n`);
 
       try {
         if (!await isJobStillRunning(jobId)) return;
-        const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
+        const output = await runStepWithRuntime(jobId, step, task, localPath, onLog, prompt);
         if (!await isJobStillRunning(jobId)) return;
 
         const phaseOutput = {
@@ -641,7 +604,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
     }).join('\n\n');
     const diffInfo = changedFiles.length > 0 ? `Files changed: ${changedFiles.join(', ')} (+${linesAdded} -${linesRemoved})` : `${filesChanged} files changed (+${linesAdded} -${linesRemoved})`;
     const summaryPrompt = `You are summarizing a completed code task for a project dashboard.\n\nTask: ${task.title}\n${diffInfo}\n\nPhase outputs:\n${phaseLog.substring(0, 3000)}\n\nWrite a concise summary (2-4 sentences) of what was done and why. Focus on the actual change, not the process. No markdown formatting, no bullet points. Plain text only.`;
-    finalSummary = await generateSummary(jobId, summaryPrompt);
+    finalSummary = await generateSummary(jobId, summaryPrompt, summaryRuntimeStep(flow));
   } catch (err: any) {
     if (err.message === 'Job canceled') return;
     console.error('[runner] Summary generation failed:', err.message);
@@ -671,363 +634,6 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
   await updateTaskStatus(task.id, 'review');
   await onReview(reviewResult);
   await onDone();
-}
-
-// ---------------------------------------------------------------------------
-// Legacy task-type-based execution (kept for backward compatibility)
-// ---------------------------------------------------------------------------
-
-// Default task type configs (used when .codesync/config.json doesn't exist)
-const DEFAULT_TASK_TYPES: Record<string, TaskTypeConfig> = {
-  'bug-fix': {
-    phases: ['plan', 'analyze', 'fix', 'verify'],
-    on_verify_fail: 'fix',
-    verify_retries: 2,
-    final: 'review',
-    on_review_fail: 'fix',
-    review_retries: 1,
-    on_max_retries: 'pause',
-    phase_config: {
-      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
-      analyze: { skill: null, tools: ['Read', 'Grep', 'Bash'], prompt: '', model: 'opus' },
-      fix: { skill: null, tools: ['Read', 'Edit', 'Bash'], prompt: '', model: 'opus' },
-      verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
-      review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
-    },
-  },
-  'feature': {
-    phases: ['plan', 'implement', 'verify'],
-    on_verify_fail: 'implement',
-    verify_retries: 2,
-    final: 'review',
-    on_review_fail: 'implement',
-    review_retries: 1,
-    on_max_retries: 'pause',
-    phase_config: {
-      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
-      implement: { skill: null, tools: ['Read', 'Edit', 'Write', 'Bash'], prompt: '', model: 'opus' },
-      verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
-      review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
-    },
-  },
-  'refactor': {
-    phases: ['plan', 'analyze', 'refactor', 'verify'],
-    on_verify_fail: 'refactor',
-    verify_retries: 2,
-    final: 'review',
-    on_review_fail: 'refactor',
-    review_retries: 1,
-    on_max_retries: 'pause',
-    phase_config: {
-      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
-      analyze: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'opus' },
-      refactor: { skill: null, tools: ['Read', 'Edit', 'Bash'], prompt: '', model: 'opus' },
-      verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
-      review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
-    },
-  },
-  'test': {
-    phases: ['plan', 'write-tests', 'verify'],
-    on_verify_fail: 'write-tests',
-    verify_retries: 2,
-    final: 'review',
-    on_review_fail: 'write-tests',
-    review_retries: 1,
-    on_max_retries: 'pause',
-    phase_config: {
-      plan: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'opus' },
-      'write-tests': { skill: null, tools: ['Read', 'Write', 'Bash'], prompt: '', model: 'opus' },
-      verify: { skill: null, tools: ['Bash', 'Read'], prompt: '', model: 'sonnet' },
-      review: { skill: null, tools: ['Read', 'Grep'], prompt: '', model: 'sonnet' },
-    },
-  },
-  'doc-search': {
-    phases: ['answer'],
-    on_verify_fail: 'answer',
-    verify_retries: 0,
-    final: 'answer',
-    on_review_fail: 'answer',
-    review_retries: 0,
-    on_max_retries: 'pause',
-    phase_config: {
-      answer: { skill: null, tools: ['Read', 'Grep', 'Glob'], prompt: '', model: 'sonnet' },
-    },
-  },
-};
-
-function loadTaskTypeConfig(localPath: string, taskType: string): TaskTypeConfig {
-  const configPath = join(localPath, '.codesync', 'config.json');
-  if (existsSync(configPath)) {
-    try {
-      const config = JSON.parse(readFileSync(configPath, 'utf-8'));
-      if (config.task_types?.[taskType]) return config.task_types[taskType];
-    } catch { /* fall through to defaults */ }
-  }
-  return DEFAULT_TASK_TYPES[taskType] || DEFAULT_TASK_TYPES['feature'];
-}
-
-async function buildPrompt(phase: string, task: any, previousOutputs: any[], localPath: string, phaseConfig: PhaseConfig, taskType: TaskTypeConfig, answer?: string): Promise<string> {
-  // Inject project context from CLAUDE.md if it exists
-  let projectContext = '';
-  const claudeMdPath = join(localPath, 'CLAUDE.md');
-  if (existsSync(claudeMdPath)) {
-    const content = readFileSync(claudeMdPath, 'utf-8');
-    projectContext = `## Project Context (from CLAUDE.md)\n${content.substring(0, 8000)}\n\n`;
-  }
-
-  let prompt = `You are working on a task in this project's codebase.
-
-${projectContext}## Task
-Title: ${task.title}
-Type: ${task.type}
-Description: ${task.description || 'No description provided.'}
-`;
-
-  // RAG context injection for doc-search flow
-  if (task._ragResults?.length > 0) prompt += '\n' + formatRagResults(task._ragResults);
-
-  // Skill references: parse /skillname from description, verify they exist, inject content
-  if (task.description) {
-    const skillRefs = [...task.description.matchAll(/(?:^|[\s\n])\/([a-zA-Z0-9_][\w:-]*)/g)]
-      .map(m => m[1]);
-    if (skillRefs.length > 0) {
-      const available = discoverSkills(localPath);
-      const skillMap = new Map(available.map(s => [s.name, s]));
-      const verified = skillRefs.filter(name => skillMap.has(name));
-      if (verified.length > 0) {
-        prompt += '\n## Skills to Apply\n';
-        for (const name of verified) {
-          const skill = skillMap.get(name)!;
-          try {
-            let content = readFileSync(skill.filePath, 'utf-8');
-            // Strip YAML frontmatter
-            content = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '');
-            content = content.trim();
-            if (content.length > 8000) content = content.substring(0, 8000) + '\n...(truncated)';
-            prompt += `\n### Skill: /${name}\n${content}\n`;
-          } catch {
-            // File unreadable — fall back to invocation instruction
-            prompt += `\n### Skill: /${name}\nInvoke this skill using the Skill tool: /${name}\n`;
-          }
-        }
-        prompt += '\nApply the methodologies from these skills throughout this task.\n';
-      }
-    }
-  }
-
-  // Feature 2: Images passed to AI prompt
-  if (Array.isArray(task.images) && task.images.length > 0) {
-    prompt += '\n## Attached Images\n';
-    for (const url of task.images) {
-      prompt += `${url}\n`;
-    }
-  }
-
-  // Feature 3: Multi-agent prompt injection
-  if (task.multiagent === 'yes') {
-    prompt += '\n## Multi-Agent Mode\nUse subagents to parallelize this work. Dispatch separate agents for independent subtasks.\n';
-  }
-
-  if (task.followup_notes) {
-    prompt += `\n## Rework Feedback\n${task.followup_notes}\n`;
-    // Include task's own artifacts so the AI can revise them
-    const { data: ownArtifacts } = await supabase
-      .from('task_artifacts').select('*').eq('task_id', task.id).order('created_at');
-    if (ownArtifacts && ownArtifacts.length > 0) {
-      prompt += '\n## Previously Generated Files\n';
-      for (const a of ownArtifacts) {
-        if (a.mime_type.startsWith('text/') || a.mime_type === 'application/json') {
-          const { data: fileData } = await supabase.storage.from('task-artifacts').download(a.storage_path);
-          if (fileData) {
-            const content = await fileData.text();
-            prompt += `### ${a.filename}\n\`\`\`\n${content}\n\`\`\`\n\n`;
-          }
-        } else {
-          prompt += `- ${a.filename} (${a.mime_type})\n`;
-        }
-      }
-      prompt += 'Revise these files based on the feedback above.\n';
-    }
-  }
-
-  if (previousOutputs.length > 0) {
-    prompt += '\n## Previous Phase Outputs\n';
-    for (const po of previousOutputs) {
-      prompt += `### ${po.phase} (attempt ${po.attempt})\n${JSON.stringify(po.output, null, 2)}\n\n`;
-    }
-  }
-
-  if (answer) {
-    prompt += `\n## Human Answer to Your Question\n${answer}\n`;
-  }
-
-  // Inject artifacts from previous task in workstream
-  if (
-    (task.chaining === 'accept' || task.chaining === 'both') &&
-    previousOutputs.length === 0
-  ) {
-    const { data: currentTask } = await supabase
-      .from('tasks')
-      .select('workstream_id, position')
-      .eq('id', task.id)
-      .single();
-
-    if (currentTask?.workstream_id) {
-      const { data: prevTasks } = await supabase
-        .from('tasks')
-        .select('id, title')
-        .eq('workstream_id', currentTask.workstream_id)
-        .eq('status', 'done')
-        .lt('position', currentTask.position)
-        .order('position', { ascending: false })
-        .limit(1);
-
-      if (prevTasks && prevTasks.length > 0) {
-        const prevTask = prevTasks[0];
-        const { data: artifacts } = await supabase
-          .from('task_artifacts')
-          .select('*')
-          .eq('task_id', prevTask.id)
-          .order('created_at');
-
-        if (artifacts && artifacts.length > 0) {
-          prompt += '\n## Artifacts from previous task\n';
-          prompt += `Previous task: "${prevTask.title}"\n\n`;
-          for (const a of artifacts) {
-            const { data: urlData } = supabase.storage.from('task-artifacts').getPublicUrl(a.storage_path);
-            const url = urlData.publicUrl;
-
-            if (a.mime_type.startsWith('text/') || a.mime_type === 'application/json') {
-              try {
-                const { data: fileData } = await supabase.storage.from('task-artifacts').download(a.storage_path);
-                if (fileData) {
-                  const text = await fileData.text();
-                  prompt += `### ${a.filename}\n\`\`\`\n${text.substring(0, 5000)}\n\`\`\`\n\n`;
-                }
-              } catch {
-                prompt += `- ${a.filename} (${a.mime_type}): ${url}\n`;
-              }
-            } else {
-              prompt += `- ${a.filename} (${a.mime_type}): ${url}\n`;
-            }
-          }
-          prompt += '\nThe artifacts from the previous task are provided above. Use them as context for your work.\n';
-        }
-      }
-    }
-  }
-
-  // Phase-specific instructions
-  const phaseInstructions: Record<string, string> = {
-    plan: 'Read the codebase to understand the relevant files and architecture. Create a step-by-step implementation plan. List which files need to be created or modified and what changes are needed. Do NOT make any changes yet — only plan.',
-    analyze: 'Analyze the codebase to understand the problem. Identify the root cause and location. Output a structured summary of your findings.',
-    fix: 'Fix the issue based on the analysis. Make the minimal changes needed. Run tests if available.',
-    implement: 'Implement the feature described above. Follow existing code patterns. Run tests if available.',
-    verify: `Run the test suite and verify the changes work. Report any issues found.
-
-IMPORTANT: You MUST end your response with a JSON verdict block:
-\`\`\`json
-{"passed": true}
-\`\`\`
-or if tests fail:
-\`\`\`json
-{"passed": false, "reason": "Brief description of what failed"}
-\`\`\``,
-    review: `Review the changes made. Check code quality, architecture alignment, and completeness.
-
-IMPORTANT: You MUST end your response with a JSON verdict block:
-\`\`\`json
-{"passed": true}
-\`\`\`
-or if issues found:
-\`\`\`json
-{"passed": false, "reason": "Brief description of issues"}
-\`\`\``,
-    refactor: 'Refactor the code as described. Maintain all existing behavior. Run tests to verify nothing broke.',
-    'write-tests': 'Write tests for the described functionality. Follow existing test patterns in the project.',
-    answer: 'Answer the user\'s question based on the document search results provided above. Cite which documents you\'re referencing. If the results don\'t contain enough information to answer fully, say so clearly.',
-  };
-
-  // Feature 5: Custom prompt files from .codesync/prompts/
-  let phaseText = phaseInstructions[phase] || 'Complete this phase of the task.';
-  if (phaseConfig.prompt && phaseConfig.prompt.length > 0) {
-    const customPromptPath = join(localPath, '.codesync', phaseConfig.prompt);
-    if (existsSync(customPromptPath)) {
-      try {
-        phaseText = readFileSync(customPromptPath, 'utf-8');
-      } catch { /* fall through to default */ }
-    }
-  }
-
-  prompt += `\n## Current Phase: ${phase}\n${phaseText}\n`;
-
-  // File output instruction for tasks that produce artifacts
-  if (task.chaining === 'produce' || task.chaining === 'both') {
-    prompt += '\n## File Output\nIf you produce any output files (documents, images, configs, etc.), save them to the `.artifacts/` directory in the project root. They will be automatically captured and made available for download.\n';
-  }
-
-  // Feature 4: Skill field injection — read actual skill file if available
-  if (phaseConfig.skill) {
-    const skillPaths = [
-      join(localPath, '.claude', 'skills', phaseConfig.skill, 'SKILL.md'),
-      join(localPath, '.claude', 'commands', phaseConfig.skill + '.md'),
-    ];
-    let skillContent: string | null = null;
-    for (const sp of skillPaths) {
-      if (existsSync(sp)) {
-        try {
-          skillContent = readFileSync(sp, 'utf-8').substring(0, 4000);
-        } catch { /* ignore read failure */ }
-        break;
-      }
-    }
-    if (skillContent) {
-      prompt += `\n## Skill: ${phaseConfig.skill}\n${skillContent}\n`;
-    } else {
-      prompt += `\n## Skill: ${phaseConfig.skill}\nApply the ${phaseConfig.skill} methodology for this phase.\n`;
-    }
-  }
-
-  // Feature 6: Review criteria from ARCHITECTURE.md
-  if (phase === 'review') {
-    // Check config.json for review_criteria
-    const configPath = join(localPath, '.codesync', 'config.json');
-    if (existsSync(configPath)) {
-      try {
-        const config = JSON.parse(readFileSync(configPath, 'utf-8'));
-        if (config.review_criteria && Array.isArray(config.review_criteria.rules) && config.review_criteria.rules.length > 0) {
-          prompt += '\n## Review Criteria\n';
-          for (const rule of config.review_criteria.rules) {
-            prompt += `- ${rule}\n`;
-          }
-        }
-      } catch { /* ignore parse errors */ }
-    }
-
-    // Check for ARCHITECTURE.md
-    let archContent: string | null = null;
-    const archPaths = [
-      join(localPath, 'ARCHITECTURE.md'),
-      join(localPath, 'docs', 'ARCHITECTURE.md'),
-    ];
-    for (const archPath of archPaths) {
-      if (existsSync(archPath)) {
-        try {
-          archContent = readFileSync(archPath, 'utf-8');
-          break;
-        } catch { /* ignore */ }
-      }
-    }
-    if (archContent) {
-      prompt += `\n## Architecture Reference\n${archContent.substring(0, 8000)}\n`;
-    }
-  }
-
-  prompt += '\nWhen done, write a brief summary of what you did and any issues found.\n';
-  prompt += 'If you need clarification from the human, clearly state your question and stop.\n';
-  prompt += '\nAt the very end of your response, write a one-line summary of what you did in this step using this exact format:\n[summary] Your short summary here\n';
-
-  return prompt;
 }
 
 // --- Structured verdict parsing for verify/review phases ---
@@ -1127,10 +733,6 @@ function registerActiveProcess(jobId: string, proc: ChildProcess): void {
   activeProcesses.set(jobId, processes);
 }
 
-function isActiveProcess(jobId: string, proc: ChildProcess): boolean {
-  return activeProcesses.get(jobId)?.has(proc) === true;
-}
-
 function unregisterActiveProcess(jobId: string, proc: ChildProcess): void {
   const processes = activeProcesses.get(jobId);
   if (!processes) return;
@@ -1220,305 +822,6 @@ export async function cleanupOrphanedJobs(): Promise<number> {
     }
   }
   return cleaned;
-}
-
-export async function runJob(ctx: JobContext): Promise<void> {
-  const { jobId, task, taskType, localPath, onLog, onPhaseStart, onPhaseComplete, onPause, onReview, onDone, onFail, phasesAlreadyCompleted } = ctx;
-
-  // Seed with already-completed phases from a previous run (for resume)
-  const phasesCompleted: any[] = [...phasesAlreadyCompleted];
-
-  // Build the set of phase names already done, so we can skip them
-  const completedPhaseNames = new Set(phasesAlreadyCompleted.map((p: any) => p.phase));
-
-  // On resume with a human answer, remove the paused phase from completed
-  // so it re-executes with fresh retries instead of looping back to pause
-  if (phasesAlreadyCompleted.length > 0 && task.answer) {
-    const lastPhase = phasesAlreadyCompleted[phasesAlreadyCompleted.length - 1]?.phase;
-    if (lastPhase) {
-      completedPhaseNames.delete(lastPhase);
-    }
-  }
-
-  // Run through phases
-  const allPhases = [...taskType.phases, taskType.final];
-
-  // Track cumulative attempts per phase so jump-back retries don't reset the counter
-  const phaseAttemptOffsets: Record<string, number> = {};
-
-  let i = 0;
-  while (i < allPhases.length) {
-    const phase = allPhases[i];
-
-    // Skip phases that were already completed in a previous run
-    if (completedPhaseNames.has(phase)) {
-      onLog(`\n--- Skipping already-completed phase: ${phase} ---\n`);
-      i++;
-      continue;
-    }
-
-    const phaseConfig = taskType.phase_config[phase];
-    if (!phaseConfig) {
-      await updateTaskStatus(task.id, 'paused');
-      onFail(`No config for phase: ${phase}`);
-      return;
-    }
-
-    const maxAttempts = phase === 'verify' ? taskType.verify_retries + 1 :
-                        phase === taskType.final ? taskType.review_retries + 1 : 1;
-    const attemptOffset = phaseAttemptOffsets[phase] || 0;
-
-    for (let attempt = 1; attempt <= maxAttempts - attemptOffset; attempt++) {
-      const displayAttempt = attemptOffset + attempt;
-      onPhaseStart(phase, displayAttempt);
-
-      // Update job in DB
-      if (await updateRunningJob(jobId, {
-        current_phase: phase,
-        attempt: displayAttempt,
-      }) !== 'updated') return;
-
-      const prompt = await buildPrompt(phase, task, phasesCompleted, localPath, phaseConfig, taskType, ctx.task.answer);
-
-      // Spawn claude -p (prompt piped via stdin to avoid arg length limits)
-      const args = ['-p', '--verbose', '--output-format', 'stream-json'];
-      if (phaseConfig.tools.length > 0) {
-        args.push('--allowedTools', phaseConfig.tools.join(','));
-        // Explicitly block write tools for read-only phases
-        const writeTools = ['Edit', 'Write', 'NotebookEdit'];
-        const blocked = writeTools.filter(t => !phaseConfig.tools.includes(t));
-        if (blocked.length > 0) {
-          args.push('--disallowedTools', blocked.join(','));
-        }
-      }
-
-      // Model selection per phase
-      if (phaseConfig.model) {
-        args.push('--model', phaseConfig.model);
-      }
-
-      // Feature 1: Effort flag
-      if (task.effort) {
-        args.push('--effort', task.effort);
-      }
-
-      onLog(`\n--- Phase: ${phase} (attempt ${displayAttempt}/${maxAttempts}) ---\n`);
-
-      try {
-        if (!await isJobStillRunning(jobId)) return;
-        const output = await spawnClaude(jobId, args, localPath, onLog, prompt);
-        if (!await isJobStillRunning(jobId)) return;
-
-        const phaseOutput = {
-          phase,
-          attempt: displayAttempt,
-          output: output.substring(0, 10000), // Cap output size
-          summary: extractPhaseSummary(output),
-        };
-        phasesCompleted.push(phaseOutput);
-        await savePhases(jobId, phasesCompleted);
-        if (!await isJobStillRunning(jobId)) return;
-        onPhaseComplete(phase, phaseOutput);
-
-        // Check if claude asked a question (simple heuristic: ends with ?)
-        const lastLines = output.trim().split('\n').slice(-3).join('\n');
-        if (lastLines.includes('?') && (lastLines.includes('Should I') || lastLines.includes('Could you') || lastLines.includes('Which') || lastLines.includes('clarif'))) {
-          if (await updateRunningJob(jobId, {
-            status: 'paused',
-            question: lastLines,
-            phases_completed: phasesCompleted,
-          }) === 'canceled') return;
-          await updateTaskStatus(task.id, 'paused');
-          onPause(lastLines);
-          return;
-        }
-
-        // Verify phase: check if tests passed
-        if (phase === 'verify') {
-          const verdict = extractVerdict(output);
-          if (!verdict) console.warn(`[runner] Job ${jobId}: verify phase returned no structured verdict, using legacy heuristics`);
-          const failed = verdict ? !verdict.passed : legacyVerifyCheck(output);
-          const reason = verdict?.reason || 'verification failed (see output)';
-          if (failed && displayAttempt < maxAttempts) {
-            const jumpTarget = taskType.on_verify_fail;
-            const jumpIndex = allPhases.indexOf(jumpTarget);
-            if (jumpIndex >= 0 && jumpIndex < i) {
-              onLog(`\nVerify failed: ${reason}. Jumping back to '${jumpTarget}'...\n`);
-              completedPhaseNames.delete(jumpTarget);
-              // Remove stale phase output so Claude doesn't see duplicate context
-              for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
-                if (phasesCompleted[pi].phase === jumpTarget) { phasesCompleted.splice(pi, 1); break; }
-              }
-              phaseAttemptOffsets[phase] = displayAttempt;
-              i = jumpIndex;
-              break;
-            } else {
-              onLog(`\nVerify failed: ${reason}. Retrying...\n`);
-              continue;
-            }
-          }
-          if (failed && displayAttempt >= maxAttempts) {
-            if (taskType.on_max_retries === 'pause') {
-              const pauseMsg = `Tests still failing after ${maxAttempts} attempts: ${reason}`;
-              if (await updateRunningJob(jobId, {
-                status: 'paused',
-                question: pauseMsg,
-                phases_completed: phasesCompleted,
-              }) === 'canceled') return;
-              await updateTaskStatus(task.id, 'paused');
-              onPause(pauseMsg);
-              return;
-            }
-          }
-        }
-
-        // Review/final phase: check if review passed
-        if (phase === taskType.final) {
-          const verdict = extractVerdict(output);
-          if (!verdict) console.warn(`[runner] Job ${jobId}: review phase returned no structured verdict, using legacy heuristics`);
-          const failed = verdict ? !verdict.passed : legacyReviewCheck(output);
-          const reason = verdict?.reason || 'review found issues (see output)';
-          if (failed && displayAttempt < maxAttempts) {
-            const jumpTarget = taskType.on_review_fail;
-            const jumpIndex = allPhases.indexOf(jumpTarget);
-            if (jumpIndex >= 0 && jumpIndex < i) {
-              onLog(`\nReview failed: ${reason}. Jumping back to '${jumpTarget}'...\n`);
-              completedPhaseNames.delete(jumpTarget);
-              // Remove stale phase output so Claude doesn't see duplicate context
-              for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
-                if (phasesCompleted[pi].phase === jumpTarget) { phasesCompleted.splice(pi, 1); break; }
-              }
-              phaseAttemptOffsets[phase] = displayAttempt;
-              i = jumpIndex;
-              break;
-            } else {
-              onLog(`\nReview failed: ${reason}. Retrying...\n`);
-              continue;
-            }
-          }
-          if (failed && displayAttempt >= maxAttempts) {
-            if (taskType.on_max_retries === 'pause') {
-              const pauseMsg = `Review still failing after ${maxAttempts} attempts: ${reason}`;
-              if (await updateRunningJob(jobId, {
-                status: 'paused',
-                question: pauseMsg,
-                phases_completed: phasesCompleted,
-              }) === 'canceled') return;
-              await updateTaskStatus(task.id, 'paused');
-              onPause(pauseMsg);
-              return;
-            }
-          }
-        }
-
-        // Move to next phase
-        i++;
-        break;
-
-      } catch (err: any) {
-        // If the job was canceled, the cancellation loop handles cleanup — just bail out.
-        if (err.message === 'Job canceled') return;
-
-        onLog(`\nError in phase ${phase}: ${err.message}\n`);
-        if (displayAttempt >= maxAttempts) {
-          if (!await isJobStillRunning(jobId)) return;
-          let failMessage = `Phase '${phase}' failed: ${err.message}`;
-          let revertSucceeded = false;
-          try {
-            const { revertToCheckpoint } = await import('./checkpoint.js');
-            revertToCheckpoint(localPath, jobId);
-            onLog('[checkpoint] Auto-reverted changes after failure\n');
-            failMessage += '. Changes have been automatically reverted.';
-            revertSucceeded = true;
-          } catch (revertErr: any) {
-            onLog(`[checkpoint] Could not revert: ${revertErr.message}\n`);
-            failMessage += '. WARNING: Changes were NOT reverted — manual cleanup may be needed.';
-          }
-          if (await updateRunningJob(jobId, {
-            status: 'failed',
-            phases_completed: phasesCompleted,
-            completed_at: new Date().toISOString(),
-            question: failMessage,
-            checkpoint_status: revertSucceeded ? 'reverted' : 'active',
-          }) === 'canceled') return;
-          // Runner is sole authority: always update task status on failure
-          await updateTaskStatus(ctx.taskId, 'paused');
-          onFail(failMessage);
-          return;
-        }
-      }
-    }
-  }
-
-  // All phases complete -- move to review
-
-  if (!await isJobStillRunning(jobId)) return;
-
-  // Scan .artifacts/ directory for produced files
-  if (ctx.task.chaining === 'produce' || ctx.task.chaining === 'both') {
-    await scanAndUploadArtifacts(localPath, ctx.taskId, jobId, phasesCompleted[phasesCompleted.length - 1]?.phase || 'unknown', onLog);
-  }
-
-  if (!await isJobStillRunning(jobId)) return;
-
-  let { filesChanged, linesAdded, linesRemoved, changedFiles } = { filesChanged: 0, linesAdded: 0, linesRemoved: 0, changedFiles: [] as string[] };
-  try {
-    ({ filesChanged, linesAdded, linesRemoved, changedFiles } = stagedDiffStat(localPath));
-  } catch { /* ignore */ }
-
-  // Generate a clean summary by asking Claude to summarize the phase outputs
-  let finalSummary = 'Completed';
-  try {
-    const phaseLog = phasesCompleted.map((p: any) => {
-      const raw = (p.output || '').split('\n').filter((l: string) => {
-        const t = l.trim();
-        return t && !/^\[/.test(t);
-      }).join('\n').trim();
-      return `## ${p.phase} (attempt ${p.attempt || 1})\n${raw}`;
-    }).join('\n\n');
-
-    const diffInfo = changedFiles.length > 0
-      ? `Files changed: ${changedFiles.join(', ')} (+${linesAdded} -${linesRemoved})`
-      : `${filesChanged} files changed (+${linesAdded} -${linesRemoved})`;
-
-    const summaryPrompt = `You are summarizing a completed code task for a project dashboard.
-
-Task: ${ctx.task.title}
-${diffInfo}
-
-Phase outputs:
-${phaseLog.substring(0, 3000)}
-
-Write a concise summary (2-4 sentences) of what was done and why. Focus on the actual change, not the process. No markdown formatting, no bullet points. Plain text only.`;
-
-    finalSummary = await generateSummary(jobId, summaryPrompt);
-  } catch (err: any) {
-    if (err.message === 'Job canceled') return;
-    console.error('[runner] Summary generation failed, using fallback:', err.message);
-  }
-
-  if (!await isJobStillRunning(jobId)) return;
-
-  const reviewResult = {
-    filesChanged,
-    // testsPassed is true here because if any gate step had failed beyond max
-    // retries, we would have already returned (paused/failed) before reaching
-    // this point. Reaching here means all gates passed or were skipped.
-    testsPassed: true,
-    linesAdded,
-    linesRemoved,
-    changedFiles: changedFiles.length > 0 ? changedFiles : undefined,
-    summary: finalSummary,
-  };
-
-  if (await markRunningJobForReview(jobId, {
-    status: 'review',
-    phases_completed: phasesCompleted,
-    review_result: reviewResult,
-  }) === 'canceled') return;
-  await updateTaskStatus(ctx.taskId, 'review');
-  await onReview(reviewResult);
-  await onDone();
 }
 
 async function isJobStillRunning(jobId: string): Promise<boolean> {
@@ -1621,10 +924,15 @@ function formatStreamEvent(event: any): string | null {
   return null;
 }
 
-/** Quick claude call for generating summaries. No tools, no streaming, just text in/out. */
-function generateSummary(jobId: string, prompt: string): Promise<string> {
+/** Quick runtime call for generating summaries. No tools, no streaming, just text in/out. */
+function generateSummary(jobId: string, prompt: string, step: FlowStepConfig): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('claude', ['-p', '--output-format', 'text', '--max-turns', '1', '--model', 'sonnet'], {
+    if (step.runtime_id !== 'claude_code') {
+      reject(new Error(`Summary runtime not implemented: ${step.runtime_id}`));
+      return;
+    }
+    const model = step.runtime_variant || 'sonnet';
+    const proc = spawn('claude', ['-p', '--output-format', 'text', '--max-turns', '1', '--model', model], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: claudeEnv,
       timeout: 30000,
@@ -1760,5 +1068,3 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
     });
   });
 }
-
-export { loadTaskTypeConfig };

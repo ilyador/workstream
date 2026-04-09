@@ -4,9 +4,12 @@ interface TaskExecutionSectionProps {
   assignee: string;
   multiagent: string;
   autoContinue: boolean;
+  allowProjectData: boolean;
   chaining: string;
+  projectDataEnabled: boolean;
   setMultiagent: (value: string) => void;
   setAutoContinue: (value: boolean) => void;
+  setAllowProjectData: (value: boolean) => void;
   setChaining: (value: string) => void;
 }
 
@@ -14,9 +17,12 @@ export function TaskExecutionSection({
   assignee,
   multiagent,
   autoContinue,
+  allowProjectData,
   chaining,
+  projectDataEnabled,
   setMultiagent,
   setAutoContinue,
+  setAllowProjectData,
   setChaining,
 }: TaskExecutionSectionProps) {
   return (
@@ -41,6 +47,20 @@ export function TaskExecutionSection({
             />
             <span>Continue automatically</span>
           </label>
+        )}
+        {!assignee && (
+          <label className={s.checkboxRow}>
+            <input
+              type="checkbox"
+              checked={allowProjectData}
+              disabled={!projectDataEnabled}
+              onChange={event => setAllowProjectData(event.target.checked)}
+            />
+            <span>Allow Project Data</span>
+          </label>
+        )}
+        {!assignee && !projectDataEnabled && (
+          <div className={s.hint}>Set up Project Data in project settings before enabling it on tasks.</div>
         )}
       </div>
 

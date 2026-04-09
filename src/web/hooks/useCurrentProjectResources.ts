@@ -3,6 +3,7 @@ import { useCustomTypes } from './useCustomTypes';
 import { useFlows } from './useFlows';
 import { useJobs } from './useJobs';
 import { useMembers } from './useMembers';
+import { useProjectDataSettings } from './useProjectDataSettings';
 import { useTasks } from './useTasks';
 import { useWorkstreams } from './useWorkstreams';
 
@@ -14,6 +15,7 @@ export function useCurrentProjectResources(projectId: string | null) {
   const aiFlows = useFlows(projectId);
   const customTypes = useCustomTypes(projectId);
   const commentCounts = useCommentCounts(projectId);
+  const projectData = useProjectDataSettings(projectId);
 
   const ready = tasks.ready
     && jobs.ready
@@ -21,7 +23,8 @@ export function useCurrentProjectResources(projectId: string | null) {
     && members.ready
     && aiFlows.ready
     && customTypes.ready
-    && commentCounts.ready;
+    && commentCounts.ready
+    && projectData.ready;
 
   return {
     tasks,
@@ -31,6 +34,7 @@ export function useCurrentProjectResources(projectId: string | null) {
     aiFlows,
     customTypes,
     commentCounts,
+    projectData,
     ready,
   };
 }

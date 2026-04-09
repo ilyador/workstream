@@ -10,7 +10,7 @@ interface UseTaskFormStateArgs {
   customTypes: CustomTypeOption[];
   defaultWorkstreamId?: string | null;
   editTask?: EditTaskData;
-  onSaveCustomType?: (name: string, pipeline: string) => Promise<void>;
+  onSaveCustomType?: (name: string) => Promise<void>;
   onSubmit: (data: TaskFormData) => Promise<void>;
   onClose: () => void;
 }
@@ -34,12 +34,6 @@ export function useTaskFormState({
     editTypeIsSavedCustom ? editTask.type : (editTypeIsCustom ? 'feature' : (editTask?.type || 'feature')),
   );
   const [customType, setCustomType] = useState(editTypeIsCustom && !editTypeIsSavedCustom ? editTask.type : '');
-  const [customPipeline, setCustomPipeline] = useState(() => {
-    if (editTypeIsSavedCustom) {
-      return customTypes.find(ct => ct.name === editTask.type)?.pipeline || 'feature';
-    }
-    return 'feature';
-  });
   const [isCustomType, setIsCustomType] = useState(editTypeIsCustom && !editTypeIsSavedCustom);
   const [mode, setMode] = useState(editTask?.mode || 'ai');
   const [effort, setEffort] = useState(editTask?.effort || 'max');
@@ -48,6 +42,7 @@ export function useTaskFormState({
   const [flowId, setFlowId] = useState(isEdit ? (editTask?.flow_id ?? '') : getPreferredFlowId(flows, 'feature'));
   const [multiagent, setMultiagent] = useState(editTask?.multiagent || 'auto');
   const [autoContinue, setAutoContinue] = useState(editTask?.auto_continue ?? true);
+  const [allowProjectData, setAllowProjectData] = useState(editTask?.allow_project_data ?? false);
   const [priority, setPriority] = useState(editTask?.priority || 'backlog');
   const [chaining, setChaining] = useState(editTask?.chaining || 'none');
   const [loading, setLoading] = useState(false);
@@ -75,7 +70,7 @@ export function useTaskFormState({
     try {
       const resolvedType = isCustomType ? customType.trim().toLowerCase().replace(/\s+/g, '-') : type;
       if (isCustomType && customType.trim() && onSaveCustomType) {
-        await onSaveCustomType(resolvedType, customPipeline);
+        await onSaveCustomType(resolvedType);
       }
       await onSubmit({
         title: title.trim(),
@@ -87,6 +82,7 @@ export function useTaskFormState({
         assignee: assignee || null,
         flow_id: flowId || null,
         auto_continue: autoContinue,
+        allow_project_data: mode === 'human' ? false : allowProjectData,
         images: imagesState.images,
         workstream_id: workstreamId || null,
         priority,
@@ -110,8 +106,6 @@ export function useTaskFormState({
     setType,
     customType,
     setCustomType,
-    customPipeline,
-    setCustomPipeline,
     isCustomType,
     setIsCustomType,
     assignee,
@@ -128,6 +122,8 @@ export function useTaskFormState({
     setMultiagent,
     autoContinue,
     setAutoContinue,
+    allowProjectData,
+    setAllowProjectData,
     chaining,
     setChaining,
     mode,

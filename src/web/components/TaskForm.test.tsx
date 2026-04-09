@@ -41,13 +41,14 @@ function makeFlow(id: string, name: string, defaultTypes: string[]): Flow {
   };
 }
 
-function renderTaskForm(flows: Flow[]) {
+function renderTaskForm(flows: Flow[], options: { projectDataEnabled?: boolean } = {}) {
   return render(
     <TaskForm
       workstreams={[]}
       members={[{ id: 'user-1', name: 'Pat Doe', initials: 'PD' }]}
       flows={flows}
       customTypes={[]}
+      projectDataEnabled={options.projectDataEnabled ?? true}
       onSubmit={vi.fn().mockResolvedValue(undefined)}
       onClose={() => {}}
     />,
@@ -83,6 +84,7 @@ describe('TaskForm flow selection', () => {
         members={[{ id: 'user-1', name: 'Pat Doe', initials: 'PD' }]}
         flows={[featureFlow, bugFlow]}
         customTypes={[]}
+        projectDataEnabled
         onSubmit={vi.fn().mockResolvedValue(undefined)}
         onClose={() => {}}
       />,
@@ -123,6 +125,7 @@ describe('TaskForm flow selection', () => {
           { ...bugFlow, position: 1 },
         ]}
         customTypes={[]}
+        projectDataEnabled
         onSubmit={vi.fn().mockResolvedValue(undefined)}
         onClose={() => {}}
       />,
@@ -172,5 +175,15 @@ describe('TaskForm flow selection', () => {
     await waitFor(() => {
       expect(screen.getByTestId('flow-id').textContent).toBe('flow-bug');
     });
+  });
+
+  it('disables Project Data on tasks until the project settings are configured', async () => {
+    const featureFlow = makeFlow('flow-feature', 'Feature Flow', ['feature']);
+
+    renderTaskForm([featureFlow], { projectDataEnabled: false });
+
+    const checkbox = screen.getByRole('checkbox', { name: 'Allow Project Data' }) as HTMLInputElement;
+    expect(checkbox.disabled).toBe(true);
+    expect(screen.getByText('Set up Project Data in project settings before enabling it on tasks.')).toBeTruthy();
   });
 });

@@ -9,7 +9,6 @@ export function useCurrentProjectWorkspaceProps(props: CurrentProjectWorkspacePr
   const {
     tasks,
     flowMap,
-    typeFlowMap,
     memberMap,
     onStartEditingTask,
   } = props;
@@ -18,12 +17,10 @@ export function useCurrentProjectWorkspaceProps(props: CurrentProjectWorkspacePr
     const rawTask = tasks.find(task => task.id === taskId);
     if (!rawTask) return;
 
-    const flowName = rawTask.flow_id
-      ? flowMap[rawTask.flow_id]
-      : (typeFlowMap[rawTask.type] ? flowMap[typeFlowMap[rawTask.type]] : null);
+    const flowName = rawTask.flow_id ? flowMap[rawTask.flow_id] : null;
 
     onStartEditingTask(toTaskView(rawTask, memberMap, flowName), rawTask);
-  }, [flowMap, memberMap, onStartEditingTask, tasks, typeFlowMap]);
+  }, [flowMap, memberMap, onStartEditingTask, tasks]);
 
   const headerProps = useProjectWorkspaceHeaderProps(props);
   const routesProps = useProjectWorkspaceRoutesProps({ ...props, handleEditTask });

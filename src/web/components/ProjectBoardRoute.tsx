@@ -9,7 +9,6 @@ type ProjectBoardRouteProps = Pick<
   | 'activeWorkstreams'
   | 'memberMap'
   | 'flowMap'
-  | 'typeFlowMap'
   | 'mentionedTaskIds'
   | 'commentCounts'
   | 'focusTaskId'
@@ -44,7 +43,6 @@ export function ProjectBoardRoute({
   activeWorkstreams,
   memberMap,
   flowMap,
-  typeFlowMap,
   mentionedTaskIds,
   commentCounts,
   focusTaskId,
@@ -78,7 +76,6 @@ export function ProjectBoardRoute({
       jobs={jobs}
       memberMap={memberMap}
       flowMap={flowMap}
-      typeFlowMap={typeFlowMap}
       userRole={project.role || 'dev'}
       projectId={project.id}
       mentionedTaskIds={mentionedTaskIds}

@@ -14,12 +14,13 @@ export interface ProjectWorkspaceModalsProps {
   members: MemberRecord[];
   flows: Flow[];
   customTypes: CustomTaskType[];
+  projectDataEnabled: boolean;
   showTaskForm: boolean;
   taskFormWorkstream: string | null;
   editingTask: EditTaskData | null;
   showAddProject: boolean;
   showMembersModal: boolean;
-  onSaveCustomType: (name: string, pipeline: string) => Promise<void>;
+  onSaveCustomType: (name: string) => Promise<void>;
   onCreateTask: (data: TaskFormData) => Promise<void>;
   onUpdateTaskForm: (taskId: string, data: TaskFormData) => Promise<void>;
   onCloseCreateTask: () => void;
@@ -36,6 +37,7 @@ export function ProjectWorkspaceModals({
   members,
   flows,
   customTypes,
+  projectDataEnabled,
   showTaskForm,
   taskFormWorkstream,
   editingTask,
@@ -59,6 +61,7 @@ export function ProjectWorkspaceModals({
         members={members}
         flows={flows}
         customTypes={customTypes}
+        projectDataEnabled={projectDataEnabled}
         showCreate={showTaskForm}
         defaultWorkstreamId={taskFormWorkstream}
         editingTask={editingTask}

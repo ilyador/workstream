@@ -1,0 +1,164 @@
+.page {
+  display: grid;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted-text, #667085);
+}
+
+.card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border-subtle, #d7dbe7);
+  border-radius: 16px;
+  background: var(--panel-bg, #fff);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.cardSubtitle {
+  margin: 4px 0 0;
+  color: var(--muted-text, #667085);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle, #d7dbe7);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fff;
+}
+
+.textarea {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.textComposer,
+.list,
+.results {
+  display: grid;
+  gap: 12px;
+}
+
+.listRow,
+.result {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.listRow {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.rowTitle,
+.resultHeader {
+  font-weight: 600;
+}
+
+.rowMeta,
+.empty {
+  color: var(--muted-text, #667085);
+}
+
+.hint {
+  color: var(--muted-text, #667085);
+  font-size: 0.92rem;
+}
+
+.resultHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.resultBody {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+}
+
+.searchRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+}
+
+.error,
+.message {
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+
+.error {
+  background: #fef2f2;
+  color: #b42318;
+}
+
+.message {
+  background: #ecfdf3;
+  color: #027a48;
+}

@@ -13,6 +13,7 @@ import s from './FlowEditor.module.css';
 interface FlowEditorProps {
   flows: Flow[];
   setFlows: React.Dispatch<React.SetStateAction<Flow[]>>;
+  projectDataEnabled: boolean;
   onSave: (flowId: string, updates: { name?: string; description?: string; agents_md?: string; default_types?: string[]; position?: number }) => Promise<void>;
   onSaveSteps: (flowId: string, steps: FlowStepInput[]) => Promise<void>;
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: FlowStepInput[] }) => Promise<Flow>;
@@ -24,7 +25,7 @@ interface FlowEditorProps {
 
 const EMPTY_JOB_MAP = {};
 const EMPTY_SET = new Set<string>();
-export function FlowEditor({ flows, setFlows, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, onSwapColumns, projectId, taskTypes }: FlowEditorProps) {
+export function FlowEditor({ flows, setFlows, projectDataEnabled, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, onSwapColumns, projectId, taskTypes }: FlowEditorProps) {
   const {
     creating,
     drag,
@@ -110,6 +111,7 @@ export function FlowEditor({ flows, setFlows, onSave, onSaveSteps, onCreateFlow,
         <FlowStepModal
           flow={modalFlow}
           stepIndex={modalTarget.stepIndex}
+          projectDataEnabled={projectDataEnabled}
           onSaveSteps={onSaveSteps}
           onClose={closeStepModal}
         />
