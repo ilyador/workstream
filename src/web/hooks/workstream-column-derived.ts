@@ -2,6 +2,8 @@ import type { JobView } from '../components/job-types';
 import type { TaskView } from '../lib/task-view';
 
 const UNTOUCHED_STATUSES = new Set(['backlog', 'todo']);
+const REORDER_BLOCKING_JOB_STATUSES = new Set<JobView['status']>(['queued', 'running', 'paused']);
+const ACTIVE_AI_JOB_STATUSES = new Set<JobView['status']>(['queued', 'running', 'paused', 'review']);
 
 export interface ChainGroup {
   taskIds: string[];
@@ -97,7 +99,7 @@ export function getWorkstreamStatus({
 
   const hasRunningTask = tasks.some(task => {
     const job = taskJobMap[task.id];
-    if (job && ['queued', 'running', 'paused'].includes(job.status)) return true;
+    if (job && REORDER_BLOCKING_JOB_STATUSES.has(job.status)) return true;
     if (task.mode === 'human' && task.status === 'in_progress') return true;
     return false;
   });
@@ -116,10 +118,19 @@ export function getWorkstreamStatus({
   return 'open' as const;
 }
 
+export function getReorderBlockingTaskId(tasks: TaskView[], taskJobMap: Record<string, JobView>) {
+  const blockingTask = tasks.find(task => {
+    const job = taskJobMap[task.id];
+    return job && REORDER_BLOCKING_JOB_STATUSES.has(job.status);
+  });
+
+  return blockingTask?.id ?? null;
+}
+
 export function getActiveTaskId(tasks: TaskView[], taskJobMap: Record<string, JobView>) {
   const activeAiTask = tasks.find(task => {
     const job = taskJobMap[task.id];
-    return job && ['queued', 'running', 'paused', 'review'].includes(job.status);
+    return job && ACTIVE_AI_JOB_STATUSES.has(job.status);
   });
   if (activeAiTask) return activeAiTask.id;
 

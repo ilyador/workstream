@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getWorkstreamStatus } from './workstream-column-derived';
+import { getActiveTaskId, getReorderBlockingTaskId, getWorkstreamStatus } from './workstream-column-derived';
 import type { JobView } from '../components/job-types';
 import type { TaskView } from '../lib/task-view';
 
@@ -54,3 +54,39 @@ describe('getWorkstreamStatus', () => {
     })).toBe('in progress');
   });
 });
+
+describe('task activity selectors', () => {
+  it('keeps review tasks active for UI without blocking reorder', () => {
+    const tasks = [task({ id: 'task-1', status: 'review' })];
+    const taskJobMap = { 'task-1': job('task-1', 'review') };
+
+    expect(getActiveTaskId(tasks, taskJobMap)).toBe('task-1');
+    expect(getReorderBlockingTaskId(tasks, taskJobMap)).toBeNull();
+  });
+
+  it('blocks reorder only for in-flight AI jobs', () => {
+    for (const status of ['queued', 'running', 'paused'] as const) {
+      const tasks = [task({ id: 'task-1', status: 'in_progress' })];
+      const taskJobMap = { 'task-1': job('task-1', status) };
+
+      expect(getReorderBlockingTaskId(tasks, taskJobMap)).toBe('task-1');
+    }
+  });
+
+  it('does not block reorder for human tasks waiting in progress', () => {
+    const tasks = [task({ id: 'task-1', mode: 'human', status: 'in_progress' })];
+
+    expect(getActiveTaskId(tasks, {})).toBe('task-1');
+    expect(getReorderBlockingTaskId(tasks, {})).toBeNull();
+  });
+});
+
+function job(taskId: string, status: JobView['status']): JobView {
+  return {
+    id: `job-${taskId}`,
+    taskId,
+    title: 'Task',
+    type: 'feature',
+    status,
+  } as JobView;
+}

@@ -6,6 +6,7 @@ import {
   buildChainGroups,
   getActiveTaskId,
   getFreezeIndex,
+  getReorderBlockingTaskId,
   getWorkstreamStatus,
 } from './workstream-column-derived';
 import { useWorkstreamColumnEffects } from './useWorkstreamColumnEffects';
@@ -69,7 +70,8 @@ export function useWorkstreamColumnState({
   }), [allDone, doneTasks, isBacklog, taskJobMap, tasks, totalTasks, workstream?.status]);
 
   const activeTaskId = useMemo(() => getActiveTaskId(tasks, taskJobMap), [tasks, taskJobMap]);
-  const dragDisabledGlobal = !isBacklog && activeTaskId !== null;
+  const reorderBlockingTaskId = useMemo(() => getReorderBlockingTaskId(tasks, taskJobMap), [tasks, taskJobMap]);
+  const dragDisabledGlobal = !isBacklog && reorderBlockingTaskId !== null;
 
   useWorkstreamColumnEffects({
     activeTaskId,
