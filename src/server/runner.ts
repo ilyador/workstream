@@ -1,20 +1,15 @@
-import { spawn } from 'child_process';
-import { readFileSync, existsSync, readdirSync, statSync, rmSync, unlinkSync } from 'fs';
-import { tmpdir } from 'os';
+import { readFileSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
 import { join } from 'path';
 import { supabase } from './supabase.js';
 import { stagedDiff, stagedDiffStat } from './git-utils.js';
 import { discoverSkills } from './routes/data.js';
 import type { FlowConfig, FlowStepConfig } from './flow-config.js';
-import { requireDetectedAiRuntime } from './ai-runtime-discovery.js';
 import {
-  registerActiveProcess,
-  unregisterActiveProcess,
-  isJobCanceled,
   getActiveProcessCount,
   cancelJob as cancelJobImpl,
   cancelAllJobs as cancelAllJobsImpl,
 } from './process-lifecycle.js';
+import { executeFlowStep, summarize } from './runtimes/index.js';
 
 const MIME_MAP: Record<string, string> = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
@@ -350,69 +345,6 @@ export async function buildStepPrompt(
   return prompt;
 }
 
-function buildClaudeArgs(step: FlowStepConfig, task: { effort?: string | null }): string[] {
-  const args = ['-p', '--verbose', '--output-format', 'stream-json'];
-  if (step.tools.length > 0) {
-    args.push('--allowedTools', step.tools.join(','));
-    const writeTools = ['Edit', 'Write', 'NotebookEdit'];
-    const blocked = writeTools.filter(tool => !step.tools.includes(tool));
-    if (blocked.length > 0) args.push('--disallowedTools', blocked.join(','));
-  }
-  if (step.runtime_variant) args.push('--model', step.runtime_variant);
-  if (task.effort) args.push('--effort', task.effort);
-  return args;
-}
-
-function codexEffortLevel(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return value === 'max' ? 'xhigh' : value;
-}
-
-function buildCodexArgs(step: FlowStepConfig, task: { effort?: string | null }, cwd: string, outputPath: string): string[] {
-  const args = [
-    'exec',
-    '--json',
-    '--cd', cwd,
-    '--dangerously-bypass-approvals-and-sandbox',
-    '--output-last-message', outputPath,
-    '-',
-  ];
-  if (step.runtime_variant) args.splice(args.length - 1, 0, '--model', step.runtime_variant);
-  const effort = codexEffortLevel(task.effort);
-  if (effort) args.splice(args.length - 1, 0, '-c', `model_reasoning_effort="${effort}"`);
-  return args;
-}
-
-function buildQwenArgs(step: FlowStepConfig, _task: { effort?: string | null }, prompt: string): string[] {
-  const args = [
-    '--prompt', prompt,
-    '--output-format', 'text',
-    '--approval-mode', 'yolo',
-  ];
-  if (step.runtime_variant) args.push('--model', step.runtime_variant);
-  return args;
-}
-
-async function runStepWithRuntime(
-  jobId: string,
-  step: FlowStepConfig,
-  task: { effort?: string | null },
-  localPath: string,
-  onLog: (text: string) => void,
-  prompt: string,
-): Promise<string> {
-  const runtime = requireDetectedAiRuntime(step.runtime_id);
-  switch (runtime.id) {
-    case 'claude_code':
-      return spawnClaude(jobId, buildClaudeArgs(step, task), localPath, onLog, prompt);
-    case 'codex':
-      return spawnCodex(jobId, buildCodexArgs(step, task, localPath, join(tmpdir(), `workstream-codex-${jobId}-${Date.now()}.txt`)), localPath, onLog, prompt);
-    case 'qwen_code':
-      return spawnQwen(jobId, buildQwenArgs(step, task, prompt), localPath, onLog);
-    default:
-      throw new Error(`Runtime driver not implemented: ${runtime.id}`);
-  }
-}
 
 function summaryRuntimeStep(flow: FlowConfig): FlowStepConfig {
   return [...flow.steps].reverse().find(step => step.runtime_kind === 'coding') ?? flow.steps[0];
@@ -467,7 +399,14 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
       try {
         if (!await isJobStillRunning(jobId)) return;
-        const output = await runStepWithRuntime(jobId, step, task, localPath, onLog, prompt);
+        const output = await executeFlowStep({
+          jobId,
+          step,
+          task,
+          cwd: localPath,
+          prompt,
+          onLog,
+        });
         if (!await isJobStillRunning(jobId)) return;
 
         const phaseOutput = {
@@ -638,7 +577,12 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
     }).join('\n\n');
     const diffInfo = changedFiles.length > 0 ? `Files changed: ${changedFiles.join(', ')} (+${linesAdded} -${linesRemoved})` : `${filesChanged} files changed (+${linesAdded} -${linesRemoved})`;
     const summaryPrompt = `You are summarizing a completed code task for a project dashboard.\n\nTask: ${task.title}\n${diffInfo}\n\nPhase outputs:\n${phaseLog.substring(0, 3000)}\n\nWrite a concise summary (2-4 sentences) of what was done and why. Focus on the actual change, not the process. No markdown formatting, no bullet points. Plain text only.`;
-    finalSummary = await generateSummary(jobId, summaryPrompt, summaryRuntimeStep(flow), localPath);
+    finalSummary = await summarize({
+      jobId,
+      step: summaryRuntimeStep(flow),
+      cwd: localPath,
+      prompt: summaryPrompt,
+    });
   } catch (err: any) {
     if (err.message === 'Job canceled') return;
     console.error('[runner] Summary generation failed:', err.message);
@@ -749,12 +693,6 @@ function legacyReviewCheck(output: string): boolean {
   return (hasIssues || hasFail) && !excluded;
 }
 
-/** Shared env for spawned claude processes. Ensures PATH includes ~/.local/bin for systemd. */
-export const claudeEnv = {
-  ...process.env,
-  TERM: 'dumb',
-  PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}`,
-};
 
 export const cancelJob = cancelJobImpl;
 export const cancelAllJobs = cancelAllJobsImpl;
@@ -863,322 +801,3 @@ async function savePhases(jobId: string, phasesCompleted: unknown[]): Promise<vo
   }
 }
 
-function formatStreamEvent(event: any): string | null {
-  // Handle assistant messages with content blocks
-  if (event.type === 'assistant' && event.message?.content) {
-    const parts: string[] = [];
-    for (const block of event.message.content) {
-      if (block.type === 'text' && block.text) {
-        parts.push(block.text);
-      }
-      if (block.type === 'tool_use') {
-        const toolName = block.name || 'unknown';
-        const input = block.input || {};
-        if (toolName === 'Read' || toolName === 'Glob' || toolName === 'Grep') {
-          parts.push(`[${toolName}] ${input.file_path || input.pattern || input.path || ''}`);
-        } else if (toolName === 'Edit' || toolName === 'Write') {
-          parts.push(`[${toolName}] ${input.file_path || ''}`);
-        } else if (toolName === 'Bash') {
-          const cmd = (input.command || '').substring(0, 100);
-          parts.push(`[Bash] ${cmd}`);
-        } else {
-          parts.push(`[${toolName}]`);
-        }
-      }
-    }
-    return parts.join('\n') || null;
-  }
-
-  // Handle result event (final summary)
-  if (event.type === 'result') {
-    const duration = event.duration_ms ? ` (${(event.duration_ms / 1000).toFixed(1)}s)` : '';
-    return `[done] Phase complete${duration}`;
-  }
-
-  // Skip tool_result / tool_output to avoid noise
-  if (event.type === 'tool_result' || event.type === 'tool_output') {
-    return null;
-  }
-
-  return null;
-}
-
-/** Quick runtime call for generating summaries. No tools, just text in/out. */
-function generateSummary(jobId: string, prompt: string, step: FlowStepConfig, cwd: string): Promise<string> {
-  const runtime = requireDetectedAiRuntime(step.runtime_id);
-  switch (runtime.id) {
-    case 'claude_code':
-      return new Promise((resolve, reject) => {
-        const model = step.runtime_variant || 'sonnet';
-        const proc = spawn('claude', ['-p', '--output-format', 'text', '--max-turns', '1', '--model', model], {
-          cwd,
-          stdio: ['pipe', 'pipe', 'pipe'],
-          env: claudeEnv,
-          timeout: 30000,
-        });
-
-        registerActiveProcess(jobId, proc);
-        let stdout = '';
-        proc.stdin.write(prompt);
-        proc.stdin.end();
-        proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-        proc.on('close', (code) => {
-          const wasCanceled = isJobCanceled(jobId);
-          unregisterActiveProcess(jobId, proc);
-          if (wasCanceled) {
-            reject(new Error('Job canceled'));
-            return;
-          }
-          if (code === 0 || code === null) resolve(stdout.trim() || 'Completed');
-          else reject(new Error(`summary claude exited with code ${code}`));
-        });
-        proc.on('error', (err) => {
-          unregisterActiveProcess(jobId, proc);
-          reject(err);
-        });
-      });
-    case 'codex':
-      return spawnCodex(
-        jobId,
-        buildCodexArgs(step, { effort: null }, cwd, join(tmpdir(), `workstream-codex-summary-${jobId}-${Date.now()}.txt`)),
-        cwd,
-        () => {},
-        prompt,
-      );
-    case 'qwen_code':
-      return spawnQwen(jobId, buildQwenArgs(step, { effort: null }, prompt), cwd, () => {});
-    default:
-      return Promise.reject(new Error(`Summary runtime not implemented: ${step.runtime_id}`));
-  }
-}
-
-const JOB_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes per Claude call
-
-function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: string) => void, prompt?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('claude', args, {
-      cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: claudeEnv,
-    });
-
-    registerActiveProcess(jobId, proc);
-    let fullOutput = '';
-
-    // Kill process if it exceeds the timeout
-    const timeout = setTimeout(() => {
-      onLog(`[runner] Process timed out after ${JOB_TIMEOUT_MS / 60000}m — killing\n`);
-      try { proc.kill('SIGTERM'); } catch { /* already dead */ }
-      setTimeout(() => { try { proc.kill('SIGKILL'); } catch { /* already dead */ } }, 5000);
-    }, JOB_TIMEOUT_MS);
-    let lineBuffer = '';
-
-    // Pipe prompt via stdin to avoid arg length limits
-    proc.stdin.on('error', (err) => {
-      console.error(`[runner] stdin write error for job ${jobId}:`, err.message);
-    });
-    if (prompt) {
-      proc.stdin.write(prompt);
-      proc.stdin.end();
-    } else {
-      proc.stdin.end();
-    }
-
-    proc.stdout.on('data', (data: Buffer) => {
-      const text = data.toString();
-      lineBuffer += text;
-
-      // Process complete lines (stream-json sends one JSON object per line)
-      const lines = lineBuffer.split('\n');
-      lineBuffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line);
-          const formatted = formatStreamEvent(event);
-          if (formatted) {
-            fullOutput += formatted + '\n';
-            onLog(formatted + '\n');
-          }
-        } catch {
-          // Not JSON, log raw
-          fullOutput += line + '\n';
-          onLog(line + '\n');
-        }
-      }
-    });
-
-    let stderrBuffer = '';
-    proc.stderr.on('data', (data: Buffer) => {
-      const text = data.toString();
-      stderrBuffer += text;
-      if (!text.includes('stdin') && !text.includes('Warning')) {
-        onLog(text);
-      }
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timeout);
-      // Process remaining buffer
-      if (lineBuffer.trim()) {
-        try {
-          const event = JSON.parse(lineBuffer);
-          const formatted = formatStreamEvent(event);
-          if (formatted) fullOutput += formatted + '\n';
-        } catch {
-          fullOutput += lineBuffer;
-        }
-      }
-      // If cancelJob() already removed this jobId from activeProcesses, the
-      // process was killed intentionally — reject so the runner stops.
-      const wasCanceled = isJobCanceled(jobId);
-      unregisterActiveProcess(jobId, proc);
-      if (wasCanceled) {
-        reject(new Error('Job canceled'));
-        return;
-      }
-      // If claude streamed a result event but exited non-zero, treat as success.
-      // The CLI sometimes exits 1 after completing successfully (e.g. max turns reached).
-      const hasResult = fullOutput.includes('[done] Phase complete');
-      if (code === 0 || code === null || hasResult) {
-        resolve(fullOutput);
-      } else {
-        // Include stderr in error for diagnosability
-        const stderrClean = stderrBuffer.trim().split('\n')
-          .filter(l => !l.includes('stdin') && !l.includes('Warning'))
-          .slice(-10).join('\n');
-        const detail = stderrClean ? `\n${stderrClean}` : '';
-        reject(new Error(`claude exited with code ${code}${detail}`));
-      }
-    });
-
-    proc.on('error', (err) => {
-      clearTimeout(timeout);
-      unregisterActiveProcess(jobId, proc);
-      reject(err);
-    });
-  });
-}
-
-function spawnCodex(jobId: string, args: string[], cwd: string, onLog: (text: string) => void, prompt: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const outputIndex = args.findIndex(arg => arg === '--output-last-message');
-    const outputPath = outputIndex >= 0 && typeof args[outputIndex + 1] === 'string'
-      ? args[outputIndex + 1]
-      : join(tmpdir(), `workstream-codex-${jobId}-${Date.now()}.txt`);
-    const proc = spawn('codex', args, {
-      cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: claudeEnv,
-    });
-
-    registerActiveProcess(jobId, proc);
-    let stdoutBuffer = '';
-    let stderrBuffer = '';
-
-    proc.stdin.on('error', () => {});
-    proc.stdin.write(prompt);
-    proc.stdin.end();
-
-    proc.stdout.on('data', (data: Buffer) => {
-      stdoutBuffer += data.toString();
-      const lines = stdoutBuffer.split('\n');
-      stdoutBuffer = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line) as Record<string, unknown>;
-          const message = typeof event.msg === 'string' ? event.msg
-            : typeof event.message === 'string' ? event.message
-            : typeof event.text === 'string' ? event.text
-            : (typeof event.type === 'string' && typeof event.command === 'string' ? `[${event.type}] ${event.command}` : null);
-          if (message) onLog(`${message}\n`);
-        } catch {
-          onLog(`${line}\n`);
-        }
-      }
-    });
-
-    proc.stderr.on('data', (data: Buffer) => {
-      const text = data.toString();
-      stderrBuffer += text;
-      if (text.trim()) onLog(text);
-    });
-
-    proc.on('close', (code) => {
-      unregisterActiveProcess(jobId, proc);
-      if (isJobCanceled(jobId)) {
-        reject(new Error('Job canceled'));
-        return;
-      }
-
-      let output = '';
-      try {
-        output = readFileSync(outputPath, 'utf8').trim();
-      } catch {
-        output = '';
-      }
-      try { unlinkSync(outputPath); } catch { /* ignore */ }
-
-      if (code === 0 || code === null) {
-        resolve(output || 'Completed');
-        return;
-      }
-
-      const stderrClean = stderrBuffer.trim().split('\n').slice(-10).join('\n');
-      const detail = stderrClean ? `\n${stderrClean}` : '';
-      reject(new Error(`codex exited with code ${code}${detail}`));
-    });
-
-    proc.on('error', (error) => {
-      unregisterActiveProcess(jobId, proc);
-      reject(error);
-    });
-  });
-}
-
-function spawnQwen(jobId: string, args: string[], cwd: string, onLog: (text: string) => void): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('qwen', args, {
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: claudeEnv,
-    });
-
-    registerActiveProcess(jobId, proc);
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data: Buffer) => {
-      const text = data.toString();
-      stdout += text;
-      if (text.trim()) onLog(text);
-    });
-
-    proc.stderr.on('data', (data: Buffer) => {
-      const text = data.toString();
-      stderr += text;
-      if (text.trim()) onLog(text);
-    });
-
-    proc.on('close', (code) => {
-      unregisterActiveProcess(jobId, proc);
-      if (isJobCanceled(jobId)) {
-        reject(new Error('Job canceled'));
-        return;
-      }
-      if (code === 0 || code === null) {
-        resolve(stdout.trim() || 'Completed');
-        return;
-      }
-      const detail = stderr.trim().split('\n').slice(-10).join('\n');
-      reject(new Error(`qwen exited with code ${code}${detail ? `\n${detail}` : ''}`));
-    });
-
-    proc.on('error', (error) => {
-      unregisterActiveProcess(jobId, proc);
-      reject(error);
-    });
-  });
-}
