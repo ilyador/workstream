@@ -74,6 +74,25 @@ function makeReviewJob(review: JobView['review']): JobView {
   };
 }
 
+function makeDoneJob(overrides: Partial<JobView> = {}): JobView {
+  return {
+    id: 'job-done',
+    taskId: 'task-1',
+    title: 'Review task',
+    type: 'task',
+    status: 'done',
+    attempt: 1,
+    maxAttempts: 1,
+    completedAgo: '2m ago',
+    phases: [
+      { name: 'implement', status: 'completed', summary: 'Built the feature.' },
+      { name: 'verify', status: 'completed', summary: 'Ran the checks.' },
+      { name: 'review', status: 'completed', summary: 'Reviewed the result.' },
+    ],
+    ...overrides,
+  };
+}
+
 describe('TaskCard review checks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -474,5 +493,29 @@ describe('TaskCard review checks', () => {
     expect(useArtifactsMock).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(screen.getByTitle('actions-plan.md')).toBeTruthy();
+  });
+
+  it('renders completed phases and summaries in expanded done cards', () => {
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'done',
+          description: '',
+        }}
+        job={makeDoneJob()}
+        canRunAi
+        isExpanded
+        onToggleExpand={() => {}}
+      />,
+    );
+
+    expect(screen.getByText((_, element) => element?.textContent === '✓ Completed 2m ago')).toBeTruthy();
+    expect(screen.getAllByText('implement').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('verify').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('review').length).toBeGreaterThan(0);
+    expect(screen.getByText('Built the feature.')).toBeTruthy();
+    expect(screen.getByText('Ran the checks.')).toBeTruthy();
+    expect(screen.getByText('Reviewed the result.')).toBeTruthy();
   });
 });

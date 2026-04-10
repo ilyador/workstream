@@ -85,7 +85,7 @@ export function TaskCardActiveDetail({
                 .filter(phase => phase.status === 'completed' && phase.summary)
                 .map(phase => (
                   <div key={phase.name} className={s.stepSummary}>
-                    <span className={s.stepName}>{phase.name}</span> {phase.summary}
+                    <span className={`${s.stepName} ${s[`pn${capTaskCardToken(phase.name)}`] || s.stepNameDefault}`}>{phase.name}</span> {phase.summary}
                   </div>
                 ))}
             </div>

@@ -5,6 +5,7 @@ import { TaskComments } from './TaskComments';
 import type { JobView } from './job-types';
 import type { TaskView } from '../lib/task-view';
 import type { MentionMember } from './task-card-types';
+import { capTaskCardToken } from './task-card-status';
 import s from './TaskCard.module.css';
 
 interface TaskDoneDetailProps {
@@ -59,6 +60,30 @@ export function TaskDoneDetail({
                     Move to backlog
                   </button>
                 )}
+              </div>
+            )}
+            {job.phases && job.phases.length > 0 && (
+              <div className={s.phases}>
+                {job.phases.map((phase, index) => (
+                  <span key={phase.name} className={s.phaseWrap}>
+                    {index > 0 && <span className={s.arrow}>&rarr;</span>}
+                    <span className={`${s.phase} ${s[`ph${capTaskCardToken(phase.status)}`]} ${s[`pn${capTaskCardToken(phase.name)}`] || ''}`}>
+                      {phase.status === 'completed' && <span className={s.phaseCheck}>&#10003;</span>}
+                      {phase.name}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
+            {job.phases?.some(phase => phase.status === 'completed' && phase.summary) && (
+              <div className={s.stepSummaries}>
+                {job.phases
+                  .filter(phase => phase.status === 'completed' && phase.summary)
+                  .map(phase => (
+                    <div key={phase.name} className={s.stepSummary}>
+                      <span className={`${s.stepName} ${s[`pn${capTaskCardToken(phase.name)}`] || s.stepNameDefault}`}>{phase.name}</span> {phase.summary}
+                    </div>
+                  ))}
               </div>
             )}
             {job.review?.summary && (
