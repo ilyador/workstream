@@ -32,6 +32,19 @@ function formatReindexMessage(summary: ProjectDataReindexResult | null | undefin
   return `${base}.`;
 }
 
+function formatBackendLabel(backend: ProjectDataSettings['backend']): string {
+  switch (backend) {
+    case 'lmstudio':
+      return 'LM Studio';
+    case 'ollama':
+      return 'Ollama';
+    case 'openai_compatible':
+      return 'OpenAI-Compatible';
+    default:
+      return backend;
+  }
+}
+
 export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDataSettings }: ProjectDataRouteProps) {
   const modal = useModal();
   const [settings, setSettings] = useState<ProjectDataSettings>(projectDataSettings);
@@ -48,6 +61,11 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isAdmin = project.role === 'admin';
   const projectDataEnabled = settings.enabled;
+  const readyDocuments = documents.filter(document => document.status === 'ready').length;
+  const failedDocuments = documents.filter(document => document.status === 'failed').length;
+  const indexingDocuments = documents.length - readyDocuments - failedDocuments;
+  const backendLabel = formatBackendLabel(settings.backend);
+  const reindexRequired = documents.length > 0 && projectDataEmbeddingsChanged(savedSettings, settings);
 
   useEffect(() => {
     setSettings(projectDataSettings);
@@ -212,209 +230,279 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
 
   return (
     <div className={s.page}>
-      <div className={s.header}>
-        <div>
-          <h2 className={s.title}>Project Data</h2>
-          <p className={s.subtitle}>Project-wide indexed docs for planning, research, and flow steps that request them.</p>
+      <section className={s.hero}>
+        <div className={s.heroHeader}>
+          <div className={s.heroCopy}>
+            <div className={s.eyebrow}>Knowledge Layer</div>
+            <h2 className={s.title}>Project Data</h2>
+            <p className={s.subtitle}>Project-wide indexed docs for planning, research, and flow steps that request them.</p>
+          </div>
+          <div className={s.heroPanel}>
+            <div className={`${s.stateBadge} ${projectDataEnabled ? s.stateEnabled : s.stateDisabled}`}>
+              {projectDataEnabled ? 'Enabled' : 'Disabled'}
+            </div>
+            <p className={s.heroNote}>
+              {isAdmin ? 'Tune embeddings, index material, and test retrieval from one place.' : 'Browse the current retrieval setup and inspect the indexed project context.'}
+            </p>
+          </div>
         </div>
-      </div>
+
+        <div className={s.metricGrid}>
+          <div className={s.metricCard}>
+            <span className={s.metricLabel}>Indexed docs</span>
+            <strong className={s.metricValue}>{documents.length}</strong>
+            <span className={s.metricMeta}>
+              {documents.length === 0
+                ? 'No indexed context yet'
+                : `${readyDocuments} ready${failedDocuments > 0 ? ` · ${failedDocuments} failed` : indexingDocuments > 0 ? ` · ${indexingDocuments} processing` : ''}`}
+            </span>
+          </div>
+          <div className={s.metricCard}>
+            <span className={s.metricLabel}>Embedding backend</span>
+            <strong className={s.metricValue}>{backendLabel}</strong>
+            <span className={s.metricMeta}>{settings.embeddingModel}</span>
+          </div>
+          <div className={s.metricCard}>
+            <span className={s.metricLabel}>Retrieval depth</span>
+            <strong className={s.metricValue}>Top {settings.topK}</strong>
+            <span className={s.metricMeta}>Returned chunks per search</span>
+          </div>
+          <div className={s.metricCard}>
+            <span className={s.metricLabel}>Access</span>
+            <strong className={s.metricValue}>{isAdmin ? 'Admin' : 'Viewer'}</strong>
+            <span className={s.metricMeta}>{isAdmin ? 'Can manage indexing and settings' : 'Read-only access to the current setup'}</span>
+          </div>
+        </div>
+      </section>
 
       {loading ? (
-        <div className={s.card}>Loading Project Data…</div>
+        <div className={`${s.card} ${s.loadingCard}`}>Loading Project Data…</div>
       ) : (
         <>
-          <section className={s.card}>
-            <div className={s.cardHeader}>
-              <div>
-                <h3 className={s.cardTitle}>Settings</h3>
-                <p className={s.cardSubtitle}>Configure the embedding backend for this project.</p>
-              </div>
-            </div>
-
-            <div className={s.grid}>
-              <label className={s.field}>
-                <span className={s.label}>Backend</span>
-                <select
-                  className={s.input}
-                  value={settings.backend}
-                  disabled={!isAdmin}
-                  onChange={event => setSettings(current => ({ ...current, backend: event.target.value as ProjectDataSettings['backend'] }))}
-                >
-                  <option value="lmstudio">LM Studio</option>
-                  <option value="ollama">Ollama</option>
-                  <option value="openai_compatible">OpenAI-Compatible</option>
-                </select>
-              </label>
-
-              <label className={s.field}>
-                <span className={s.label}>Base URL</span>
-                <input
-                  className={s.input}
-                  value={settings.baseUrl}
-                  disabled={!isAdmin}
-                  onChange={event => setSettings(current => ({ ...current, baseUrl: event.target.value }))}
-                />
-              </label>
-
-              <label className={s.field}>
-                <span className={s.label}>Embedding Model</span>
-                <input
-                  className={s.input}
-                  value={settings.embeddingModel}
-                  disabled={!isAdmin}
-                  onChange={event => setSettings(current => ({ ...current, embeddingModel: event.target.value }))}
-                />
-              </label>
-
-              <label className={s.field}>
-                <span className={s.label}>Top K</span>
-                <input
-                  className={s.input}
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={settings.topK}
-                  disabled={!isAdmin}
-                  onChange={event => setSettings(current => ({ ...current, topK: Number(event.target.value) || 1 }))}
-                />
-              </label>
-            </div>
-
-            <label className={s.checkbox}>
-              <input
-                type="checkbox"
-                checked={settings.enabled}
-                disabled={!isAdmin}
-                onChange={event => setSettings(current => ({ ...current, enabled: event.target.checked }))}
-              />
-              <span>Enable Project Data for this project</span>
-            </label>
-
-            {isAdmin && (
-              <div className={s.actions}>
-                <button className="btn btnPrimary" type="button" disabled={saving} onClick={() => void handleSaveSettings()}>
-                  {saving ? 'Saving…' : 'Save Settings'}
-                </button>
-                {documents.length > 0 && (
-                  <button className="btn btnSecondary" type="button" disabled={saving} onClick={() => void handleReindex()}>
-                    {saving ? 'Working…' : 'Reindex Documents'}
-                  </button>
-                )}
-              </div>
-            )}
-          </section>
-
-          <section className={s.card}>
-            <div className={s.cardHeader}>
-              <div>
-                <h3 className={s.cardTitle}>Documents</h3>
-                <p className={s.cardSubtitle}>Upload docs or notes to index them for Project Data retrieval.</p>
-              </div>
-              {isAdmin && (
-                <>
-                  <input
-                    ref={fileInputRef}
-                    className={s.hiddenInput}
-                    type="file"
-                    onChange={event => {
-                      const file = event.target.files?.[0];
-                      if (file) void handleUploadFile(file);
-                      event.currentTarget.value = '';
-                    }}
-                  />
-                  <button className="btn btnSecondary" type="button" disabled={saving || !projectDataEnabled} onClick={() => fileInputRef.current?.click()}>
-                    Upload File
-                  </button>
-                </>
-              )}
-            </div>
-
-            {!projectDataEnabled && (
-              <div className={s.hint}>Enable Project Data in project settings before uploading, indexing, or searching documents.</div>
-            )}
-
-            <div className={s.textComposer}>
-              <input
-                className={s.input}
-                placeholder="notes.md"
-                value={draftName}
-                disabled={!isAdmin || !projectDataEnabled}
-                onChange={event => setDraftName(event.target.value)}
-              />
-              <textarea
-                className={s.textarea}
-                placeholder="Paste project notes, specs, design rules, or lore here..."
-                value={draftContent}
-                disabled={!isAdmin || !projectDataEnabled}
-                onChange={event => setDraftContent(event.target.value)}
-              />
-              {isAdmin && (
-                <div className={s.actions}>
-                  <button className="btn btnSecondary" type="button" disabled={saving || !projectDataEnabled || !draftName.trim() || !draftContent.trim()} onClick={() => void handleCreateTextDocument()}>
-                    Index Text Note
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className={s.list}>
-              {documents.length === 0 ? (
-                <div className={s.empty}>No indexed documents yet.</div>
-              ) : documents.map(document => (
-                <div key={document.id} className={s.listRow}>
-                  <div>
-                    <div className={s.rowTitle}>{document.file_name}</div>
-                    <div className={s.rowMeta}>{document.file_type} · {document.chunk_count} chunks · {document.status}</div>
-                  </div>
-                  {isAdmin && (
-                    <button className="btn btnDanger btnSm" type="button" disabled={saving} onClick={() => void handleDeleteDocument(document.id)}>
-                      Delete
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className={s.card}>
-            <div className={s.cardHeader}>
-              <div>
-                <h3 className={s.cardTitle}>Search</h3>
-                <p className={s.cardSubtitle}>Test what Project Data retrieval will surface for AI steps.</p>
-              </div>
-            </div>
-
-            <div className={s.searchRow}>
-              <input
-                className={s.input}
-                placeholder="Search the indexed project knowledge…"
-                value={searchQuery}
-                disabled={!projectDataEnabled}
-                onChange={event => setSearchQuery(event.target.value)}
-              />
-              <button className="btn btnSecondary" type="button" disabled={saving || !projectDataEnabled || !searchQuery.trim()} onClick={() => void handleSearch()}>
-                Search
-              </button>
-            </div>
-
-            <div className={s.results}>
-              {results.length === 0 ? (
-                <div className={s.empty}>No search results yet.</div>
-              ) : results.map((result, index) => (
-                <div key={`${result.document_id}-${result.chunk_index}-${index}`} className={s.result}>
-                  <div className={s.resultHeader}>
-                    <span>{result.file_name}</span>
-                    <span>{(result.similarity * 100).toFixed(1)}%</span>
-                  </div>
-                  <pre className={s.resultBody}>{result.content}</pre>
-                </div>
-              ))}
-            </div>
-          </section>
-
           {(error || message) && (
             <div className={error ? s.error : s.message}>{error || message}</div>
           )}
+
+          <div className={s.dashboard}>
+            <section className={`${s.card} ${s.settingsCard}`}>
+              <div className={s.cardHeader}>
+                <div>
+                  <div className={s.sectionTag}>Control room</div>
+                  <h3 className={s.cardTitle}>Settings</h3>
+                  <p className={s.cardSubtitle}>Configure the embedding backend for this project.</p>
+                </div>
+                <div className={s.cardChip}>{isAdmin ? 'Editable' : 'Read only'}</div>
+              </div>
+
+              {reindexRequired && (
+                <div className={s.notice}>
+                  Saving these changes will reindex all existing Project Data documents.
+                </div>
+              )}
+
+              <div className={s.grid}>
+                <label className={s.field}>
+                  <span className={s.label}>Backend</span>
+                  <select
+                    className={s.input}
+                    value={settings.backend}
+                    disabled={!isAdmin}
+                    onChange={event => setSettings(current => ({ ...current, backend: event.target.value as ProjectDataSettings['backend'] }))}
+                  >
+                    <option value="lmstudio">LM Studio</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="openai_compatible">OpenAI-Compatible</option>
+                  </select>
+                </label>
+
+                <label className={s.field}>
+                  <span className={s.label}>Base URL</span>
+                  <input
+                    className={s.input}
+                    value={settings.baseUrl}
+                    disabled={!isAdmin}
+                    onChange={event => setSettings(current => ({ ...current, baseUrl: event.target.value }))}
+                  />
+                </label>
+
+                <label className={s.field}>
+                  <span className={s.label}>Embedding Model</span>
+                  <input
+                    className={s.input}
+                    value={settings.embeddingModel}
+                    disabled={!isAdmin}
+                    onChange={event => setSettings(current => ({ ...current, embeddingModel: event.target.value }))}
+                  />
+                </label>
+
+                <label className={s.field}>
+                  <span className={s.label}>Top K</span>
+                  <input
+                    className={s.input}
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={settings.topK}
+                    disabled={!isAdmin}
+                    onChange={event => setSettings(current => ({ ...current, topK: Number(event.target.value) || 1 }))}
+                  />
+                </label>
+              </div>
+
+              <label className={s.checkbox}>
+                <input
+                  type="checkbox"
+                  checked={settings.enabled}
+                  disabled={!isAdmin}
+                  onChange={event => setSettings(current => ({ ...current, enabled: event.target.checked }))}
+                />
+                <span>Enable Project Data for this project</span>
+              </label>
+
+              {isAdmin && (
+                <div className={s.actions}>
+                  <button className="btn btnPrimary" type="button" disabled={saving} onClick={() => void handleSaveSettings()}>
+                    {saving ? 'Saving…' : 'Save Settings'}
+                  </button>
+                  {documents.length > 0 && (
+                    <button className="btn btnSecondary" type="button" disabled={saving} onClick={() => void handleReindex()}>
+                      {saving ? 'Working…' : 'Reindex Documents'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <div className={s.sideColumn}>
+              <section className={`${s.card} ${s.documentsCard}`}>
+                <div className={s.cardHeader}>
+                  <div>
+                    <div className={s.sectionTag}>Source material</div>
+                    <h3 className={s.cardTitle}>Documents</h3>
+                    <p className={s.cardSubtitle}>Upload docs or notes to index them for Project Data retrieval.</p>
+                  </div>
+                  {isAdmin && (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        className={s.hiddenInput}
+                        type="file"
+                        onChange={event => {
+                          const file = event.target.files?.[0];
+                          if (file) void handleUploadFile(file);
+                          event.currentTarget.value = '';
+                        }}
+                      />
+                      <button className="btn btnSecondary" type="button" disabled={saving || !projectDataEnabled} onClick={() => fileInputRef.current?.click()}>
+                        Upload File
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {!projectDataEnabled && (
+                  <div className={s.hint}>Enable Project Data in project settings before uploading, indexing, or searching documents.</div>
+                )}
+
+                <div className={s.documentsLayout}>
+                  <div className={s.textComposer}>
+                    <div className={s.composerHeader}>
+                      <div className={s.composerTitle}>Quick note</div>
+                      <div className={s.composerHint}>Drop in raw project context, design rules, or specs and make it searchable immediately.</div>
+                    </div>
+                    <input
+                      className={s.input}
+                      placeholder="notes.md"
+                      value={draftName}
+                      disabled={!isAdmin || !projectDataEnabled}
+                      onChange={event => setDraftName(event.target.value)}
+                    />
+                    <textarea
+                      className={s.textarea}
+                      placeholder="Paste project notes, specs, design rules, or lore here..."
+                      value={draftContent}
+                      disabled={!isAdmin || !projectDataEnabled}
+                      onChange={event => setDraftContent(event.target.value)}
+                    />
+                    {isAdmin && (
+                      <div className={s.actions}>
+                        <button className="btn btnSecondary" type="button" disabled={saving || !projectDataEnabled || !draftName.trim() || !draftContent.trim()} onClick={() => void handleCreateTextDocument()}>
+                          Index Text Note
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={s.listPanel}>
+                    <div className={s.listHeader}>
+                      <div className={s.listTitle}>Indexed files</div>
+                      <div className={s.listCount}>{documents.length}</div>
+                    </div>
+                    <div className={s.list}>
+                      {documents.length === 0 ? (
+                        <div className={s.empty}>No indexed documents yet.</div>
+                      ) : documents.map(document => (
+                        <div key={document.id} className={s.listRow}>
+                          <div className={s.rowContent}>
+                            <div className={s.rowTopline}>
+                              <div className={s.rowTitle}>{document.file_name}</div>
+                              <div className={`${s.statusChip} ${document.status === 'ready' ? s.statusReady : document.status === 'failed' ? s.statusFailed : s.statusWorking}`}>
+                                {document.status}
+                              </div>
+                            </div>
+                            <div className={s.rowMeta}>{document.file_type} · {document.chunk_count} chunks</div>
+                          </div>
+                          {isAdmin && (
+                            <button className="btn btnDanger btnSm" type="button" disabled={saving} onClick={() => void handleDeleteDocument(document.id)}>
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className={`${s.card} ${s.searchCard}`}>
+                <div className={s.cardHeader}>
+                  <div>
+                    <div className={s.sectionTag}>Retrieval preview</div>
+                    <h3 className={s.cardTitle}>Search</h3>
+                    <p className={s.cardSubtitle}>Test what Project Data retrieval will surface for AI steps.</p>
+                  </div>
+                  <div className={s.cardChip}>{results.length > 0 ? `${results.length} hit${results.length === 1 ? '' : 's'}` : 'No results yet'}</div>
+                </div>
+
+                <div className={s.searchRow}>
+                  <input
+                    className={s.input}
+                    placeholder="Search the indexed project knowledge…"
+                    value={searchQuery}
+                    disabled={!projectDataEnabled}
+                    onChange={event => setSearchQuery(event.target.value)}
+                  />
+                  <button className="btn btnSecondary" type="button" disabled={saving || !projectDataEnabled || !searchQuery.trim()} onClick={() => void handleSearch()}>
+                    Search
+                  </button>
+                </div>
+
+                <div className={s.results}>
+                  {results.length === 0 ? (
+                    <div className={s.empty}>No search results yet.</div>
+                  ) : results.map((result, index) => (
+                    <div key={`${result.document_id}-${result.chunk_index}-${index}`} className={s.result}>
+                      <div className={s.resultHeader}>
+                        <span>{result.file_name}</span>
+                        <span className={s.score}>{(result.similarity * 100).toFixed(1)}%</span>
+                      </div>
+                      <pre className={s.resultBody}>{result.content}</pre>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
         </>
       )}
     </div>
