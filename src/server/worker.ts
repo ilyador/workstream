@@ -9,7 +9,7 @@ import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkp
 import { queueNextWorkstreamTask } from './auto-continue.js';
 import { autoCommit, slugify } from './git-utils.js';
 import { search as ragSearch } from './rag/service.js';
-import { refreshDetectedAiRuntimes } from './ai-runtime-discovery.js';
+import { refreshDetectedAiRuntimes, getDetectedAiRuntimeTimestamp } from './ai-runtime-discovery.js';
 import { cleanupWorktree, ensureWorktree } from './worktree.js';
 
 const execFileAsync = promisify(execFile);
@@ -366,6 +366,7 @@ let busyJobId: string | null = null;
 const pollInterval = setInterval(async () => {
   try {
     if (busyJobId) return;
+    if (!getDetectedAiRuntimeTimestamp()) return; // wait for discovery to populate cache
 
     const job = await claimNextQueuedJob();
     if (!job) return;
