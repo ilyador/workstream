@@ -543,9 +543,10 @@ process.on('SIGINT', shutdown);
 // Startup
 // ---------------------------------------------------------------------------
 
-const detectedRuntimes = refreshDetectedAiRuntimes();
-const runtimeSummary = detectedRuntimes
-  .filter(runtime => runtime.available)
-  .map(runtime => `${runtime.label} (${runtime.command})`)
-  .join(', ');
-console.log(`[worker] WorkStream worker started, polling for jobs... detected runtimes: ${runtimeSummary || 'none'}`);
+void refreshDetectedAiRuntimes().then(detectedRuntimes => {
+  const runtimeSummary = detectedRuntimes
+    .filter(runtime => runtime.available)
+    .map(runtime => `${runtime.label} (${runtime.command})`)
+    .join(', ');
+  console.log(`[worker] WorkStream worker started, polling for jobs... detected runtimes: ${runtimeSummary || 'none'}`);
+});

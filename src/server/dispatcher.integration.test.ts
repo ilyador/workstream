@@ -143,6 +143,18 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
+// Mock ai-runtime-discovery so requireDetectedAiRuntime works without a live cache
+vi.mock('./ai-runtime-discovery.js', () => ({
+  requireDetectedAiRuntime: vi.fn((id: string) => ({ id, available: true, label: id, command: id })),
+  getDetectedAiRuntime: vi.fn((id: string | null | undefined) =>
+    id ? { id, available: true, label: id, command: id } : null,
+  ),
+  getDetectedAiRuntimes: vi.fn(async () => []),
+  getDetectedAiRuntimesSync: vi.fn(() => []),
+  refreshDetectedAiRuntimes: vi.fn(async () => []),
+  getDetectedAiRuntimeTimestamp: vi.fn(() => null),
+}));
+
 // Mock modules that runner imports
 vi.mock('./routes/data.js', () => ({
   discoverSkills: vi.fn().mockReturnValue([]),
