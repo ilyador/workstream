@@ -7,9 +7,10 @@ import type { FlowConfig } from './runner.js';
 import { supabase } from './supabase.js';
 import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
 import { queueNextWorkstreamTask } from './auto-continue.js';
-import { ensureWorktree } from './worktree.js';
 import { autoCommit, slugify } from './git-utils.js';
 import { search as ragSearch } from './rag/service.js';
+import { refreshDetectedAiRuntimes } from './ai-runtime-discovery.js';
+import { cleanupWorktree, ensureWorktree } from './worktree.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -193,12 +194,12 @@ async function startJob(job: ClaimedJob): Promise<void> {
     try {
       const { data: ws } = await supabase
         .from('workstreams')
-        .select('name')
+        .select('id, name')
         .eq('id', task.workstream_id)
         .single();
       if (ws) {
         const slug = slugify(ws.name);
-        localPath = ensureWorktree(localPath, slug);
+        localPath = ensureWorktree(localPath, slug, ws.id);
         await supabase.from('jobs').update({ local_path: localPath }).eq('id', jobId);
         await writeLog(jobId, 'log', { text: `[worktree] Using worktree at ${localPath}` });
       }
@@ -499,8 +500,7 @@ const prMergeInterval = setInterval(async () => {
                 .limit(1)
                 .single();
               if (member?.local_path) {
-                const { cleanupWorktree } = await import('./worktree.js');
-                cleanupWorktree(member.local_path, slugify(ws.name));
+                cleanupWorktree(member.local_path, slugify(ws.name), ws.id);
                 console.log(`[worker] Cleaned up worktree for workstream ${ws.name}`);
               }
             }
@@ -543,4 +543,9 @@ process.on('SIGINT', shutdown);
 // Startup
 // ---------------------------------------------------------------------------
 
-console.log('[worker] WorkStream worker started, polling for jobs...');
+const detectedRuntimes = refreshDetectedAiRuntimes();
+const runtimeSummary = detectedRuntimes
+  .filter(runtime => runtime.available)
+  .map(runtime => `${runtime.label} (${runtime.command})`)
+  .join(', ');
+console.log(`[worker] WorkStream worker started, polling for jobs... detected runtimes: ${runtimeSummary || 'none'}`);

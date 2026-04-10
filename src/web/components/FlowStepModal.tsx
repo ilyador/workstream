@@ -1,5 +1,6 @@
 import type { Flow } from '../lib/api';
 import type { FlowStepInput } from '../lib/flow-editor';
+import type { AiRuntimeStatus } from '../../shared/ai-runtimes.js';
 import { useExitAnimation } from '../hooks/useExitAnimation';
 import { useFlowStepEditor } from '../hooks/useFlowStepEditor';
 import { FlowStepFormFields } from './FlowStepFormFields';
@@ -10,11 +11,21 @@ interface FlowStepModalProps {
   flow: Flow;
   stepIndex: number;
   projectDataEnabled: boolean;
+  codingRuntimes: AiRuntimeStatus[];
+  runtimeCatalogError: string | null;
   onSaveSteps: (flowId: string, steps: FlowStepInput[]) => Promise<void>;
   onClose: () => void;
 }
 
-export function FlowStepModal({ flow, stepIndex, projectDataEnabled, onSaveSteps, onClose }: FlowStepModalProps) {
+export function FlowStepModal({
+  flow,
+  stepIndex,
+  projectDataEnabled,
+  codingRuntimes,
+  runtimeCatalogError,
+  onSaveSteps,
+  onClose,
+}: FlowStepModalProps) {
   const { closing, closeWithAnimation } = useExitAnimation(onClose);
   const {
     isNew,
@@ -29,6 +40,7 @@ export function FlowStepModal({ flow, stepIndex, projectDataEnabled, onSaveSteps
   } = useFlowStepEditor({
     flow,
     stepIndex,
+    codingRuntimes,
     onSaveSteps,
     onClose: closeWithAnimation,
   });
@@ -48,6 +60,8 @@ export function FlowStepModal({ flow, stepIndex, projectDataEnabled, onSaveSteps
           allSteps={steps}
           isNew={isNew}
           projectDataEnabled={projectDataEnabled}
+          codingRuntimes={codingRuntimes}
+          runtimeCatalogError={runtimeCatalogError}
           onUpdate={updateStep}
           onToggleTool={toggleTool}
           onToggleContext={toggleContext}

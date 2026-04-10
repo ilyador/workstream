@@ -2,15 +2,16 @@ import { execFileSync, spawn } from 'child_process';
 import { claudeEnv } from '../claude-env.js';
 import { git, slugify } from '../git-utils.js';
 import { supabase } from '../supabase.js';
+import { workstreamRef } from '../worktree.js';
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Git operation failed';
 }
 
-function workstreamBranch(wsName: string): string {
+function workstreamBranch(wsName: string, workstreamId: string): string {
   const slug = slugify(wsName);
   if (!slug) throw new Error('Workstream name cannot be converted to a branch name');
-  return `workstream/${slug}`;
+  return `workstream/${workstreamRef(slug, workstreamId)}`;
 }
 
 export async function pushAndCreatePr(workstreamId: string, wsName: string, localPath: string, extraBody?: string): Promise<string> {
@@ -22,7 +23,7 @@ export async function pushAndCreatePr(workstreamId: string, wsName: string, loca
     .order('position', { ascending: true });
   if (tasksError) throw new Error(tasksError.message);
 
-  const branch = workstreamBranch(wsName);
+  const branch = workstreamBranch(wsName, workstreamId);
   const title = `workstream: ${wsName}`;
   let body = `## ${wsName}\n\n### Completed Tasks\n\n`;
   if (tasks && tasks.length > 0) {

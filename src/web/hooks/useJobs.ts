@@ -40,6 +40,23 @@ export function useJobs(projectId: string | null) {
     return unsub;
   }, [projectId, load, setJobs]);
 
+  useEffect(() => {
+    if (!projectId) return;
+    const hasActiveJobs = jobs.some(job => (
+      job.status === 'queued'
+      || job.status === 'running'
+      || job.status === 'paused'
+      || job.status === 'review'
+    ));
+    if (!hasActiveJobs) return;
+
+    const timer = setInterval(() => {
+      void load();
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [jobs, load, projectId]);
+
   const running = jobs.filter(j => j.status === 'running');
   const paused = jobs.filter(j => j.status === 'paused');
   const review = jobs.filter(j => j.status === 'review');

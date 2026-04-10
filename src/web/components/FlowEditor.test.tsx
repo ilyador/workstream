@@ -23,6 +23,35 @@ const { useCommentsMock, useArtifactsMock } = vi.hoisted(() => ({
   })),
 }));
 
+vi.mock('../hooks/useAiRuntimes', () => ({
+  useAiRuntimes: () => ({
+    runtimes: [
+      {
+        id: 'claude_code',
+        kind: 'coding',
+        label: 'Claude Code',
+        description: 'Claude runtime',
+        command: 'claude',
+        implemented: true,
+        supportsTools: true,
+        supportsEffortControl: true,
+        supportsMultiagent: true,
+        variantOptions: [
+          { id: 'opus', label: 'Opus' },
+          { id: 'sonnet', label: 'Sonnet' },
+        ],
+        defaultVariant: 'opus',
+        available: true,
+        detectedPath: '/usr/bin/claude',
+      },
+    ],
+    loading: false,
+    error: null,
+    ready: true,
+    reload: vi.fn(),
+  }),
+}));
+
 vi.mock('../hooks/useComments', () => ({
   useComments: useCommentsMock,
 }));
