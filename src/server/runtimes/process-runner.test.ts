@@ -276,4 +276,49 @@ describe('runProcess', () => {
     await promise;
     expect(logs.some(log => log.includes('EPIPE'))).toBe(true);
   });
+
+  it('registers the spawned process during execution and unregisters on close', async () => {
+    const { getActiveProcessCount } = await import('../process-lifecycle.js');
+    const proc = makeProc();
+    spawnMock.mockReturnValue(proc);
+
+    const { runProcess } = await import('./process-runner.js');
+    const promise = runProcess({
+      jobId: 'job-register',
+      command: 'claude',
+      args: [],
+      cwd: '/work',
+      env: {},
+      onLine: () => {},
+      onLog: () => {},
+    });
+
+    expect(getActiveProcessCount('job-register')).toBe(1);
+    proc.emit('close', 0);
+    await promise;
+    expect(getActiveProcessCount('job-register')).toBe(0);
+  });
+
+  it('unregisters the process when close fires with a non-zero exit code', async () => {
+    const { getActiveProcessCount } = await import('../process-lifecycle.js');
+    const proc = makeProc();
+    spawnMock.mockReturnValue(proc);
+
+    const { runProcess } = await import('./process-runner.js');
+    const promise = runProcess({
+      jobId: 'job-register-err',
+      command: 'claude',
+      args: [],
+      cwd: '/work',
+      env: {},
+      onLine: () => {},
+      onLog: () => {},
+    });
+
+    expect(getActiveProcessCount('job-register-err')).toBe(1);
+    proc.stderr.emit('data', Buffer.from('fail\n'));
+    proc.emit('close', 1);
+    await expect(promise).rejects.toThrow();
+    expect(getActiveProcessCount('job-register-err')).toBe(0);
+  });
 });

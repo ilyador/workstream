@@ -16,6 +16,13 @@ export interface RunProcessOptions {
   env: NodeJS.ProcessEnv;
   stdin?: string;
   timeoutMs?: number;
+  /**
+   * Called for each non-empty line emitted on stdout or stderr. Empty lines
+   * are filtered; drivers that need a faithful byte-for-byte view of the
+   * output should read the full `stdout` / `stderr` from the resolved
+   * `RunProcessResult`. The `stream` argument identifies which source the
+   * line came from.
+   */
   onLine: (line: string, stream: 'stdout' | 'stderr') => void;
   onLog: (text: string) => void;
 }
@@ -54,7 +61,7 @@ export function runProcess(opts: RunProcessOptions): Promise<RunProcessResult> {
     }, timeoutMs);
 
     const flushLines = (buffer: string, stream: 'stdout' | 'stderr'): string => {
-      const lines = buffer.split('\n');
+      const lines = buffer.split(/\r?\n/);
       const remainder = lines.pop() ?? '';
       for (const line of lines) {
         if (line) opts.onLine(line, stream);
