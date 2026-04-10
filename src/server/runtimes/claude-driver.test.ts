@@ -147,11 +147,10 @@ describe('ClaudeDriver', () => {
     await promise;
   });
 
-  it('treats exit code 1 as success when output contains [done] Phase complete', async () => {
+  it('treats exit code 1 as success when a result event arrives before the failure', async () => {
     const proc = new MockProc();
     spawnMock.mockReturnValue(proc);
 
-    const logs: string[] = [];
     const { claudeDriver } = await import('./claude-driver.js');
     const promise = claudeDriver.execute({
       jobId: 'j1',
@@ -159,12 +158,12 @@ describe('ClaudeDriver', () => {
       task: { effort: null },
       cwd: '/work',
       prompt: 'X',
-      onLog: (t) => logs.push(t),
+      onLog: () => {},
     });
 
-    proc.stdout.emit('data', Buffer.from('{"type":"assistant","message":{"content":[{"type":"text","text":"[done] Phase complete"}]}}\n'));
+    proc.stdout.emit('data', Buffer.from('{"type":"result","duration_ms":12345}\n'));
     proc.emit('close', 1);
-    await expect(promise).resolves.toBe('[done] Phase complete');
+    await expect(promise).resolves.toContain('[done] Phase complete');
   });
 
   it('rejects on non-zero exit without the done marker', async () => {
@@ -183,6 +182,127 @@ describe('ClaudeDriver', () => {
 
     proc.emit('close', 2);
     await expect(promise).rejects.toThrow(/exited with code 2/);
+  });
+
+  it('formats result events with duration suffix', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const logs: string[] = [];
+    const { claudeDriver } = await import('./claude-driver.js');
+    const promise = claudeDriver.execute({
+      jobId: 'j1',
+      step: baseStep(),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'X',
+      onLog: (t) => logs.push(t),
+    });
+
+    proc.stdout.emit('data', Buffer.from('{"type":"result","duration_ms":12345}\n'));
+    proc.emit('close', 0);
+    const result = await promise;
+    expect(result).toContain('[done] Phase complete (12.3s)');
+    expect(logs.some(l => l.includes('[done] Phase complete (12.3s)'))).toBe(true);
+  });
+
+  it('truncates Bash tool_use commands to 100 characters', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const logs: string[] = [];
+    const { claudeDriver } = await import('./claude-driver.js');
+    const promise = claudeDriver.execute({
+      jobId: 'j1',
+      step: baseStep(),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'X',
+      onLog: (t) => logs.push(t),
+    });
+
+    const longCommand = 'echo ' + 'a'.repeat(500);
+    const event = {
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'tool_use', name: 'Bash', input: { command: longCommand } },
+        ],
+      },
+    };
+    proc.stdout.emit('data', Buffer.from(JSON.stringify(event) + '\n'));
+    proc.emit('close', 0);
+    await promise;
+
+    const bashLogs = logs.filter(l => l.startsWith('[Bash]'));
+    expect(bashLogs.length).toBe(1);
+    expect(bashLogs[0].length).toBeLessThanOrEqual(108); // "[Bash] " + 100 + "\n"
+    expect(bashLogs[0]).toContain('[Bash] echo ');
+    expect(bashLogs[0]).not.toContain('a'.repeat(200));
+  });
+
+  it('formats tool_use blocks per tool: Read/Glob/Grep prefer file_path then pattern then path; Edit/Write only file_path; others bare', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const logs: string[] = [];
+    const { claudeDriver } = await import('./claude-driver.js');
+    const promise = claudeDriver.execute({
+      jobId: 'j1',
+      step: baseStep(),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'X',
+      onLog: (t) => logs.push(t),
+    });
+
+    const events = [
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/a/b.ts' } }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Glob', input: { pattern: '**/*.ts' } }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Grep', input: { pattern: 'foo', path: 'src' } }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Edit', input: { file_path: '/c/d.ts', content: 'x' } }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write', input: { file_path: '/e/f.ts' } }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'TodoWrite', input: { todos: [] } }] } },
+    ];
+    for (const event of events) {
+      proc.stdout.emit('data', Buffer.from(JSON.stringify(event) + '\n'));
+    }
+    proc.emit('close', 0);
+    await promise;
+
+    const joined = logs.join('');
+    expect(joined).toContain('[Read] /a/b.ts');
+    expect(joined).toContain('[Glob] **/*.ts');
+    expect(joined).toContain('[Grep] foo');
+    expect(joined).toContain('[Edit] /c/d.ts');
+    expect(joined).toContain('[Write] /e/f.ts');
+    // TodoWrite is a non-file-path tool: bare bracketed name, no trailing content
+    expect(joined).toMatch(/\[TodoWrite\](\n|$)/);
+  });
+
+  it('returns null for non-assistant non-result events', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const logs: string[] = [];
+    const { claudeDriver } = await import('./claude-driver.js');
+    const promise = claudeDriver.execute({
+      jobId: 'j1',
+      step: baseStep(),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'X',
+      onLog: (t) => logs.push(t),
+    });
+
+    // system, tool_result, tool_output should produce no log output
+    proc.stdout.emit('data', Buffer.from('{"type":"system","message":"init"}\n'));
+    proc.stdout.emit('data', Buffer.from('{"type":"tool_result","output":"x"}\n'));
+    proc.stdout.emit('data', Buffer.from('{"type":"tool_output","text":"x"}\n'));
+    proc.emit('close', 0);
+    await promise;
+
+    expect(logs.length).toBe(0);
   });
 
   describe('summarize', () => {

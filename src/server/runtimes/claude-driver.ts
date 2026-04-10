@@ -19,25 +19,48 @@ function buildArgs(step: FlowStepConfig, task: { effort?: string | null }): stri
 }
 
 function formatStreamEvent(line: string): string | null {
+  let event: Record<string, unknown>;
   try {
-    const event = JSON.parse(line) as Record<string, unknown>;
-    if (event.type !== 'assistant') return null;
+    event = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  if (event.type === 'assistant') {
     const message = event.message as { content?: Array<Record<string, unknown>> } | undefined;
     if (!message?.content) return null;
     const parts: string[] = [];
     for (const block of message.content) {
-      if (block.type === 'text' && typeof block.text === 'string') {
+      if (block.type === 'text' && typeof block.text === 'string' && block.text) {
         parts.push(block.text);
-      } else if (block.type === 'tool_use' && typeof block.name === 'string') {
-        const input = block.input as Record<string, unknown> | undefined;
-        const hint = input?.file_path ?? input?.path ?? input?.command ?? input?.pattern ?? '';
-        parts.push(`[${block.name}] ${hint}`.trim());
+      } else if (block.type === 'tool_use') {
+        const toolName = typeof block.name === 'string' ? block.name : 'unknown';
+        const input = (block.input as Record<string, unknown> | undefined) ?? {};
+        if (toolName === 'Read' || toolName === 'Glob' || toolName === 'Grep') {
+          const hint = input.file_path ?? input.pattern ?? input.path ?? '';
+          parts.push(`[${toolName}] ${hint}`);
+        } else if (toolName === 'Edit' || toolName === 'Write') {
+          const hint = input.file_path ?? '';
+          parts.push(`[${toolName}] ${hint}`);
+        } else if (toolName === 'Bash') {
+          const rawCommand = typeof input.command === 'string' ? input.command : '';
+          const cmd = rawCommand.substring(0, 100);
+          parts.push(`[Bash] ${cmd}`);
+        } else {
+          parts.push(`[${toolName}]`);
+        }
       }
     }
-    return parts.length > 0 ? parts.join('\n') : null;
-  } catch {
-    return null;
+    return parts.join('\n') || null;
   }
+
+  if (event.type === 'result') {
+    const durationMs = typeof event.duration_ms === 'number' ? event.duration_ms : null;
+    const duration = durationMs ? ` (${(durationMs / 1000).toFixed(1)}s)` : '';
+    return `[done] Phase complete${duration}`;
+  }
+
+  return null;
 }
 
 export const claudeDriver: RuntimeDriver = {
