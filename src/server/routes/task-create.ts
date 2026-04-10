@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../auth-middleware.js';
 import { getUserId, isMissingRowError, requireProjectMember } from '../authz.js';
 import { findDefaultFlowId } from '../flow-resolution.js';
+import { resolveTaskProjectDataAllowed } from '../project-data-settings.js';
 import { supabase } from '../supabase.js';
 import { validateTaskReferences, validateTaskScalars, validateTaskShape } from './task-validation.js';
 
@@ -21,9 +22,18 @@ taskCreateRouter.post('/api/tasks', requireAuth, async (req, res) => {
   if (referenceError) return res.status(400).json({ error: referenceError });
   const mode = taskInput.mode || 'ai';
   const taskType = taskInput.type || 'feature';
-  const resolvedFlowId = mode === 'ai'
-    ? (taskInput.flow_id || await findDefaultFlowId(project_id, taskType))
-    : null;
+  let resolvedFlowId: string | null = null;
+  let allowProjectData = false;
+  try {
+    resolvedFlowId = mode === 'ai'
+      ? (taskInput.flow_id || await findDefaultFlowId(project_id, taskType))
+      : null;
+    allowProjectData = mode === 'ai'
+      ? await resolveTaskProjectDataAllowed(project_id, taskInput.allow_project_data === true)
+      : false;
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to resolve task settings' });
+  }
   if (mode === 'ai' && !resolvedFlowId) return res.status(400).json({ error: 'AI tasks require a flow' });
 
   let posQuery = supabase
@@ -53,7 +63,7 @@ taskCreateRouter.post('/api/tasks', requireAuth, async (req, res) => {
       multiagent: taskInput.multiagent || 'auto',
       assignee: taskInput.assignee || null,
       auto_continue: taskInput.auto_continue !== undefined ? taskInput.auto_continue : true,
-      allow_project_data: mode === 'ai' ? taskInput.allow_project_data === true : false,
+      allow_project_data: allowProjectData,
       images: taskInput.images || [],
       workstream_id: taskInput.workstream_id || null,
       flow_id: resolvedFlowId,

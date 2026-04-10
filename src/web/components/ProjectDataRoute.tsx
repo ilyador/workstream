@@ -52,6 +52,15 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
   useEffect(() => {
     setSettings(projectDataSettings);
     setSavedSettings(projectDataSettings);
+    setDocuments([]);
+    setResults([]);
+    setSearchQuery('');
+    setDraftName('');
+    setDraftContent('');
+    setLoading(true);
+    setSaving(false);
+    setError('');
+    setMessage('');
   }, [project.id, projectDataSettings]);
 
   const loadAll = useCallback(async ({ reloadSettings = false }: { reloadSettings?: boolean } = {}) => {
@@ -181,6 +190,12 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
   }
 
   async function handleDeleteDocument(documentId: string) {
+    const confirmed = await modal.confirm(
+      'Delete Project Data document',
+      'Remove this indexed document from the project?',
+      { label: 'Delete', danger: true },
+    );
+    if (!confirmed) return;
     setSaving(true);
     setError('');
     setMessage('');

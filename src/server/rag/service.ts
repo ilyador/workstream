@@ -23,7 +23,8 @@ function stringValue(record: Record<string, unknown>, key: string): string {
 export async function search(projectId: string, query: string, limit?: number): Promise<SearchResult[]> {
   const settings = await loadProjectDataSettings(projectId);
   if (!settings.enabled) throw new Error('Project Data is not enabled for this project');
-  const k = limit ?? settings.topK;
+  const requested = limit ?? settings.topK;
+  const k = Math.max(1, Math.min(requested, settings.topK));
   const [queryEmbedding] = await embed(query, settings);
   const embeddingStr = `[${queryEmbedding.join(',')}]`;
 

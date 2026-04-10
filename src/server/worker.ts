@@ -217,6 +217,7 @@ async function startJob(job: ClaimedJob): Promise<void> {
     await writeLog(jobId, 'failed', { error: failMsg });
     await supabase.from('jobs').update({ status: 'failed', completed_at: new Date().toISOString(), question: failMsg }).eq('id', jobId);
     await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
+    await notifyTaskFailure(task, failMsg);
     return;
   }
 

@@ -3,6 +3,7 @@ import { requireAuth } from '../auth-middleware.js';
 import { requireTaskAccess, routeParam } from '../authz.js';
 import { asRecord, stringField } from '../authz-shared.js';
 import { findDefaultFlowId } from '../flow-resolution.js';
+import { resolveTaskProjectDataAllowed } from '../project-data-settings.js';
 import { hasActiveTaskJob, supabase } from '../supabase.js';
 import { maybeQueueTaskAutoContinue } from './task-auto-continue.js';
 import { validateTaskReferences, validateTaskScalars, validateTaskShape } from './task-validation.js';
@@ -13,7 +14,7 @@ export const taskMutationsRouter = Router();
 
 taskMutationsRouter.patch('/api/tasks/:id', requireAuth, async (req, res) => {
   const taskId = routeParam(req.params.id);
-  const access = await requireTaskAccess(req, res, taskId, 'id, project_id, mode, type, flow_id');
+  const access = await requireTaskAccess(req, res, taskId, 'id, project_id, mode, type, flow_id, allow_project_data');
   if (!access) return;
   const currentTask = asRecord(access.record) || {};
   const updates: Record<string, unknown> = {};
@@ -45,9 +46,20 @@ taskMutationsRouter.patch('/api/tasks/:id', requireAuth, async (req, res) => {
     ? updates.flow_id
     : (stringField(currentTask, 'flow_id') || null);
   if (nextMode === 'ai') {
-    const resolvedFlowId = nextFlowId || await findDefaultFlowId(access.projectId, nextType);
+    const requestedProjectData = typeof updates.allow_project_data === 'boolean'
+      ? updates.allow_project_data
+      : currentTask.allow_project_data === true;
+    let resolvedFlowId: string | null;
+    let allowProjectData: boolean;
+    try {
+      resolvedFlowId = nextFlowId || await findDefaultFlowId(access.projectId, nextType);
+      allowProjectData = await resolveTaskProjectDataAllowed(access.projectId, requestedProjectData);
+    } catch (err) {
+      return res.status(400).json({ error: err instanceof Error ? err.message : 'Failed to resolve task settings' });
+    }
     if (!resolvedFlowId) return res.status(400).json({ error: 'AI tasks require a flow' });
     updates.flow_id = resolvedFlowId;
+    updates.allow_project_data = allowProjectData;
   } else {
     updates.flow_id = null;
     updates.allow_project_data = false;

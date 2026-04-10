@@ -37,11 +37,14 @@ const modalValue: ModalContextValue = {
   confirm: vi.fn().mockResolvedValue(true),
 };
 
-function renderRoute(settings: ProjectDataSettings, overrides?: { role?: string; reload?: () => Promise<ProjectDataSettings | undefined> }) {
+function renderRoute(
+  settings: ProjectDataSettings,
+  overrides?: { role?: string; projectId?: string; reload?: () => Promise<ProjectDataSettings | undefined> },
+) {
   return render(
     <ModalContext.Provider value={modalValue}>
       <ProjectDataRoute
-        project={{ id: 'project-1', role: overrides?.role || 'admin' }}
+        project={{ id: overrides?.projectId || 'project-1', role: overrides?.role || 'admin' }}
         projectDataSettings={settings}
         reloadProjectDataSettings={overrides?.reload || vi.fn().mockResolvedValue(settings)}
       />
@@ -53,6 +56,8 @@ describe('ProjectDataRoute', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.getProjectDocuments.mockResolvedValue([]);
+    api.deleteProjectDocument.mockResolvedValue(undefined);
+    api.searchProjectData.mockResolvedValue([]);
     api.updateProjectDataSettings.mockResolvedValue(baseSettings);
   });
 
@@ -119,5 +124,82 @@ describe('ProjectDataRoute', () => {
     await waitFor(() => {
       expect(screen.getByText('Reindexed 1 of 1 documents.')).toBeTruthy();
     });
+  });
+
+  it('confirms before deleting an indexed document', async () => {
+    const user = userEvent.setup();
+    api.getProjectDocuments.mockResolvedValue([
+      {
+        id: 'doc-1',
+        file_name: 'spec.md',
+        file_type: 'md',
+        file_size: 100,
+        chunk_count: 4,
+        status: 'ready',
+        error: null,
+        created_at: '2026-04-09T10:00:00.000Z',
+      },
+    ]);
+
+    renderRoute(baseSettings);
+
+    await waitFor(() => {
+      expect(screen.getByText('spec.md')).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(modalValue.confirm).toHaveBeenCalledWith(
+        'Delete Project Data document',
+        'Remove this indexed document from the project?',
+        { label: 'Delete', danger: true },
+      );
+    });
+    expect(api.deleteProjectDocument).toHaveBeenCalledWith('doc-1');
+  });
+
+  it('clears project-scoped search state when the project changes', async () => {
+    const user = userEvent.setup();
+    api.searchProjectData.mockResolvedValue([
+      {
+        content: 'Old project result',
+        file_name: 'spec.md',
+        document_id: 'doc-1',
+        chunk_index: 0,
+        similarity: 0.91,
+      },
+    ]);
+
+    const view = renderRoute(baseSettings);
+
+    await waitFor(() => {
+      expect(api.getProjectDocuments).toHaveBeenCalledWith('project-1');
+    });
+
+    await user.type(screen.getByPlaceholderText('notes.md'), 'notes.md');
+    await user.type(screen.getByPlaceholderText('Paste project notes, specs, design rules, or lore here...'), 'Draft content');
+    await user.type(screen.getByPlaceholderText('Search the indexed project knowledge…'), 'lore');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Old project result')).toBeTruthy();
+    });
+
+    view.rerender(
+      <ModalContext.Provider value={modalValue}>
+        <ProjectDataRoute
+          project={{ id: 'project-2', role: 'admin' }}
+          projectDataSettings={baseSettings}
+          reloadProjectDataSettings={vi.fn().mockResolvedValue(baseSettings)}
+        />
+      </ModalContext.Provider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Old project result')).toBeNull();
+    });
+    expect((screen.getByPlaceholderText('notes.md') as HTMLInputElement).value).toBe('');
+    expect((screen.getByPlaceholderText('Search the indexed project knowledge…') as HTMLInputElement).value).toBe('');
   });
 });

@@ -60,7 +60,10 @@ export function defaultRuntimeForKind(kind: AiRuntimeKind): AiRuntimeDefinition 
 }
 
 export function defaultRuntimeIdForKind(kind: AiRuntimeKind): string {
-  return defaultRuntimeForKind(kind)?.id ?? 'claude_code';
+  return defaultRuntimeForKind(kind)?.id
+    ?? defaultRuntimeForKind('coding')?.id
+    ?? AI_RUNTIME_DEFINITIONS[0]?.id
+    ?? '';
 }
 
 export function defaultVariantForRuntime(runtimeId: string | null | undefined): string | null {
@@ -80,15 +83,20 @@ export function supportsMultiagent(runtimeId: string | null | undefined): boolea
 }
 
 export function normalizeRuntimeKind(value: unknown, fallback: AiRuntimeKind = 'coding'): AiRuntimeKind {
-  return value === 'coding' || value === 'image' ? value : fallback;
+  const normalized = value === 'coding' || value === 'image' ? value : fallback;
+  return defaultRuntimeForKind(normalized) ? normalized : fallback;
 }
 
 export function normalizeRuntimeId(
   runtimeId: unknown,
   runtimeKind: AiRuntimeKind = 'coding',
 ): string {
-  if (typeof runtimeId === 'string' && getAiRuntime(runtimeId)) return runtimeId;
-  return defaultRuntimeIdForKind(runtimeKind);
+  const resolvedKind = normalizeRuntimeKind(runtimeKind, 'coding');
+  if (typeof runtimeId === 'string') {
+    const runtime = getAiRuntime(runtimeId);
+    if (runtime?.kind === resolvedKind) return runtimeId;
+  }
+  return defaultRuntimeIdForKind(resolvedKind);
 }
 
 export function normalizeRuntimeVariant(runtimeId: unknown, runtimeVariant: unknown): string | null {
@@ -99,4 +107,3 @@ export function normalizeRuntimeVariant(runtimeId: unknown, runtimeVariant: unkn
   if (!value) return runtime.defaultVariant;
   return runtime.variantOptions.some(option => option.id === value) ? value : runtime.defaultVariant;
 }
-

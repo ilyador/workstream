@@ -152,6 +152,30 @@ describe('buildStepPrompt', () => {
     expect(withAgents).toContain('Use the project agent rules.');
     expect(withoutAgents).toContain('Use the project agent rules.');
   });
+
+  it('only advertises Bash-powered Project Data search when Bash is allowed', async () => {
+    const task = makeTask({ allow_project_data: true, project_id: 'proj-123' });
+    const flow = makeFlow();
+
+    const withBash = await buildStepPrompt(
+      makeStep({ use_project_data: true, tools: ['Bash'] }),
+      flow,
+      task,
+      [],
+      '/tmp/fake',
+    );
+    const withoutBash = await buildStepPrompt(
+      makeStep({ use_project_data: true, tools: ['Read'] }),
+      flow,
+      task,
+      [],
+      '/tmp/fake',
+    );
+
+    expect(withBash).toContain('npx tsx src/server/rag-cli.ts proj-123 "your search query"');
+    expect(withoutBash).not.toContain('npx tsx src/server/rag-cli.ts');
+    expect(withoutBash).toContain('cannot run additional Project Data searches because the Bash tool is disabled');
+  });
 });
 
 // ---------------------------------------------------------------------------

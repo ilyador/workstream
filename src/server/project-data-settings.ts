@@ -32,3 +32,9 @@ export async function loadProjectDataSettings(projectId: string): Promise<Projec
   if (error) throw new Error(`Failed to load Project Data settings: ${error.message}`);
   return projectDataSettingsFromRecord(data);
 }
+
+export async function resolveTaskProjectDataAllowed(projectId: string, requested: boolean): Promise<boolean> {
+  if (!requested) return false;
+  const settings = await loadProjectDataSettings(projectId);
+  return settings.enabled;
+}

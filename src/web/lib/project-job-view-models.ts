@@ -25,7 +25,17 @@ function phaseList(
   currentPhase: string | null,
   flowSnapshot?: FlowSnapshotRecord | null,
 ): string[] {
-  if (flowSnapshot?.steps?.length) return flowSnapshot.steps.map(step => step.name);
+  if (flowSnapshot?.steps?.length) {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const step of flowSnapshot.steps) {
+      if (!step.name || seen.has(step.name)) continue;
+      seen.add(step.name);
+      names.push(step.name);
+    }
+    if (currentPhase && !seen.has(currentPhase)) names.push(currentPhase);
+    return names;
+  }
 
   const names: string[] = [];
   const seen = new Set<string>();

@@ -40,7 +40,7 @@ export function useBoardColumns({
       const key = task.workstream_id || '__backlog__';
       if (key === '__backlog__' && (task.status === 'done' || task.status === 'canceled')) continue;
       if (!groups[key]) groups[key] = [];
-      const flowName = task.flow_id ? flowMap[task.flow_id] : null;
+      const flowName = task.flow_id ? (flowMap[task.flow_id] ?? null) : null;
       groups[key].push(toTaskView(task, memberMap, flowName));
     }
 

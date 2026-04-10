@@ -24,15 +24,19 @@ async function loadFlowById(projectId: string, flowId: string) {
 }
 
 async function loadDefaultTypeFlow(projectId: string, taskType: string) {
-  const { data: flow, error } = await supabase
+  const { data: flows, error } = await supabase
     .from('flows')
     .select('*, flow_steps(*)')
     .eq('project_id', projectId)
     .contains('default_types', [taskType])
-    .limit(1)
-    .single();
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(2);
   if (error && !isMissingRowError(error)) throw new Error(error.message);
-  return flow;
+  if (!flows?.length) return null;
+  if (flows.length > 1) throw new Error(`Multiple default flows are configured for task type "${taskType}"`);
+  return flows[0];
 }
 
 export async function findDefaultFlowId(projectId: string, taskType: string): Promise<string | null> {

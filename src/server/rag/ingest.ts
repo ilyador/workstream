@@ -94,7 +94,7 @@ export async function reindexProjectDocuments(
 
     if (!content.trim()) {
       failed += 1;
-      await supabase
+      const { error: statusErr } = await supabase
         .from('rag_documents')
         .update({
           status: 'error',
@@ -102,6 +102,9 @@ export async function reindexProjectDocuments(
           chunk_count: 0,
         })
         .eq('id', document.id);
+      if (statusErr) {
+        console.error(`[rag] Failed to mark document ${document.id} as error: ${statusErr.message}`);
+      }
       continue;
     }
 
@@ -116,10 +119,13 @@ export async function reindexProjectDocuments(
     } catch (err) {
       failed += 1;
       const message = err instanceof Error ? err.message : String(err);
-      await supabase
+      const { error: statusErr } = await supabase
         .from('rag_documents')
         .update({ status: 'error', error: message, chunk_count: 0 })
         .eq('id', document.id);
+      if (statusErr) {
+        console.error(`[rag] Failed to mark document ${document.id} as error: ${statusErr.message}`);
+      }
     }
   }
 

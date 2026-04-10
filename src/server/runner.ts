@@ -302,7 +302,11 @@ export async function buildStepPrompt(
 
   if (step.use_project_data && task.allow_project_data) {
     if (task._projectDataResults?.length > 0) prompt += formatRagResults(task._projectDataResults);
-    prompt += `## Project Data Search Tool\nYou can search indexed project documents using the Bash tool:\n\`\`\`\nnpx tsx src/server/rag-cli.ts ${task.project_id} "your search query"\n\`\`\`\nUse targeted queries to find architecture, specs, docs, lore, or any other indexed project knowledge.\n\n`;
+    if (step.tools.includes('Bash')) {
+      prompt += `## Project Data Search Tool\nYou can search indexed project documents using the Bash tool:\n\`\`\`\nnpx tsx src/server/rag-cli.ts ${task.project_id} "your search query"\n\`\`\`\nUse targeted queries to find architecture, specs, docs, lore, or any other indexed project knowledge.\n\n`;
+    } else {
+      prompt += '## Project Data Search Tool\nThis step can use any Project Data results already included above, but it cannot run additional Project Data searches because the Bash tool is disabled for this step.\n\n';
+    }
   }
 
   // Multi-agent injection

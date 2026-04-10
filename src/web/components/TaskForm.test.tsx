@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ComponentProps } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -41,15 +42,23 @@ function makeFlow(id: string, name: string, defaultTypes: string[]): Flow {
   };
 }
 
-function renderTaskForm(flows: Flow[], options: { projectDataEnabled?: boolean } = {}) {
+function renderTaskForm(
+  flows: Flow[],
+  options: {
+    projectDataEnabled?: boolean;
+    editTask?: ComponentProps<typeof TaskForm>['editTask'];
+    onSubmit?: ComponentProps<typeof TaskForm>['onSubmit'];
+  } = {},
+) {
   return render(
     <TaskForm
       workstreams={[]}
       members={[{ id: 'user-1', name: 'Pat Doe', initials: 'PD' }]}
       flows={flows}
       customTypes={[]}
+      editTask={options.editTask}
       projectDataEnabled={options.projectDataEnabled ?? true}
-      onSubmit={vi.fn().mockResolvedValue(undefined)}
+      onSubmit={options.onSubmit || vi.fn().mockResolvedValue(undefined)}
       onClose={() => {}}
     />,
   );
@@ -59,6 +68,7 @@ function TaskFormStateHarness({ flows }: { flows: Flow[] }) {
   const { flowId, setFlowId } = useTaskFormState({
     flows,
     customTypes: [],
+    projectDataEnabled: true,
     onSubmit: vi.fn().mockResolvedValue(undefined),
     onClose: () => {},
   });
@@ -185,5 +195,32 @@ describe('TaskForm flow selection', () => {
     const checkbox = screen.getByRole('checkbox', { name: 'Allow Project Data' }) as HTMLInputElement;
     expect(checkbox.disabled).toBe(true);
     expect(screen.getByText('Set up Project Data in project settings before enabling it on tasks.')).toBeTruthy();
+  });
+
+  it('clamps stale Project Data on submit when the project settings disable it', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const featureFlow = makeFlow('flow-feature', 'Feature Flow', ['feature']);
+
+    renderTaskForm([featureFlow], {
+      projectDataEnabled: false,
+      onSubmit,
+      editTask: {
+        id: 'task-1',
+        title: 'Research task',
+        description: 'Look things up',
+        type: 'feature',
+        mode: 'ai',
+        effort: 'max',
+        allow_project_data: true,
+        flow_id: 'flow-feature',
+      },
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ allow_project_data: false }));
+    });
   });
 });

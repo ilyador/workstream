@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FlowStepFormFields } from './FlowStepFormFields';
 import type { FlowStep } from '../lib/api';
@@ -42,5 +42,29 @@ describe('FlowStepFormFields', () => {
 
     expect((screen.getByRole('checkbox', { name: 'Use Project Data' }) as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByText('Set up Project Data in project settings before enabling it on flow steps.')).toBeTruthy();
+  });
+
+  it('clears stale Project Data usage when the project settings disable it', async () => {
+    const onUpdate = vi.fn();
+
+    render(
+      <FlowStepFormFields
+        step={{ ...step, use_project_data: true }}
+        index={0}
+        allSteps={[step]}
+        isNew={false}
+        projectDataEnabled={false}
+        onUpdate={onUpdate}
+        onToggleTool={vi.fn()}
+        onToggleContext={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onUpdate).toHaveBeenCalledWith({ use_project_data: false });
+    });
   });
 });

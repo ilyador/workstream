@@ -8,6 +8,7 @@ import { useTaskImages } from './useTaskImages';
 interface UseTaskFormStateArgs {
   flows: Flow[];
   customTypes: CustomTypeOption[];
+  projectDataEnabled: boolean;
   defaultWorkstreamId?: string | null;
   editTask?: EditTaskData;
   onSaveCustomType?: (name: string) => Promise<void>;
@@ -18,6 +19,7 @@ interface UseTaskFormStateArgs {
 export function useTaskFormState({
   flows,
   customTypes,
+  projectDataEnabled,
   defaultWorkstreamId,
   editTask,
   onSaveCustomType,
@@ -42,7 +44,7 @@ export function useTaskFormState({
   const [flowId, setFlowId] = useState(isEdit ? (editTask?.flow_id ?? '') : getPreferredFlowId(flows, 'feature'));
   const [multiagent, setMultiagent] = useState(editTask?.multiagent || 'auto');
   const [autoContinue, setAutoContinue] = useState(editTask?.auto_continue ?? true);
-  const [allowProjectData, setAllowProjectData] = useState(editTask?.allow_project_data ?? false);
+  const [allowProjectData, setAllowProjectData] = useState(Boolean(editTask?.allow_project_data && projectDataEnabled));
   const [priority, setPriority] = useState(editTask?.priority || 'backlog');
   const [chaining, setChaining] = useState(editTask?.chaining || 'none');
   const [loading, setLoading] = useState(false);
@@ -54,6 +56,12 @@ export function useTaskFormState({
     if (isEdit || assignee || flowId || !matchingFlowId) return;
     setFlowId(matchingFlowId);
   }, [assignee, flowId, isEdit, matchingFlowId]);
+
+  useEffect(() => {
+    if (!projectDataEnabled && allowProjectData) {
+      setAllowProjectData(false);
+    }
+  }, [allowProjectData, projectDataEnabled]);
 
   const imagesState = useTaskImages({
     initialImages: editTask?.images,
@@ -82,7 +90,7 @@ export function useTaskFormState({
         assignee: assignee || null,
         flow_id: flowId || null,
         auto_continue: autoContinue,
-        allow_project_data: mode === 'human' ? false : allowProjectData,
+        allow_project_data: mode === 'human' || !projectDataEnabled ? false : allowProjectData,
         images: imagesState.images,
         workstream_id: workstreamId || null,
         priority,

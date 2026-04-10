@@ -6,6 +6,10 @@ export const PROJECT_DATA_BACKENDS: Array<{ id: ProjectDataBackend; label: strin
   { id: 'openai_compatible', label: 'OpenAI-Compatible' },
 ];
 
+const PROJECT_DATA_BACKEND_IDS = new Set<ProjectDataBackend>(
+  PROJECT_DATA_BACKENDS.map(backend => backend.id),
+);
+
 export interface ProjectDataSettings {
   enabled: boolean;
   backend: ProjectDataBackend;
@@ -30,8 +34,8 @@ export interface ProjectDataReindexResult {
 }
 
 export function normalizeProjectDataBackend(value: unknown): ProjectDataBackend {
-  return value === 'ollama' || value === 'openai_compatible' || value === 'lmstudio'
-    ? value
+  return typeof value === 'string' && PROJECT_DATA_BACKEND_IDS.has(value as ProjectDataBackend)
+    ? value as ProjectDataBackend
     : DEFAULT_PROJECT_DATA_SETTINGS.backend;
 }
 

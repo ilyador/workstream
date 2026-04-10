@@ -52,7 +52,7 @@ export function TaskExecutionSection({
           <label className={s.checkboxRow}>
             <input
               type="checkbox"
-              checked={allowProjectData}
+              checked={projectDataEnabled && allowProjectData}
               disabled={!projectDataEnabled}
               onChange={event => setAllowProjectData(event.target.checked)}
             />

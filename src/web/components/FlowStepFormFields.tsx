@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { FlowStep } from '../lib/api';
 import { MdField } from './MdField';
 import {
@@ -35,6 +36,12 @@ export function FlowStepFormFields({
   onDelete,
   onClose,
 }: FlowStepFormFieldsProps) {
+  useEffect(() => {
+    if (!projectDataEnabled && step.use_project_data) {
+      onUpdate({ use_project_data: false });
+    }
+  }, [onUpdate, projectDataEnabled, step.use_project_data]);
+
   const variantOptions = runtimeVariantOptions(step.runtime_id);
   return (
     <form onSubmit={event => event.preventDefault()} className={s.modalForm}>
@@ -98,7 +105,7 @@ export function FlowStepFormFields({
       <label className={s.checkboxRow}>
         <input
           type="checkbox"
-          checked={step.use_project_data}
+          checked={projectDataEnabled && step.use_project_data}
           disabled={!projectDataEnabled}
           onChange={event => onUpdate({ use_project_data: event.target.checked })}
         />

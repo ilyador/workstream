@@ -67,6 +67,7 @@ export function TaskForm({ workstreams, members, flows = [], customTypes = [], p
   } = useTaskFormState({
     flows,
     customTypes,
+    projectDataEnabled,
     defaultWorkstreamId,
     editTask,
     onSaveCustomType,
