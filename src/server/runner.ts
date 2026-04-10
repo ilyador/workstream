@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync, rmSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -7,6 +7,14 @@ import { stagedDiff, stagedDiffStat } from './git-utils.js';
 import { discoverSkills } from './routes/data.js';
 import type { FlowConfig, FlowStepConfig } from './flow-config.js';
 import { requireDetectedAiRuntime } from './ai-runtime-discovery.js';
+import {
+  registerActiveProcess,
+  unregisterActiveProcess,
+  isJobCanceled,
+  getActiveProcessCount,
+  cancelJob as cancelJobImpl,
+  cancelAllJobs as cancelAllJobsImpl,
+} from './process-lifecycle.js';
 
 const MIME_MAP: Record<string, string> = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
@@ -748,63 +756,8 @@ export const claudeEnv = {
   PATH: `${process.env.HOME}/.local/bin:${process.env.PATH}`,
 };
 
-// Active processes for cancellation. A job can have multiple short-lived Claude
-// calls over its lifecycle, so track process identity instead of only job id.
-const activeProcesses = new Map<string, Set<ChildProcess>>();
-const canceledJobs = new Set<string>();
-
-function registerActiveProcess(jobId: string, proc: ChildProcess): void {
-  const processes = activeProcesses.get(jobId) ?? new Set<ChildProcess>();
-  processes.add(proc);
-  activeProcesses.set(jobId, processes);
-}
-
-function unregisterActiveProcess(jobId: string, proc: ChildProcess): void {
-  const processes = activeProcesses.get(jobId);
-  if (!processes) return;
-  processes.delete(proc);
-  if (processes.size === 0) activeProcesses.delete(jobId);
-}
-
-function terminateProcess(proc: ChildProcess): Promise<void> {
-  return new Promise((resolve) => {
-    let closed = false;
-    let escalate: ReturnType<typeof setTimeout> | null = null;
-    let fallback: ReturnType<typeof setTimeout> | null = null;
-    const finish = () => {
-      if (closed) return;
-      closed = true;
-      if (escalate) clearTimeout(escalate);
-      if (fallback) clearTimeout(fallback);
-      resolve();
-    };
-
-    proc.once('close', finish);
-    try { proc.kill('SIGTERM'); } catch { finish(); return; }
-    escalate = setTimeout(() => {
-      if (!closed) {
-        try { proc.kill('SIGKILL'); } catch { /* already dead */ }
-      }
-    }, 5000);
-    fallback = setTimeout(finish, 6000);
-  });
-}
-
-export async function cancelJob(jobId: string): Promise<void> {
-  const processes = activeProcesses.get(jobId);
-  if (!processes || processes.size === 0) return;
-  canceledJobs.add(jobId);
-  await Promise.all([...processes].map(terminateProcess));
-  activeProcesses.delete(jobId);
-  canceledJobs.delete(jobId);
-}
-
-export function cancelAllJobs() {
-  for (const [jobId, processes] of activeProcesses) {
-    activeProcesses.delete(jobId);
-    for (const proc of processes) terminateProcess(proc).catch(() => {});
-  }
-}
+export const cancelJob = cancelJobImpl;
+export const cancelAllJobs = cancelAllJobsImpl;
 
 
 
@@ -823,7 +776,7 @@ export async function cleanupOrphanedJobs(): Promise<number> {
 
   let cleaned = 0;
   for (const job of runningJobs) {
-    if (!activeProcesses.has(job.id)) {
+    if (getActiveProcessCount(job.id) === 0) {
       const elapsed = Date.now() - new Date(job.started_at).getTime();
       const elapsedMin = Math.round(elapsed / 60000);
 
@@ -970,7 +923,7 @@ function generateSummary(jobId: string, prompt: string, step: FlowStepConfig, cw
         proc.stdin.end();
         proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
         proc.on('close', (code) => {
-          const wasCanceled = canceledJobs.has(jobId);
+          const wasCanceled = isJobCanceled(jobId);
           unregisterActiveProcess(jobId, proc);
           if (wasCanceled) {
             reject(new Error('Job canceled'));
@@ -1079,7 +1032,7 @@ function spawnClaude(jobId: string, args: string[], cwd: string, onLog: (text: s
       }
       // If cancelJob() already removed this jobId from activeProcesses, the
       // process was killed intentionally — reject so the runner stops.
-      const wasCanceled = canceledJobs.has(jobId);
+      const wasCanceled = isJobCanceled(jobId);
       unregisterActiveProcess(jobId, proc);
       if (wasCanceled) {
         reject(new Error('Job canceled'));
@@ -1155,7 +1108,7 @@ function spawnCodex(jobId: string, args: string[], cwd: string, onLog: (text: st
 
     proc.on('close', (code) => {
       unregisterActiveProcess(jobId, proc);
-      if (canceledJobs.has(jobId)) {
+      if (isJobCanceled(jobId)) {
         reject(new Error('Job canceled'));
         return;
       }
@@ -1211,7 +1164,7 @@ function spawnQwen(jobId: string, args: string[], cwd: string, onLog: (text: str
 
     proc.on('close', (code) => {
       unregisterActiveProcess(jobId, proc);
-      if (canceledJobs.has(jobId)) {
+      if (isJobCanceled(jobId)) {
         reject(new Error('Job canceled'));
         return;
       }
