@@ -1,0 +1,113 @@
+import { readFileSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import type { FlowStepConfig } from '../flow-config.js';
+import type { RuntimeDriver, ExecuteStepOptions, SummarizeOptions } from './types.js';
+import { buildRuntimeEnv } from './env.js';
+import { runProcess } from './process-runner.js';
+
+function codexEffortLevel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value === 'max' ? 'xhigh' : value;
+}
+
+function allocateOutputPath(jobId: string, kind: 'step' | 'summary'): string {
+  return join(tmpdir(), `workstream-codex-${kind}-${jobId}-${Date.now()}.txt`);
+}
+
+function buildArgs(
+  step: FlowStepConfig,
+  task: { effort?: string | null },
+  cwd: string,
+  outputPath: string,
+): string[] {
+  const trailing: string[] = [];
+  if (step.runtime_variant) trailing.push('--model', step.runtime_variant);
+  const effort = codexEffortLevel(task.effort);
+  if (effort) trailing.push('-c', `model_reasoning_effort="${effort}"`);
+
+  return [
+    'exec',
+    '--json',
+    '--cd', cwd,
+    '--dangerously-bypass-approvals-and-sandbox',
+    '--output-last-message', outputPath,
+    ...trailing,
+    '-',
+  ];
+}
+
+function formatCodexEvent(line: string): string | null {
+  try {
+    const event = JSON.parse(line) as Record<string, unknown>;
+    if (typeof event.msg === 'string') return event.msg;
+    if (typeof event.message === 'string') return event.message;
+    if (typeof event.text === 'string') return event.text;
+    if (typeof event.type === 'string' && typeof event.command === 'string') {
+      return `[${event.type}] ${event.command}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function runCodex(
+  jobId: string,
+  args: string[],
+  outputPath: string,
+  cwd: string,
+  prompt: string,
+  onLog: (text: string) => void,
+): Promise<string> {
+  let caught: Error | null = null;
+  try {
+    await runProcess({
+      jobId,
+      command: 'codex',
+      args,
+      cwd,
+      env: buildRuntimeEnv('codex'),
+      stdin: prompt,
+      onLine: (line, stream) => {
+        if (stream === 'stdout') {
+          const message = formatCodexEvent(line);
+          onLog(`${message ?? line}\n`);
+        } else {
+          onLog(`${line}\n`);
+        }
+      },
+      onLog,
+    });
+  } catch (err) {
+    caught = err as Error;
+  }
+
+  let output = '';
+  try {
+    output = readFileSync(outputPath, 'utf8').trim();
+  } catch {
+    output = '';
+  }
+  try { unlinkSync(outputPath); } catch { /* ignore */ }
+
+  if (caught) throw caught;
+  if (!output) throw new Error('codex produced no output');
+  return output;
+}
+
+export const codexDriver: RuntimeDriver = {
+  id: 'codex',
+
+  async execute(opts: ExecuteStepOptions): Promise<string> {
+    const outputPath = allocateOutputPath(opts.jobId, 'step');
+    const args = buildArgs(opts.step, opts.task, opts.cwd, outputPath);
+    return runCodex(opts.jobId, args, outputPath, opts.cwd, opts.prompt, opts.onLog);
+  },
+
+  async summarize(opts: SummarizeOptions): Promise<string> {
+    const outputPath = allocateOutputPath(opts.jobId, 'summary');
+    const args = buildArgs(opts.step, { effort: null }, opts.cwd, outputPath);
+    return runCodex(opts.jobId, args, outputPath, opts.cwd, opts.prompt, () => {});
+  },
+};
