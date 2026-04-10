@@ -26,7 +26,7 @@ export interface TaskCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
-  onTerminate?: (jobId: string) => void;
+  onTerminate?: (jobId: string) => void | Promise<void>;
   onReply?: (jobId: string, answer: string) => void;
   onApprove?: (jobId: string) => void;
   onReject?: (jobId: string) => void;

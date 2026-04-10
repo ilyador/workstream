@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth-middleware.js';
-import { requireProjectMember, routeParam } from '../authz.js';
+import { requireProjectAdmin, routeParam } from '../authz.js';
 import { ingestDocument } from '../rag/service.js';
 import { documentType, errorMessage, safeDocumentName } from './document-utils.js';
 
@@ -8,7 +8,7 @@ export const documentTextRouter = Router();
 
 documentTextRouter.post('/api/projects/:id/documents/text', requireAuth, async (req, res) => {
   const projectId = routeParam(req.params.id);
-  if (!await requireProjectMember(req, res, projectId)) return;
+  if (!await requireProjectAdmin(req, res, projectId)) return;
   const { name, content } = req.body;
   if (typeof name !== 'string' || typeof content !== 'string' || !name.trim() || !content.trim()) {
     return res.status(400).json({ error: 'name and content required' });

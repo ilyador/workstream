@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import type { CustomTaskType, Flow, FlowStep, MemberRecord, NotificationRecord, TaskRecord, WorkstreamRecord } from '../lib/api';
+import type { CustomTaskType, Flow, FlowStep, MemberRecord, NotificationRecord, ProjectDataSettings, TaskRecord, WorkstreamRecord } from '../lib/api';
 import type { ProjectWorkspaceHeaderProps } from './ProjectWorkspaceHeader';
 import type { ProjectWorkspaceModalsProps } from './ProjectWorkspaceModals';
 import type { ProjectWorkspaceRoutesProps } from './ProjectWorkspaceRoutes';
@@ -46,10 +46,11 @@ export interface CurrentProjectWorkspaceProps {
   flows: Flow[];
   setFlows: Dispatch<SetStateAction<Flow[]>>;
   customTypes: CustomTaskType[];
+  projectDataEnabled: boolean;
+  projectDataSettings: ProjectDataSettings;
   jobs: JobView[];
   memberMap: Record<string, { name: string; initials: string }>;
   flowMap: Record<string, string>;
-  typeFlowMap: Record<string, string>;
   mentionedTaskIds: Set<string>;
   commentCounts: Record<string, number>;
   focusTaskId: string | null;
@@ -67,7 +68,7 @@ export interface CurrentProjectWorkspaceProps {
   onCloseAddProject: () => void;
   onCreateProject: (name: string, localPath?: string) => Promise<void>;
   onCloseMembersModal: () => void;
-  onSaveCustomType: (name: string, pipeline: string) => Promise<void>;
+  onSaveCustomType: (name: string) => Promise<void>;
   onCreateTask: (data: TaskFormData) => Promise<void>;
   onUpdateTaskForm: (taskId: string, data: TaskFormData) => Promise<void>;
   onCloseCreateTask: () => void;
@@ -98,4 +99,5 @@ export interface CurrentProjectWorkspaceProps {
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: Array<Omit<FlowStep, 'id'>> }) => Promise<Flow>;
   onDeleteFlow: (flowId: string) => Promise<void>;
   onSwapFlows: (draggedId: string, targetId: string, side: RelativeDropSide, orderedIds: string[]) => void;
+  onReloadProjectDataSettings: () => Promise<ProjectDataSettings | undefined>;
 }

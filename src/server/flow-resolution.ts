@@ -1,6 +1,5 @@
 import { isMissingRowError } from './authz.js';
 import { buildFlowSnapshot, type FlowConfig } from './flow-config.js';
-import { loadTaskTypeConfig } from './legacy-task-types.js';
 import { supabase } from './supabase.js';
 
 /** Resolve a flow's snapshot, first phase, and maxAttempts from a loaded flow row. */
@@ -13,37 +12,60 @@ function resolveFlow(flow: unknown): { flowSnapshot: FlowConfig; firstPhase: str
   return { flowSnapshot, firstPhase, maxAttempts };
 }
 
+async function loadFlowById(projectId: string, flowId: string) {
+  const { data: flow, error } = await supabase
+    .from('flows')
+    .select('*, flow_steps(*)')
+    .eq('id', flowId)
+    .eq('project_id', projectId)
+    .single();
+  if (error && !isMissingRowError(error)) throw new Error(error.message);
+  return flow;
+}
+
+async function loadDefaultTypeFlow(projectId: string, taskType: string) {
+  const { data: flows, error } = await supabase
+    .from('flows')
+    .select('*, flow_steps(*)')
+    .eq('project_id', projectId)
+    .contains('default_types', [taskType])
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(2);
+  if (error && !isMissingRowError(error)) throw new Error(error.message);
+  if (!flows?.length) return null;
+  if (flows.length > 1) throw new Error(`Multiple default flows are configured for task type "${taskType}"`);
+  return flows[0];
+}
+
+export async function findDefaultFlowId(projectId: string, taskType: string): Promise<string | null> {
+  const flow = await loadDefaultTypeFlow(projectId, taskType);
+  return flow?.id ?? null;
+}
+
 /**
  * Resolve flow snapshot + phase config for a task.
- * Tries: 1) task.flow_id, 2) flow with matching default_types, 3) legacy task type config.
+ * Tries: 1) task.flow_id, 2) flow with matching default_types.
  */
 export async function resolveFlowForTask(
   task: { flow_id?: string | null; type: string },
   projectId: string,
-  localPath: string,
-): Promise<{ flowSnapshot: FlowConfig | null; firstPhase: string; maxAttempts: number; flowId: string | null }> {
+): Promise<{ flowSnapshot: FlowConfig; firstPhase: string; maxAttempts: number; flowId: string }> {
   if (task.flow_id) {
-    const { data: flow, error: flowError } = await supabase
-      .from('flows')
-      .select('*, flow_steps(*)')
-      .eq('id', task.flow_id)
-      .eq('project_id', projectId)
-      .single();
-    if (flowError && !isMissingRowError(flowError)) throw new Error(flowError.message);
+    const flow = await loadFlowById(projectId, task.flow_id);
     if (flow) {
       const { flowSnapshot, firstPhase, maxAttempts } = resolveFlow(flow);
       return { flowSnapshot, firstPhase, maxAttempts, flowId: task.flow_id };
     }
-    console.warn(`[flow-resolution] Flow ${task.flow_id} not found, falling back to legacy type`);
+    throw new Error(`Assigned flow ${task.flow_id} was not found`);
   }
-  // Try to find a flow with this type in default_types
-  const { data: flow, error: flowError } = await supabase.from('flows').select('*, flow_steps(*)').eq('project_id', projectId).contains('default_types', [task.type]).limit(1).single();
-  if (flowError && !isMissingRowError(flowError)) throw new Error(flowError.message);
+
+  const flow = await loadDefaultTypeFlow(projectId, task.type);
   if (flow) {
     const { flowSnapshot, firstPhase, maxAttempts } = resolveFlow(flow);
     return { flowSnapshot, firstPhase, maxAttempts, flowId: flow.id };
   }
-  // Legacy task type config
-  const taskType = loadTaskTypeConfig(localPath, task.type);
-  return { flowSnapshot: null, firstPhase: taskType.phases[0], maxAttempts: taskType.verify_retries + 1, flowId: null };
+
+  throw new Error('AI tasks require an assigned flow');
 }

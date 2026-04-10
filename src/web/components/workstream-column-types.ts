@@ -34,7 +34,7 @@ export interface WorkstreamColumnProps {
   onEditTask?: (task: TaskView) => void;
   onDeleteTask?: (taskId: string) => void;
   onUpdateTask?: (taskId: string, data: Record<string, unknown>) => void;
-  onTerminate?: (jobId: string) => void;
+  onTerminate?: (jobId: string) => void | Promise<void>;
   onReply?: (jobId: string, answer: string) => void;
   onApprove?: (jobId: string) => void;
   onReject?: (jobId: string) => void;

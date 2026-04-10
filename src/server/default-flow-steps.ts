@@ -3,14 +3,16 @@ import type { FlowStepRow } from './default-flows.js';
 export const VERIFY_STEP: FlowStepRow = {
   name: 'verify',
   position: 2,
-  model: 'sonnet',
+  runtime_kind: 'coding',
+  runtime_id: 'claude_code',
+  runtime_variant: 'sonnet',
   tools: ['Bash', 'Read'],
   context_sources: ['task_description'],
+  use_project_data: false,
   is_gate: true,
   on_fail_jump_to: 1,
   max_retries: 2,
   on_max_retries: 'pause',
-  include_agents_md: false,
   instructions: `RULES:
 - Run the test suite. Do nothing else.
 - Do NOT modify any files.
@@ -43,14 +45,16 @@ This will pause the job so the user can decide. Do NOT include a verdict block w
 export const REVIEW_STEP: FlowStepRow = {
   name: 'review',
   position: 3,
-  model: 'sonnet',
+  runtime_kind: 'coding',
+  runtime_id: 'claude_code',
+  runtime_variant: 'sonnet',
   tools: ['Read', 'Grep'],
   context_sources: ['task_description', 'architecture_md', 'review_criteria', 'git_diff'],
+  use_project_data: false,
   is_gate: true,
   on_fail_jump_to: 1,
   max_retries: 1,
   on_max_retries: 'pause',
-  include_agents_md: false,
   instructions: `RULES:
 - Review the git diff only. Do NOT modify files.
 - Check: code quality, architecture alignment, completeness.
@@ -69,4 +73,4 @@ or if issues found:
 \`\`\``,
 };
 
-export const EXECUTE_CONTEXT = ['claude_md', 'agents_md', 'task_description', 'skills', 'task_images', 'followup_notes', 'gate_feedback'];
+export const EXECUTE_CONTEXT = ['agents', 'task_description', 'skills', 'task_images', 'followup_notes', 'gate_feedback'];

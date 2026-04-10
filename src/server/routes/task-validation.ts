@@ -47,6 +47,9 @@ export function validateTaskScalars(updates: DbRecord): string | null {
   if ('auto_continue' in updates && updates.auto_continue != null && typeof updates.auto_continue !== 'boolean') {
     return 'auto_continue must be a boolean';
   }
+  if ('allow_project_data' in updates && updates.allow_project_data != null && typeof updates.allow_project_data !== 'boolean') {
+    return 'allow_project_data must be a boolean';
+  }
   if ('images' in updates && updates.images != null && (!Array.isArray(updates.images) || !updates.images.every(image => typeof image === 'string'))) {
     return 'images must be an array of strings';
   }

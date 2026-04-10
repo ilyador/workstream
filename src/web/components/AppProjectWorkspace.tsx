@@ -76,10 +76,11 @@ export function AppProjectWorkspace({
       flows={resources.aiFlows.flows}
       setFlows={resources.aiFlows.setFlows}
       customTypes={resources.customTypes.types}
+      projectDataEnabled={resources.projectData.settings.enabled}
+      projectDataSettings={resources.projectData.settings}
       jobs={viewModels.jobViews}
       memberMap={viewModels.memberMap}
       flowMap={viewModels.flowMap}
-      typeFlowMap={viewModels.typeFlowMap}
       mentionedTaskIds={viewModels.mentionedTaskIds}
       commentCounts={resources.commentCounts.counts}
       focusTaskId={focusTaskId}
@@ -99,8 +100,8 @@ export function AppProjectWorkspace({
         await projects.createProject(name, undefined, localPath);
       }}
       onCloseMembersModal={onCloseMembersModal}
-      onSaveCustomType={async (name, pipeline) => {
-        await resources.customTypes.addType(name, pipeline);
+      onSaveCustomType={async (name) => {
+        await resources.customTypes.addType(name);
       }}
       onCreateTask={async (data) => {
         await resources.tasks.createTask(toTaskCreatePayload(currentProject.id, data));
@@ -144,6 +145,7 @@ export function AppProjectWorkspace({
       onCreateFlow={resources.aiFlows.createFlow}
       onDeleteFlow={resources.aiFlows.deleteFlow}
       onSwapFlows={ordering.handleSwapFlows}
+      onReloadProjectDataSettings={resources.projectData.reload}
     />
   );
 }

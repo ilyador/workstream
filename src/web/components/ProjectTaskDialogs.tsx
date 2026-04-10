@@ -9,10 +9,11 @@ interface ProjectTaskDialogsProps {
   members: MemberRecord[];
   flows: Flow[];
   customTypes: CustomTaskType[];
+  projectDataEnabled: boolean;
   showCreate: boolean;
   defaultWorkstreamId: string | null;
   editingTask: EditTaskData | null;
-  onSaveCustomType: (name: string, pipeline: string) => Promise<void>;
+  onSaveCustomType: (name: string) => Promise<void>;
   onCreateTask: (data: TaskFormData) => Promise<void>;
   onUpdateTask: (taskId: string, data: TaskFormData) => Promise<void>;
   onCloseCreate: () => void;
@@ -26,6 +27,7 @@ export function ProjectTaskDialogs({
   members,
   flows,
   customTypes,
+  projectDataEnabled,
   showCreate,
   defaultWorkstreamId,
   editingTask,
@@ -37,7 +39,7 @@ export function ProjectTaskDialogs({
 }: ProjectTaskDialogsProps) {
   const workstreamOptions = workstreams.map(workstream => ({ id: workstream.id, name: workstream.name }));
   const memberOptions = members.map(member => ({ id: member.id, name: member.name, initials: member.initials }));
-  const customTypeOptions = customTypes.map(type => ({ id: type.id, name: type.name, pipeline: type.pipeline }));
+  const customTypeOptions = customTypes.map(type => ({ id: type.id, name: type.name }));
 
   return (
     <>
@@ -50,6 +52,7 @@ export function ProjectTaskDialogs({
           members={memberOptions}
           flows={flows}
           customTypes={customTypeOptions}
+          projectDataEnabled={projectDataEnabled}
           onSaveCustomType={onSaveCustomType}
           onSubmit={onCreateTask}
           onClose={onCloseCreate}
@@ -64,6 +67,7 @@ export function ProjectTaskDialogs({
           members={memberOptions}
           flows={flows}
           customTypes={customTypeOptions}
+          projectDataEnabled={projectDataEnabled}
           onSaveCustomType={onSaveCustomType}
           editTask={editingTask}
           onSubmit={(data) => onUpdateTask(editingTask.id, data)}

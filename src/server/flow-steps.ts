@@ -1,6 +1,7 @@
 import { asRecord, stringField } from './authz.js';
 import { DEFAULT_FLOWS, type FlowStepRow } from './default-flows.js';
 import { supabase } from './supabase.js';
+import { normalizeRuntimeId, normalizeRuntimeKind, normalizeRuntimeVariant } from '../shared/ai-runtimes.js';
 
 function stringArray(value: unknown, fallback: string[] = []): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : fallback;
@@ -8,18 +9,22 @@ function stringArray(value: unknown, fallback: string[] = []): string[] {
 
 export function normalizeFlowStep(step: unknown, index: number): FlowStepRow {
   const record = asRecord(step) || {};
+  const runtimeKind = normalizeRuntimeKind(record.runtime_kind, 'coding');
+  const runtimeId = normalizeRuntimeId(record.runtime_id, runtimeKind);
   return {
     name: typeof record.name === 'string' ? record.name.trim() : '',
     position: typeof record.position === 'number' ? record.position : index + 1,
     instructions: typeof record.instructions === 'string' ? record.instructions : '',
-    model: typeof record.model === 'string' ? record.model : 'opus',
+    runtime_kind: runtimeKind,
+    runtime_id: runtimeId,
+    runtime_variant: normalizeRuntimeVariant(runtimeId, record.runtime_variant),
     tools: stringArray(record.tools),
-    context_sources: stringArray(record.context_sources, ['task_description', 'previous_step']),
+    context_sources: stringArray(record.context_sources, ['agents', 'task_description']),
+    use_project_data: record.use_project_data === true,
     is_gate: record.is_gate === true,
     on_fail_jump_to: typeof record.on_fail_jump_to === 'number' ? record.on_fail_jump_to : null,
     max_retries: typeof record.max_retries === 'number' ? record.max_retries : 0,
     on_max_retries: typeof record.on_max_retries === 'string' ? record.on_max_retries : 'pause',
-    include_agents_md: record.include_agents_md !== false,
   };
 }
 

@@ -15,7 +15,7 @@ interface TaskCardActiveDetailProps {
   task: TaskView;
   job: JobView;
   projectId?: string;
-  onTerminate?: (jobId: string) => void;
+  onTerminate?: (jobId: string) => void | Promise<void>;
   onReply?: (jobId: string, answer: string) => void;
   onApprove?: (jobId: string) => void;
   onReject?: (jobId: string) => void;
@@ -39,6 +39,7 @@ export function TaskCardActiveDetail({
   const jobStatus = job.status;
   const [, setElapsedTick] = useState(0);
   const [showRework, setShowRework] = useState(false);
+  const [terminating, setTerminating] = useState(false);
 
   useEffect(() => {
     if (jobStatus !== 'running' || !job.startedAt) return;
@@ -95,7 +96,22 @@ export function TaskCardActiveDetail({
           <LiveLogs
             jobId={job.id}
             footer={onTerminate ? (
-              <button className="btn btnDanger btnSm" onClick={() => onTerminate(job.id)} disabled={busy}>Terminate</button>
+              <button
+                type="button"
+                className="btn btnDanger btnSm"
+                disabled={terminating}
+                onClick={async () => {
+                  if (terminating) return;
+                  setTerminating(true);
+                  try {
+                    await onTerminate(job.id);
+                  } finally {
+                    setTerminating(false);
+                  }
+                }}
+              >
+                {terminating ? 'Terminating…' : 'Terminate'}
+              </button>
             ) : undefined}
           />
         </>

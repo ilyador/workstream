@@ -10,7 +10,7 @@ export async function queueAiTask(params: {
   const { task, projectId, localPath } = params;
   let flowConfig: Awaited<ReturnType<typeof resolveFlowForTask>>;
   try {
-    flowConfig = await resolveFlowForTask(task, projectId, localPath);
+    flowConfig = await resolveFlowForTask(task, projectId);
   } catch (error) {
     console.error(`[auto-continue] Failed to resolve flow for task ${task.id}:`, error instanceof Error ? error.message : error);
     return null;

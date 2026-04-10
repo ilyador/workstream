@@ -16,6 +16,7 @@ interface HeaderProjectSwitcherProps {
 const MOBILE_LINKS: ReadonlyArray<{ to: string; label: string; exact?: boolean }> = [
   { to: '/', label: 'Streams', exact: true },
   { to: '/flows', label: 'AI Flows' },
+  { to: '/project-data', label: 'Project Data' },
   { to: '/archive', label: 'Archive' },
 ];
 
@@ -112,6 +113,9 @@ export function HeaderProjectSwitcher({
         </NavLink>
         <NavLink to="/flows" className={({ isActive }) => (isActive ? s.navLinkActive : s.navLink)}>
           AI Flows
+        </NavLink>
+        <NavLink to="/project-data" className={({ isActive }) => (isActive ? s.navLinkActive : s.navLink)}>
+          Project Data
         </NavLink>
         <NavLink to="/archive" className={({ isActive }) => (isActive ? s.navLinkActive : s.navLink)}>
           Archive

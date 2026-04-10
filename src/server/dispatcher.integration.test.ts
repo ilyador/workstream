@@ -152,7 +152,7 @@ vi.mock('./routes/data.js', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { runFlowJob, cancelJob } from './runner.js';
+import { runFlowJob } from './runner.js';
 import type { FlowJobContext, FlowConfig, FlowStepConfig } from './runner.js';
 
 // ---------------------------------------------------------------------------
@@ -164,14 +164,16 @@ function makeStep(overrides: Partial<FlowStepConfig> = {}): FlowStepConfig {
     position: 1,
     name: 'implement',
     instructions: 'Do the work.',
-    model: 'opus',
+    runtime_kind: 'coding',
+    runtime_id: 'claude_code',
+    runtime_variant: 'opus',
     tools: [],
     context_sources: ['task_description'],
+    use_project_data: false,
     is_gate: false,
     on_fail_jump_to: null,
     max_retries: 0,
     on_max_retries: 'pause',
-    include_agents_md: false,
     ...overrides,
   };
 }
@@ -413,10 +415,10 @@ describe('dispatcher integration', () => {
   // agents_md always injected
   // -------------------------------------------------------------------------
   describe('agents_md always injected (fix #1)', () => {
-    it('injects agents_md regardless of include_agents_md flag', async () => {
+    it('injects agents_md regardless of step context sources', async () => {
       // This is already tested in runner.test.ts but verify it still holds
       const { buildStepPrompt } = await import('./runner.js');
-      const step = makeStep({ include_agents_md: false });
+      const step = makeStep({ context_sources: ['task_description'] });
       const flow = makeFlow({ agents_md: 'Always apply these rules.' });
       const task = { id: 't1', title: 'T', description: 'D', chaining: 'none', multiagent: 'auto', images: [] };
 

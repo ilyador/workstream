@@ -1,9 +1,10 @@
 import { Route, Routes } from 'react-router-dom';
-import type { Flow, FlowStep, TaskRecord, WorkstreamRecord } from '../lib/api';
+import type { Flow, FlowStep, ProjectDataSettings, TaskRecord, WorkstreamRecord } from '../lib/api';
 import type { JobView } from './job-types';
 import type { RelativeDropSide } from '../lib/optimistic-updates';
 import { ProjectArchiveRoute } from './ProjectArchiveRoute';
 import { ProjectBoardRoute } from './ProjectBoardRoute';
+import { ProjectDataRoute } from './ProjectDataRoute';
 import { ProjectFlowsRoute } from './ProjectFlowsRoute';
 
 export interface ProjectWorkspaceRoutesProps {
@@ -17,9 +18,10 @@ export interface ProjectWorkspaceRoutesProps {
   allWorkstreams: WorkstreamRecord[];
   flows: Flow[];
   setFlows: React.Dispatch<React.SetStateAction<Flow[]>>;
+  projectDataEnabled: boolean;
+  projectDataSettings: ProjectDataSettings;
   memberMap: Record<string, { name: string; initials: string }>;
   flowMap: Record<string, string>;
-  typeFlowMap: Record<string, string>;
   mentionedTaskIds: Set<string>;
   commentCounts: Record<string, number>;
   focusTaskId: string | null;
@@ -51,6 +53,7 @@ export interface ProjectWorkspaceRoutesProps {
   onCreateFlow: (data: { project_id: string; name: string; description?: string; steps?: Array<Omit<FlowStep, 'id'>> }) => Promise<Flow>;
   onDeleteFlow: (flowId: string) => Promise<void>;
   onSwapFlows: (draggedId: string, targetId: string, side: RelativeDropSide, orderedIds: string[]) => void;
+  onReloadProjectDataSettings: () => Promise<ProjectDataSettings | undefined>;
 }
 
 export function ProjectWorkspaceRoutes({
@@ -61,9 +64,10 @@ export function ProjectWorkspaceRoutes({
   allWorkstreams,
   flows,
   setFlows,
+  projectDataEnabled,
+  projectDataSettings,
   memberMap,
   flowMap,
-  typeFlowMap,
   mentionedTaskIds,
   commentCounts,
   focusTaskId,
@@ -95,6 +99,7 @@ export function ProjectWorkspaceRoutes({
   onCreateFlow,
   onDeleteFlow,
   onSwapFlows,
+  onReloadProjectDataSettings,
 }: ProjectWorkspaceRoutesProps) {
   return (
     <Routes>
@@ -108,7 +113,6 @@ export function ProjectWorkspaceRoutes({
             activeWorkstreams={activeWorkstreams}
             memberMap={memberMap}
             flowMap={flowMap}
-            typeFlowMap={typeFlowMap}
             mentionedTaskIds={mentionedTaskIds}
             commentCounts={commentCounts}
             focusTaskId={focusTaskId}
@@ -158,11 +162,22 @@ export function ProjectWorkspaceRoutes({
             flows={flows}
             setFlows={setFlows}
             project={project}
+            projectDataEnabled={projectDataEnabled}
             onSaveFlow={onSaveFlow}
             onSaveFlowSteps={onSaveFlowSteps}
             onCreateFlow={onCreateFlow}
             onDeleteFlow={onDeleteFlow}
             onSwapFlows={onSwapFlows}
+          />
+        )}
+      />
+      <Route
+        path="/project-data"
+        element={(
+          <ProjectDataRoute
+            project={project}
+            projectDataSettings={projectDataSettings}
+            reloadProjectDataSettings={onReloadProjectDataSettings}
           />
         )}
       />

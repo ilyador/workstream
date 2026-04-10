@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth-middleware.js';
-import { isMissingRowError, requireProjectMember, routeParam, stringField } from '../authz.js';
+import { isMissingRowError, requireProjectAdmin, routeParam, stringField } from '../authz.js';
 import { deleteDocument } from '../rag/service.js';
 import { supabase } from '../supabase.js';
 import { errorMessage } from './document-utils.js';
@@ -17,7 +17,7 @@ documentDeleteRouter.delete('/api/documents/:id', requireAuth, async (req, res) 
   }
   const projectId = doc ? stringField(doc, 'project_id') : null;
   if (!projectId) return res.status(404).json({ error: 'Document not found' });
-  if (!await requireProjectMember(req, res, projectId)) return;
+  if (!await requireProjectAdmin(req, res, projectId)) return;
 
   try {
     await deleteDocument(documentId);
