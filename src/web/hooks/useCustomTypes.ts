@@ -27,9 +27,9 @@ export function useCustomTypes(projectId: string | null) {
     return unsub;
   }, [projectId, load]);
 
-  const addType = useCallback(async (name: string, pipeline?: string, description?: string) => {
+  const addType = useCallback(async (name: string, description?: string) => {
     if (!projectId) return;
-    const created = await createCustomType(projectId, name, pipeline, description);
+    const created = await createCustomType(projectId, name, description);
     setTypes(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
     return created;
   }, [projectId, setTypes]);

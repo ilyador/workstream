@@ -1,15 +1,24 @@
+import {
+  normalizeRuntimeId,
+  normalizeRuntimeKind,
+  normalizeRuntimeVariant,
+  type AiRuntimeKind,
+} from '../shared/ai-runtimes.js';
+
 export interface FlowStepConfig {
   position: number;
   name: string;
   instructions: string;
-  model: string;
+  runtime_kind: AiRuntimeKind;
+  runtime_id: string;
+  runtime_variant: string | null;
   tools: string[];
   context_sources: string[];
+  use_project_data: boolean;
   is_gate: boolean;
   on_fail_jump_to: number | null;
   max_retries: number;
   on_max_retries: 'pause' | 'fail' | 'skip';
-  include_agents_md: boolean;
 }
 
 export interface FlowConfig {
@@ -44,19 +53,24 @@ export function buildFlowSnapshot(flow: unknown): FlowConfig {
   const steps = rawSteps
     .map(step => record(step))
     .sort((a, b) => numberValue(a.position, 0) - numberValue(b.position, 0))
-    .map(step => ({
-      position: numberValue(step.position, 0),
-      name: stringValue(step.name, 'step'),
-      instructions: stringValue(step.instructions, ''),
-      model: stringValue(step.model, 'opus'),
-      tools: stringArray(step.tools, []),
-      context_sources: stringArray(step.context_sources, ['task_description', 'previous_step']),
-      is_gate: step.is_gate === true,
-      on_fail_jump_to: typeof step.on_fail_jump_to === 'number' ? step.on_fail_jump_to : null,
-      max_retries: numberValue(step.max_retries, 0),
-      on_max_retries: onMaxRetries(step.on_max_retries),
-      include_agents_md: step.include_agents_md !== false,
-    }));
+    .map(step => {
+      const runtimeKind = normalizeRuntimeKind(step.runtime_kind, 'coding');
+      return {
+        position: numberValue(step.position, 0),
+        name: stringValue(step.name, 'step'),
+        instructions: stringValue(step.instructions, ''),
+        runtime_kind: runtimeKind,
+        runtime_id: normalizeRuntimeId(step.runtime_id, runtimeKind),
+        runtime_variant: normalizeRuntimeVariant(step.runtime_id, step.runtime_variant),
+        tools: stringArray(step.tools, []),
+        context_sources: stringArray(step.context_sources, ['agents', 'task_description']),
+        use_project_data: step.use_project_data === true,
+        is_gate: step.is_gate === true,
+        on_fail_jump_to: typeof step.on_fail_jump_to === 'number' ? step.on_fail_jump_to : null,
+        max_retries: numberValue(step.max_retries, 0),
+        on_max_retries: onMaxRetries(step.on_max_retries),
+      };
+    });
 
   return {
     flow_name: stringValue(flowRecord.name, 'Unnamed flow'),

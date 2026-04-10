@@ -3,6 +3,8 @@ import { isMissingRowError } from '../authz-shared.js';
 import { supabase } from '../supabase.js';
 import { embed } from './embeddings.js';
 import { chunkText, extractTextFromDocx, extractTextFromPdf } from './chunker.js';
+import { loadProjectDataSettings } from '../project-data-settings.js';
+import type { ProjectDataSettings } from '../../shared/project-data.js';
 
 const EMBED_BATCH_SIZE = 32;
 const CHUNK_SIZE = parseInt(process.env.RAG_CHUNK_SIZE || '800');
@@ -24,14 +26,20 @@ async function extractText(fileType: string, content: string | Buffer): Promise<
   return typeof content === 'string' ? content : content.toString('utf-8');
 }
 
-async function insertChunks(docId: string, projectId: string, textContent: string, fileType: string): Promise<number> {
+async function insertChunks(
+  docId: string,
+  projectId: string,
+  textContent: string,
+  fileType: string,
+  settings: ProjectDataSettings,
+): Promise<number> {
   const chunks = chunkText(textContent, fileType, CHUNK_SIZE, CHUNK_OVERLAP);
   if (chunks.length === 0) throw new Error('Document produced no text chunks');
 
   const allEmbeddings: number[][] = [];
   for (let i = 0; i < chunks.length; i += EMBED_BATCH_SIZE) {
     const batch = chunks.slice(i, i + EMBED_BATCH_SIZE);
-    const embeddings = await embed(batch.map(c => c.content));
+    const embeddings = await embed(batch.map(c => c.content), settings);
     allEmbeddings.push(...embeddings);
   }
 
@@ -51,12 +59,87 @@ async function insertChunks(docId: string, projectId: string, textContent: strin
   return chunks.length;
 }
 
+export async function reindexProjectDocuments(
+  projectId: string,
+  settings: ProjectDataSettings,
+): Promise<{ total: number; ready: number; failed: number }> {
+  const { data: docs, error } = await supabase
+    .from('rag_documents')
+    .select('id, file_type, content')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(`Failed to load documents for reindex: ${error.message}`);
+
+  const documents = Array.isArray(docs) ? docs : [];
+  if (documents.length === 0) return { total: 0, ready: 0, failed: 0 };
+
+  const { error: markErr } = await supabase
+    .from('rag_documents')
+    .update({ status: 'processing', error: null, chunk_count: 0 })
+    .eq('project_id', projectId);
+  if (markErr) throw new Error(`Failed to mark documents for reindex: ${markErr.message}`);
+
+  const { error: deleteErr } = await supabase
+    .from('rag_chunks')
+    .delete()
+    .eq('project_id', projectId);
+  if (deleteErr) throw new Error(`Failed to clear existing project data chunks: ${deleteErr.message}`);
+
+  let ready = 0;
+  let failed = 0;
+
+  for (const document of documents) {
+    const content = typeof document.content === 'string' ? document.content : '';
+    const fileType = typeof document.file_type === 'string' && document.file_type ? document.file_type : 'txt';
+
+    if (!content.trim()) {
+      failed += 1;
+      const { error: statusErr } = await supabase
+        .from('rag_documents')
+        .update({
+          status: 'error',
+          error: 'Document content is missing; re-upload or re-index the document.',
+          chunk_count: 0,
+        })
+        .eq('id', document.id);
+      if (statusErr) {
+        console.error(`[rag] Failed to mark document ${document.id} as error: ${statusErr.message}`);
+      }
+      continue;
+    }
+
+    try {
+      const chunkCount = await insertChunks(document.id, projectId, content, fileType, settings);
+      const { error: updateErr } = await supabase
+        .from('rag_documents')
+        .update({ status: 'ready', error: null, chunk_count: chunkCount, content })
+        .eq('id', document.id);
+      if (updateErr) throw new Error(`Failed to mark document ready: ${updateErr.message}`);
+      ready += 1;
+    } catch (err) {
+      failed += 1;
+      const message = err instanceof Error ? err.message : String(err);
+      const { error: statusErr } = await supabase
+        .from('rag_documents')
+        .update({ status: 'error', error: message, chunk_count: 0 })
+        .eq('id', document.id);
+      if (statusErr) {
+        console.error(`[rag] Failed to mark document ${document.id} as error: ${statusErr.message}`);
+      }
+    }
+  }
+
+  return { total: documents.length, ready, failed };
+}
+
 export async function ingestDocument(
   projectId: string,
   fileName: string,
   fileType: string,
   content: string | Buffer,
 ): Promise<{ id: string; status: string; chunkCount: number }> {
+  const settings = await loadProjectDataSettings(projectId);
+  if (!settings.enabled) throw new Error('Enable Project Data in project settings before indexing documents');
   const hashInput = contentBuffer(content);
   const contentHash = createHash('md5').update(hashInput).digest('hex');
 
@@ -79,7 +162,7 @@ export async function ingestDocument(
 
   try {
     const textContent = await extractText(fileType, content);
-    const chunkCount = await insertChunks(doc.id, projectId, textContent, fileType);
+    const chunkCount = await insertChunks(doc.id, projectId, textContent, fileType, settings);
     const { error: updateErr } = await supabase
       .from('rag_documents')
       .update({ status: 'ready', chunk_count: chunkCount, content: textContent })

@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { homedir } from 'os';
-import { runJob, runFlowJob, loadTaskTypeConfig, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
+import { runFlowJob, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
 import type { FlowConfig } from './runner.js';
 import { supabase } from './supabase.js';
 import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
@@ -211,9 +211,15 @@ async function startJob(job: ClaimedJob): Promise<void> {
   // Update task status
   await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', task.id);
 
-  // Determine execution path: flow-based (new) or type-based (legacy)
   const flowSnapshot: FlowConfig | null = job.flow_snapshot || null;
-  const taskType = flowSnapshot ? null : loadTaskTypeConfig(localPath, task.type);
+  if (!flowSnapshot) {
+    const failMsg = 'Job failed: flow snapshot is missing.';
+    await writeLog(jobId, 'failed', { error: failMsg });
+    await supabase.from('jobs').update({ status: 'failed', completed_at: new Date().toISOString(), question: failMsg }).eq('id', jobId);
+    await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
+    await notifyTaskFailure(task, failMsg);
+    return;
+  }
 
   // Determine fresh start vs resume
   const phasesAlreadyCompleted = Array.isArray(job.phases_completed) ? job.phases_completed : [];
@@ -307,16 +313,17 @@ async function startJob(job: ClaimedJob): Promise<void> {
   try {
     const taskWithAnswer = isResume ? { ...task, answer: job.answer } : task;
 
-    // RAG injection: search if any flow step uses 'rag' context source, or legacy doc-search type
-    const needsRag = flowSnapshot?.steps?.some((s: any) => s.context_sources?.includes('rag'))
-      || task.type === 'doc-search';
-    if (needsRag) {
+    const needsProjectData = task.allow_project_data === true
+      && flowSnapshot.steps.some(step => step.use_project_data);
+    if (needsProjectData) {
       try {
-        const ragResults = await ragSearch(job.project_id, task.description || task.title);
-        taskWithAnswer._ragResults = ragResults;
-        await writeLog(jobId, 'log', { text: `[rag] Found ${ragResults.length} relevant document chunks` });
+        const projectDataResults = await ragSearch(job.project_id, task.description || task.title);
+        taskWithAnswer._projectDataResults = projectDataResults;
+        await writeLog(jobId, 'log', { text: `[project-data] Found ${projectDataResults.length} relevant document chunks` });
       } catch (err: any) {
-        await writeLog(jobId, 'log', { text: `[rag] Search failed: ${err.message}` });
+        const message = `[project-data] Search failed: ${err.message}`;
+        await writeLog(jobId, 'log', { text: message });
+        throw new Error(message);
       }
     }
 
@@ -331,25 +338,12 @@ async function startJob(job: ClaimedJob): Promise<void> {
       onReview,
     };
 
-    if (flowSnapshot) {
-      // New flow-based execution
-      await runFlowJob({
-        ...sharedCtx,
-        task: taskWithAnswer,
-        flow: flowSnapshot,
-      });
-    } else {
-      // Legacy type-based execution
-      await runJob({
-        ...sharedCtx,
-        task: taskWithAnswer,
-        taskType: taskType!,
-      });
-    }
+    await runFlowJob({
+      ...sharedCtx,
+      task: taskWithAnswer,
+      flow: flowSnapshot,
+    });
   } catch (err: any) {
-    // This catch only fires if runJob() itself throws an unhandled error
-    // (e.g., a bug in the runner code). Phase failures are handled inside
-    // runJob() which updates both job and task status directly.
     console.error(`[worker] Unexpected runner crash for job ${jobId}:`, err.message);
     await writeLog(jobId, 'failed', { error: `Runner crashed: ${err.message}` });
     await supabase.from('jobs').update({

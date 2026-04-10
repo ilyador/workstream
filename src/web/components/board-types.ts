@@ -9,7 +9,6 @@ export interface BoardProps {
   jobs: JobView[];
   memberMap: Record<string, { name: string; initials: string }>;
   flowMap: Record<string, string>;
-  typeFlowMap: Record<string, string>;
   userRole: string;
   projectId: string | null;
   mentionedTaskIds: Set<string>;

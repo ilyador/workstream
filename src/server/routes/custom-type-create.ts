@@ -8,11 +8,11 @@ import { slugifyCustomTypeName, validateCustomTypeInput } from './custom-type-va
 export const customTypeCreateRouter = Router();
 
 customTypeCreateRouter.post('/api/custom-types', requireAuth, async (req, res) => {
-  const { project_id, name, description, pipeline } = req.body;
+  const { project_id, name, description } = req.body;
   if (typeof project_id !== 'string' || !project_id || typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'project_id and name required' });
   if (!await requireProjectMember(req, res, project_id)) return;
 
-  const inputError = validateCustomTypeInput({ description, pipeline });
+  const inputError = validateCustomTypeInput({ description });
   if (inputError) return res.status(400).json({ error: inputError });
 
   const slug = slugifyCustomTypeName(name);
@@ -23,7 +23,6 @@ customTypeCreateRouter.post('/api/custom-types', requireAuth, async (req, res) =
       project_id,
       name: slug,
       description: description || '',
-      pipeline: pipeline || 'feature',
     })
     .select()
     .single();

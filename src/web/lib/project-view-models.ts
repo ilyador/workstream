@@ -31,12 +31,6 @@ export function buildTaskTitleMap(tasks: TaskRecord[]) {
   return map;
 }
 
-export function buildTaskTypeMap(tasks: TaskRecord[]) {
-  const map: Record<string, string> = {};
-  for (const task of tasks) map[task.id] = task.type;
-  return map;
-}
-
 export function buildMemberMap(members: MemberRecord[]) {
   const map: Record<string, { name: string; initials: string }> = {};
   for (const member of members) map[member.id] = { name: member.name, initials: member.initials };
@@ -46,16 +40,6 @@ export function buildMemberMap(members: MemberRecord[]) {
 export function buildFlowMap(flows: Flow[]) {
   const map: Record<string, string> = {};
   for (const flow of flows) map[flow.id] = flow.name;
-  return map;
-}
-
-export function buildTypeFlowMap(flows: Flow[]) {
-  const map: Record<string, string> = {};
-  for (const flow of flows) {
-    for (const type of flow.default_types || []) {
-      if (!map[type]) map[type] = flow.id;
-    }
-  }
   return map;
 }
 

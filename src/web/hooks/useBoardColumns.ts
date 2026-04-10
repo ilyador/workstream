@@ -11,7 +11,6 @@ interface UseBoardColumnsArgs {
   jobs: JobView[];
   memberMap: Record<string, { name: string; initials: string }>;
   flowMap: Record<string, string>;
-  typeFlowMap: Record<string, string>;
   draggedTaskId: string | null;
   draggedGroupIds: string[];
   onMoveTask: (taskId: string, workstreamId: string | null, newPosition: number) => void;
@@ -24,7 +23,6 @@ export function useBoardColumns({
   jobs,
   memberMap,
   flowMap,
-  typeFlowMap,
   draggedTaskId,
   draggedGroupIds,
   onMoveTask,
@@ -42,8 +40,7 @@ export function useBoardColumns({
       const key = task.workstream_id || '__backlog__';
       if (key === '__backlog__' && (task.status === 'done' || task.status === 'canceled')) continue;
       if (!groups[key]) groups[key] = [];
-      const resolvedFlowId = task.flow_id || typeFlowMap[task.type];
-      const flowName = resolvedFlowId ? flowMap[resolvedFlowId] : null;
+      const flowName = task.flow_id ? (flowMap[task.flow_id] ?? null) : null;
       groups[key].push(toTaskView(task, memberMap, flowName));
     }
 
@@ -51,7 +48,7 @@ export function useBoardColumns({
       groups[key].sort(compareByPosition);
     }
     return groups;
-  }, [tasks, workstreams, memberMap, flowMap, typeFlowMap]);
+  }, [tasks, workstreams, memberMap, flowMap]);
 
   const sortedWorkstreams = useMemo(
     () => [...workstreams].sort((a, b) => a.position - b.position),

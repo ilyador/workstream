@@ -11,6 +11,7 @@ export function toTaskMutationPayload(data: TaskFormData) {
     assignee: data.assignee,
     flow_id: data.flow_id,
     auto_continue: data.auto_continue,
+    allow_project_data: data.allow_project_data,
     images: data.images,
     workstream_id: data.workstream_id,
     priority: data.priority,

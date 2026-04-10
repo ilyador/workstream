@@ -14,7 +14,7 @@ export async function queueReworkJob(params: {
 
   let flowConfig: Awaited<ReturnType<typeof resolveFlowForTask>>;
   try {
-    flowConfig = await resolveFlowForTask(flowCompatibleTask, params.projectId, params.localPath);
+    flowConfig = await resolveFlowForTask(flowCompatibleTask, params.projectId);
   } catch (error) {
     return { status: 500, error: error instanceof Error ? error.message : 'Failed to resolve flow' };
   }

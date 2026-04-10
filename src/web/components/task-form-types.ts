@@ -8,6 +8,7 @@ export interface TaskFormData {
   assignee: string | null;
   flow_id: string | null;
   auto_continue: boolean;
+  allow_project_data: boolean;
   images: string[];
   workstream_id: string | null;
   priority: string;
@@ -25,6 +26,7 @@ export interface EditTaskData {
   assignee?: string | null;
   flow_id?: string | null;
   auto_continue?: boolean;
+  allow_project_data?: boolean;
   images?: string[];
   workstream_id?: string | null;
   priority?: string;

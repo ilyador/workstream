@@ -56,14 +56,16 @@ function makeStep(overrides: Partial<FlowStepConfig> = {}): FlowStepConfig {
     position: 1,
     name: 'implement',
     instructions: 'Implement the feature.',
-    model: 'opus',
+    runtime_kind: 'coding',
+    runtime_id: 'claude_code',
+    runtime_variant: 'opus',
     tools: [],
     context_sources: ['task_description'],
+    use_project_data: false,
     is_gate: false,
     on_fail_jump_to: null,
     max_retries: 0,
     on_max_retries: 'pause',
-    include_agents_md: false,
     ...overrides,
   };
 }
@@ -144,11 +146,35 @@ describe('buildStepPrompt', () => {
     const task = makeTask();
     const flow = makeFlow({ agents_md: 'Use the project agent rules.' });
 
-    const withFlag = await buildStepPrompt(makeStep({ include_agents_md: true }), flow, task, [], '/tmp/fake');
-    const withoutFlag = await buildStepPrompt(makeStep({ include_agents_md: false }), flow, task, [], '/tmp/fake');
+    const withAgents = await buildStepPrompt(makeStep({ context_sources: ['agents', 'task_description'] }), flow, task, [], '/tmp/fake');
+    const withoutAgents = await buildStepPrompt(makeStep({ context_sources: ['task_description'] }), flow, task, [], '/tmp/fake');
 
-    expect(withFlag).toContain('Use the project agent rules.');
-    expect(withoutFlag).toContain('Use the project agent rules.');
+    expect(withAgents).toContain('Use the project agent rules.');
+    expect(withoutAgents).toContain('Use the project agent rules.');
+  });
+
+  it('only advertises Bash-powered Project Data search when Bash is allowed', async () => {
+    const task = makeTask({ allow_project_data: true, project_id: 'proj-123' });
+    const flow = makeFlow();
+
+    const withBash = await buildStepPrompt(
+      makeStep({ use_project_data: true, tools: ['Bash'] }),
+      flow,
+      task,
+      [],
+      '/tmp/fake',
+    );
+    const withoutBash = await buildStepPrompt(
+      makeStep({ use_project_data: true, tools: ['Read'] }),
+      flow,
+      task,
+      [],
+      '/tmp/fake',
+    );
+
+    expect(withBash).toContain('npx tsx src/server/rag-cli.ts proj-123 "your search query"');
+    expect(withoutBash).not.toContain('npx tsx src/server/rag-cli.ts');
+    expect(withoutBash).toContain('cannot run additional Project Data searches because the Bash tool is disabled');
   });
 });
 
@@ -202,8 +228,10 @@ describe('scanAndUploadArtifacts', () => {
 
     // Verify correct MIME types
     const reportCall = uploadCalls.find((c: any[]) => c[0].includes('report.md'));
+    if (!reportCall) throw new Error('Missing report upload call');
     expect(reportCall[2]).toEqual(expect.objectContaining({ contentType: 'text/markdown' }));
     const jsonCall = uploadCalls.find((c: any[]) => c[0].includes('data.json'));
+    if (!jsonCall) throw new Error('Missing json upload call');
     expect(jsonCall[2]).toEqual(expect.objectContaining({ contentType: 'application/json' }));
 
     // Verify DB insert was called for each file
@@ -234,12 +262,15 @@ describe('scanAndUploadArtifacts', () => {
     const uploadCalls = uploadMock.mock.calls;
 
     const pngCall = uploadCalls.find((c: any[]) => c[0].includes('image.png'));
+    if (!pngCall) throw new Error('Missing png upload call');
     expect(pngCall[2]).toEqual(expect.objectContaining({ contentType: 'image/png' }));
 
     const pdfCall = uploadCalls.find((c: any[]) => c[0].includes('doc.pdf'));
+    if (!pdfCall) throw new Error('Missing pdf upload call');
     expect(pdfCall[2]).toEqual(expect.objectContaining({ contentType: 'application/pdf' }));
 
     const htmlCall = uploadCalls.find((c: any[]) => c[0].includes('style.html'));
+    if (!htmlCall) throw new Error('Missing html upload call');
     expect(htmlCall[2]).toEqual(expect.objectContaining({ contentType: 'text/html' }));
   });
 
@@ -331,6 +362,7 @@ describe('artifact production without code changes', () => {
 
     // Verify MIME types
     const svgCall = uploadMock.mock.calls.find((c: any[]) => c[0].includes('diagram.svg'));
+    if (!svgCall) throw new Error('Missing svg upload call');
     expect(svgCall[2]).toEqual(expect.objectContaining({ contentType: 'image/svg+xml' }));
 
     // Verify logs confirm capture
@@ -435,7 +467,7 @@ describe('artifact production without code changes', () => {
     writeFileSync(join(artifactsDir, 'also-good.txt'), 'more content');
 
     // Get the upload mock by invoking the factory and make it fail for 'bad.md'
-    const uploadFn = (supabase.storage.from('task-artifacts') as { upload: ReturnType<typeof vi.fn> }).upload;
+    const uploadFn = ((supabase.storage.from('task-artifacts') as unknown) as { upload: ReturnType<typeof vi.fn> }).upload;
     uploadFn.mockImplementation((path: string) => {
       if (path.includes('bad.md')) return Promise.reject(new Error('Upload failed'));
       return Promise.resolve({ data: {}, error: null });
@@ -459,7 +491,7 @@ describe('artifact production without code changes', () => {
     mkdirSync(artifactsDir, { recursive: true });
     writeFileSync(join(artifactsDir, 'report.md'), '# Report');
 
-    const uploadFn = (supabase.storage.from('task-artifacts') as { upload: ReturnType<typeof vi.fn> }).upload;
+    const uploadFn = ((supabase.storage.from('task-artifacts') as unknown) as { upload: ReturnType<typeof vi.fn> }).upload;
     uploadFn.mockResolvedValueOnce({ data: null, error: { message: 'Storage unavailable' } });
 
     const logs: string[] = [];

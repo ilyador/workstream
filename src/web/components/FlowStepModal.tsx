@@ -9,11 +9,12 @@ import s from './FlowEditor.module.css';
 interface FlowStepModalProps {
   flow: Flow;
   stepIndex: number;
+  projectDataEnabled: boolean;
   onSaveSteps: (flowId: string, steps: FlowStepInput[]) => Promise<void>;
   onClose: () => void;
 }
 
-export function FlowStepModal({ flow, stepIndex, onSaveSteps, onClose }: FlowStepModalProps) {
+export function FlowStepModal({ flow, stepIndex, projectDataEnabled, onSaveSteps, onClose }: FlowStepModalProps) {
   const { closing, closeWithAnimation } = useExitAnimation(onClose);
   const {
     isNew,
@@ -46,6 +47,7 @@ export function FlowStepModal({ flow, stepIndex, onSaveSteps, onClose }: FlowSte
           index={activeIndex}
           allSteps={steps}
           isNew={isNew}
+          projectDataEnabled={projectDataEnabled}
           onUpdate={updateStep}
           onToggleTool={toggleTool}
           onToggleContext={toggleContext}

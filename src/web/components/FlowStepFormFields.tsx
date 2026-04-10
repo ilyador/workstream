@@ -1,11 +1,12 @@
+import { useEffect } from 'react';
 import type { FlowStep } from '../lib/api';
 import { MdField } from './MdField';
 import {
   ALL_CONTEXT_SOURCES,
   ALL_TOOLS,
-  MODEL_OPTIONS,
   ON_MAX_RETRIES_OPTIONS,
 } from '../lib/constants';
+import { CODING_RUNTIME_OPTIONS, defaultVariantForRuntime, runtimeVariantOptions } from '../../shared/ai-runtimes.js';
 import s from './FlowEditor.module.css';
 
 interface FlowStepFormFieldsProps {
@@ -13,6 +14,7 @@ interface FlowStepFormFieldsProps {
   index: number;
   allSteps: FlowStep[];
   isNew: boolean;
+  projectDataEnabled: boolean;
   onUpdate: (patch: Partial<FlowStep>) => void;
   onToggleTool: (tool: string) => void;
   onToggleContext: (source: string) => void;
@@ -26,6 +28,7 @@ export function FlowStepFormFields({
   index,
   allSteps,
   isNew,
+  projectDataEnabled,
   onUpdate,
   onToggleTool,
   onToggleContext,
@@ -33,6 +36,13 @@ export function FlowStepFormFields({
   onDelete,
   onClose,
 }: FlowStepFormFieldsProps) {
+  useEffect(() => {
+    if (!projectDataEnabled && step.use_project_data) {
+      onUpdate({ use_project_data: false });
+    }
+  }, [onUpdate, projectDataEnabled, step.use_project_data]);
+
+  const variantOptions = runtimeVariantOptions(step.runtime_id);
   return (
     <form onSubmit={event => event.preventDefault()} className={s.modalForm}>
       <input
@@ -53,32 +63,57 @@ export function FlowStepFormFields({
       </div>
 
       <div className={s.field}>
-        <label className={s.label}>Model</label>
-        <div className={s.segmented}>
-          {MODEL_OPTIONS.map(model => (
-            <button
-              key={model}
-              type="button"
-              className={`${s.segmentedBtn} ${step.model === model ? s.segmentedActive : ''}`}
-              onClick={() => onUpdate({ model })}
-            >
-              {model.charAt(0).toUpperCase() + model.slice(1)}
-            </button>
+        <label className={s.label}>Executor</label>
+        <select
+          className={s.select}
+          value={step.runtime_id}
+          onChange={event => {
+            const runtimeId = event.target.value;
+            onUpdate({
+              runtime_kind: 'coding',
+              runtime_id: runtimeId,
+              runtime_variant: defaultVariantForRuntime(runtimeId),
+            });
+          }}
+        >
+          {CODING_RUNTIME_OPTIONS.map(runtime => (
+            <option key={runtime.id} value={runtime.id}>
+              {runtime.label}
+            </option>
           ))}
-        </div>
+        </select>
       </div>
 
-      <div className={s.field}>
-        <label className={s.label}>Tools</label>
-        <div className={s.checkboxGrid}>
-          {ALL_TOOLS.map(tool => (
-            <label key={tool} className={s.checkboxLabel}>
-              <input type="checkbox" checked={step.tools.includes(tool)} onChange={() => onToggleTool(tool)} />
-              {tool}
-            </label>
-          ))}
+      {variantOptions.length > 0 && (
+        <div className={s.field}>
+          <label className={s.label}>Variant</label>
+          <div className={s.segmented}>
+            {variantOptions.map(option => (
+              <button
+                key={option.id}
+                type="button"
+                className={`${s.segmentedBtn} ${step.runtime_variant === option.id ? s.segmentedActive : ''}`}
+                onClick={() => onUpdate({ runtime_variant: option.id })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      <label className={s.checkboxRow}>
+        <input
+          type="checkbox"
+          checked={projectDataEnabled && step.use_project_data}
+          disabled={!projectDataEnabled}
+          onChange={event => onUpdate({ use_project_data: event.target.checked })}
+        />
+        <span>Use Project Data</span>
+      </label>
+      {!projectDataEnabled && (
+        <div className={s.hint}>Set up Project Data in project settings before enabling it on flow steps.</div>
+      )}
 
       <div className={s.field}>
         <label className={s.label}>Context Sources</label>
@@ -92,6 +127,18 @@ export function FlowStepFormFields({
             >
               {source}
             </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={s.field}>
+        <label className={s.label}>Tools</label>
+        <div className={s.checkboxGrid}>
+          {ALL_TOOLS.map(tool => (
+            <label key={tool} className={s.checkboxLabel}>
+              <input type="checkbox" checked={step.tools.includes(tool)} onChange={() => onToggleTool(tool)} />
+              {tool}
+            </label>
           ))}
         </div>
       </div>

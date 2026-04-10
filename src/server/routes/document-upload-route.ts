@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth-middleware.js';
-import { requireProjectMember, routeParam } from '../authz.js';
+import { requireProjectAdmin, routeParam } from '../authz.js';
 import { ingestDocument } from '../rag/service.js';
 import { documentType, errorMessage, safeDocumentName } from './document-utils.js';
 import { documentUpload } from './document-upload.js';
@@ -9,7 +9,7 @@ export const documentUploadRouter = Router();
 
 documentUploadRouter.post('/api/projects/:id/documents', requireAuth, documentUpload.single('file'), async (req, res) => {
   const projectId = routeParam(req.params.id);
-  if (!await requireProjectMember(req, res, projectId)) return;
+  if (!await requireProjectAdmin(req, res, projectId)) return;
   const file = req.file;
   if (!file) return res.status(400).json({ error: 'No file uploaded' });
   const name = safeDocumentName(file.originalname);

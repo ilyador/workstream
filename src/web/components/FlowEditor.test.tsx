@@ -49,14 +49,16 @@ function makeFlow(): Flow {
         name: 'Draft spec',
         position: 1,
         instructions: 'Write the first draft.',
-        model: 'sonnet',
+        runtime_kind: 'coding',
+        runtime_id: 'claude_code',
+        runtime_variant: 'sonnet',
         tools: ['Read', 'Write'],
         context_sources: ['task_description'],
+        use_project_data: false,
         is_gate: false,
         on_fail_jump_to: null,
         max_retries: 0,
         on_max_retries: 'pause',
-        include_agents_md: true,
       },
     ],
   };
@@ -74,6 +76,7 @@ describe('FlowEditor flow step rendering', () => {
         <FlowEditor
           flows={[makeFlow()]}
           setFlows={vi.fn()}
+          projectDataEnabled
           onSave={vi.fn().mockResolvedValue(undefined)}
           onSaveSteps={vi.fn().mockResolvedValue(undefined)}
           onCreateFlow={vi.fn()}
