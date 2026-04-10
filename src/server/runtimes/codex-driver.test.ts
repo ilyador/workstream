@@ -238,4 +238,43 @@ describe('CodexDriver', () => {
     await promise;
     expect(existsSync(outputPath)).toBe(false);
   });
+
+  it('silently drops valid JSON events with no known message field', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const logs: string[] = [];
+    const { codexDriver } = await import('./codex-driver.js');
+    const promise = codexDriver.execute({
+      jobId: 'j1',
+      step: baseStep(),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'x',
+      onLog: (t) => logs.push(t),
+    });
+
+    // Events that have no msg/message/text/type+command — original dropped these silently
+    proc.stdout.emit('data', Buffer.from('{"id":"abc","type":"task_started"}\n'));
+    proc.stdout.emit('data', Buffer.from('{"seq":42}\n'));
+    // A recognized event should still log
+    proc.stdout.emit('data', Buffer.from('{"msg":"working"}\n'));
+    // Invalid JSON should fall through to raw-line logging
+    proc.stdout.emit('data', Buffer.from('not json at all\n'));
+
+    const args = spawnMock.mock.calls[0][1] as string[];
+    writeFileSync(args[args.indexOf('--output-last-message') + 1], 'done');
+    proc.emit('close', 0);
+    await promise;
+
+    const joined = logs.join('');
+    // Unknown-shape events must not appear in logs
+    expect(joined).not.toContain('task_started');
+    expect(joined).not.toContain('seq');
+    expect(joined).not.toContain('"id":"abc"');
+    // Known event must appear
+    expect(joined).toContain('working');
+    // Invalid JSON must fall through as raw
+    expect(joined).toContain('not json at all');
+  });
 });

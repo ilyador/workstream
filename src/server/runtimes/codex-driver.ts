@@ -37,19 +37,14 @@ function buildArgs(
   ];
 }
 
-function formatCodexEvent(line: string): string | null {
-  try {
-    const event = JSON.parse(line) as Record<string, unknown>;
-    if (typeof event.msg === 'string') return event.msg;
-    if (typeof event.message === 'string') return event.message;
-    if (typeof event.text === 'string') return event.text;
-    if (typeof event.type === 'string' && typeof event.command === 'string') {
-      return `[${event.type}] ${event.command}`;
-    }
-    return null;
-  } catch {
-    return null;
+function formatCodexEventBody(event: Record<string, unknown>): string | null {
+  if (typeof event.msg === 'string') return event.msg;
+  if (typeof event.message === 'string') return event.message;
+  if (typeof event.text === 'string') return event.text;
+  if (typeof event.type === 'string' && typeof event.command === 'string') {
+    return `[${event.type}] ${event.command}`;
   }
+  return null;
 }
 
 async function runCodex(
@@ -59,6 +54,7 @@ async function runCodex(
   cwd: string,
   prompt: string,
   onLog: (text: string) => void,
+  timeoutMs?: number,
 ): Promise<string> {
   let caught: Error | null = null;
   try {
@@ -69,10 +65,18 @@ async function runCodex(
       cwd,
       env: buildRuntimeEnv('codex'),
       stdin: prompt,
+      timeoutMs,
       onLine: (line, stream) => {
         if (stream === 'stdout') {
-          const message = formatCodexEvent(line);
-          onLog(`${message ?? line}\n`);
+          try {
+            const event = JSON.parse(line) as Record<string, unknown>;
+            const message = formatCodexEventBody(event);
+            if (message) onLog(`${message}\n`);
+            // Valid JSON with no known fields: silently drop (matches original behavior)
+          } catch {
+            // Invalid JSON: log raw line (matches original behavior)
+            onLog(`${line}\n`);
+          }
         } else {
           onLog(`${line}\n`);
         }
@@ -108,6 +112,6 @@ export const codexDriver: RuntimeDriver = {
   async summarize(opts: SummarizeOptions): Promise<string> {
     const outputPath = allocateOutputPath(opts.jobId, 'summary');
     const args = buildArgs(opts.step, { effort: null }, opts.cwd, outputPath);
-    return runCodex(opts.jobId, args, outputPath, opts.cwd, opts.prompt, () => {});
+    return runCodex(opts.jobId, args, outputPath, opts.cwd, opts.prompt, () => {}, 60_000);
   },
 };
