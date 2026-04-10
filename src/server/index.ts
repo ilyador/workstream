@@ -87,13 +87,13 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-const detectedRuntimes = refreshDetectedAiRuntimes();
-
-app.listen(PORT, () => {
-  console.log(`WorkStream server running on port ${PORT}`);
-  const summary = detectedRuntimes
-    .filter(runtime => runtime.available)
-    .map(runtime => `${runtime.label} (${runtime.command})`)
-    .join(', ');
-  console.log(`[runtimes] Detected: ${summary || 'none'}`);
+void refreshDetectedAiRuntimes().then(detectedRuntimes => {
+  app.listen(PORT, () => {
+    console.log(`WorkStream server running on port ${PORT}`);
+    const summary = detectedRuntimes
+      .filter(runtime => runtime.available)
+      .map(runtime => `${runtime.label} (${runtime.command})`)
+      .join(', ');
+    console.log(`[runtimes] Detected: ${summary || 'none'}`);
+  });
 });

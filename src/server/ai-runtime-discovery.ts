@@ -1,10 +1,13 @@
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import {
   AI_RUNTIME_DEFINITIONS,
   type AiRuntimeId,
   type AiRuntimeStatus,
 } from '../shared/ai-runtimes.js';
-import { claudeEnv } from './claude-env.js';
+import { buildRuntimeEnv } from './runtimes/env.js';
+
+const execFileAsync = promisify(execFile);
 
 let detectedAt: string | null = null;
 let cachedRuntimes: AiRuntimeStatus[] = AI_RUNTIME_DEFINITIONS.map(runtime => ({
@@ -13,44 +16,51 @@ let cachedRuntimes: AiRuntimeStatus[] = AI_RUNTIME_DEFINITIONS.map(runtime => ({
   detectedPath: null,
 }));
 
-function resolveCommandPath(command: string): string | null {
+async function resolveCommandPath(command: string): Promise<string | null> {
   try {
-    const output = execFileSync('which', [command], {
-      encoding: 'utf8',
-      env: claudeEnv,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-    return output || null;
+    const { stdout } = await execFileAsync('which', [command], {
+      env: buildRuntimeEnv('claude_code'),
+      timeout: 5_000,
+    });
+    const trimmed = typeof stdout === 'string' ? stdout.trim() : '';
+    return trimmed || null;
   } catch {
     return null;
   }
 }
 
-function detectRuntimeStatuses(): AiRuntimeStatus[] {
-  return AI_RUNTIME_DEFINITIONS.map(runtime => {
-    const detectedPath = resolveCommandPath(runtime.command);
-    return {
-      ...runtime,
-      available: Boolean(detectedPath),
-      detectedPath,
-    };
-  });
+async function detectRuntimeStatuses(): Promise<AiRuntimeStatus[]> {
+  const results = await Promise.all(
+    AI_RUNTIME_DEFINITIONS.map(async runtime => {
+      const detectedPath = await resolveCommandPath(runtime.command);
+      return {
+        ...runtime,
+        available: Boolean(detectedPath),
+        detectedPath,
+      };
+    }),
+  );
+  return results;
 }
 
-export function refreshDetectedAiRuntimes(): AiRuntimeStatus[] {
-  cachedRuntimes = detectRuntimeStatuses();
+export async function refreshDetectedAiRuntimes(): Promise<AiRuntimeStatus[]> {
+  cachedRuntimes = await detectRuntimeStatuses();
   detectedAt = new Date().toISOString();
   return cachedRuntimes;
 }
 
-export function getDetectedAiRuntimes(): AiRuntimeStatus[] {
+export async function getDetectedAiRuntimes(): Promise<AiRuntimeStatus[]> {
   if (!detectedAt) return refreshDetectedAiRuntimes();
+  return cachedRuntimes;
+}
+
+export function getDetectedAiRuntimesSync(): AiRuntimeStatus[] {
   return cachedRuntimes;
 }
 
 export function getDetectedAiRuntime(runtimeId: string | null | undefined): AiRuntimeStatus | null {
   if (!runtimeId) return null;
-  return getDetectedAiRuntimes().find(runtime => runtime.id === runtimeId) ?? null;
+  return cachedRuntimes.find(runtime => runtime.id === runtimeId) ?? null;
 }
 
 export function requireDetectedAiRuntime(runtimeId: AiRuntimeId | string): AiRuntimeStatus {
