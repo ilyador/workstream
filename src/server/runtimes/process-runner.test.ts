@@ -219,10 +219,12 @@ describe('runProcess', () => {
       onLine: () => {},
       onLog: () => {},
     });
+    // Attach rejection handler before advancing timers to avoid unhandled rejection window.
+    const settled = promise.catch((err) => err);
 
     await vi.advanceTimersByTimeAsync(1100);
     expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
-    await promise.catch(() => {});
+    await settled;
     vi.useRealTimers();
   });
 
@@ -243,10 +245,12 @@ describe('runProcess', () => {
       onLine: () => {},
       onLog: () => {},
     });
+    // Attach rejection handler before advancing timers to avoid unhandled rejection window.
+    const settled = promise.catch((err) => err);
 
     await vi.advanceTimersByTimeAsync(DEFAULT_PROCESS_TIMEOUT_MS + 100);
     expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
-    await promise.catch(() => {});
+    await settled;
     vi.useRealTimers();
   });
 
