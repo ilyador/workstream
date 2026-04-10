@@ -1,6 +1,8 @@
 import type { JobRecord } from '../components/job-types';
 import type { ProjectDataReindexResult } from '../../shared/project-data.js';
+import type { AiRuntimeStatus } from '../../shared/ai-runtimes.js';
 export type { ProjectDataReindexResult } from '../../shared/project-data.js';
+export type { AiRuntimeStatus } from '../../shared/ai-runtimes.js';
 
 const BASE = '';
 
@@ -254,11 +256,20 @@ export interface ProjectDataSettingsUpdateResponse extends ProjectDataSettings {
   reindex?: ProjectDataReindexResult | null;
 }
 
+export interface AiRuntimesResponse {
+  detected_at: string | null;
+  runtimes: AiRuntimeStatus[];
+}
+
 export async function createProject(name: string, supabaseConfig?: SupabaseConfig, localPath?: string): Promise<ProjectSummary> {
   return apiFetch('/api/projects', {
     method: 'POST',
     body: JSON.stringify({ name, supabase_config: supabaseConfig, local_path: localPath }),
   });
+}
+
+export async function getAiRuntimes(): Promise<AiRuntimesResponse> {
+  return apiFetch('/api/ai-runtimes');
 }
 
 export async function updateProjectLocalPath(projectId: string, localPath: string) {

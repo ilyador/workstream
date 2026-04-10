@@ -1,7 +1,7 @@
 import type { Flow, FlowStep } from './api';
 import type { TaskView, WorkstreamView } from './task-view';
 import type { TaskCardMetaItem } from '../components/task-card-types';
-import { defaultRuntimeIdForKind, defaultVariantForRuntime } from '../../shared/ai-runtimes.js';
+import { defaultRuntimeIdForKind, defaultVariantForRuntime, type AiRuntimeStatus } from '../../shared/ai-runtimes.js';
 
 export type FlowStepInput = Omit<FlowStep, 'id'>;
 
@@ -9,8 +9,9 @@ export function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
-export function makeBlankStep(position: number): FlowStep {
-  const runtimeId = defaultRuntimeIdForKind('coding');
+export function makeBlankStep(position: number, runtimes: AiRuntimeStatus[] = []): FlowStep {
+  const runtimeId = runtimes.find(runtime => runtime.kind === 'coding' && runtime.available)?.id
+    ?? defaultRuntimeIdForKind('coding');
   return {
     id: `new-${Date.now()}-${position}`,
     name: '',

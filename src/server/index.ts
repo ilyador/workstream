@@ -19,6 +19,8 @@ import { skillsRouter } from './routes/skills.js';
 import { tasksRouter } from './routes/tasks.js';
 import { workstreamsRouter } from './routes/workstreams.js';
 import { changesRouter } from './realtime.js';
+import { aiRuntimesRouter } from './routes/ai-runtimes.js';
+import { refreshDetectedAiRuntimes } from './ai-runtime-discovery.js';
 
 const PORT = process.env.PORT || 3001;
 const app = express();
@@ -37,6 +39,9 @@ app.get('/api/health', (_req, res) => {
 
 // Auth (signup, signin, signout, me, refresh)
 app.use(authRouter);
+
+// Runtime catalog
+app.use(aiRuntimesRouter);
 
 // Data (projects, tasks, workstreams, jobs, comments, notifications, SSE changes)
 app.use(projectsRouter);
@@ -82,6 +87,13 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+const detectedRuntimes = refreshDetectedAiRuntimes();
+
 app.listen(PORT, () => {
   console.log(`WorkStream server running on port ${PORT}`);
+  const summary = detectedRuntimes
+    .filter(runtime => runtime.available)
+    .map(runtime => `${runtime.label} (${runtime.command})`)
+    .join(', ');
+  console.log(`[runtimes] Detected: ${summary || 'none'}`);
 });

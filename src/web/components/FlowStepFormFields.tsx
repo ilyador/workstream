@@ -6,7 +6,7 @@ import {
   ALL_TOOLS,
   ON_MAX_RETRIES_OPTIONS,
 } from '../lib/constants';
-import { CODING_RUNTIME_OPTIONS, defaultVariantForRuntime, runtimeVariantOptions } from '../../shared/ai-runtimes.js';
+import { defaultVariantForRuntime, runtimeVariantOptions, type AiRuntimeStatus } from '../../shared/ai-runtimes.js';
 import s from './FlowEditor.module.css';
 
 interface FlowStepFormFieldsProps {
@@ -15,6 +15,8 @@ interface FlowStepFormFieldsProps {
   allSteps: FlowStep[];
   isNew: boolean;
   projectDataEnabled: boolean;
+  codingRuntimes: AiRuntimeStatus[];
+  runtimeCatalogError: string | null;
   onUpdate: (patch: Partial<FlowStep>) => void;
   onToggleTool: (tool: string) => void;
   onToggleContext: (source: string) => void;
@@ -29,6 +31,8 @@ export function FlowStepFormFields({
   allSteps,
   isNew,
   projectDataEnabled,
+  codingRuntimes,
+  runtimeCatalogError,
   onUpdate,
   onToggleTool,
   onToggleContext,
@@ -76,12 +80,18 @@ export function FlowStepFormFields({
             });
           }}
         >
-          {CODING_RUNTIME_OPTIONS.map(runtime => (
-            <option key={runtime.id} value={runtime.id}>
-              {runtime.label}
+          {codingRuntimes.map(runtime => (
+            <option key={runtime.id} value={runtime.id} disabled={!runtime.available}>
+              {runtime.label}{runtime.available ? '' : ' (not installed)'}
             </option>
           ))}
         </select>
+        {runtimeCatalogError && (
+          <div className={s.hint}>Failed to load runtime availability: {runtimeCatalogError}</div>
+        )}
+        {!runtimeCatalogError && codingRuntimes.every(runtime => !runtime.available) && (
+          <div className={s.hint}>No supported coding runtimes were detected on this server.</div>
+        )}
       </div>
 
       {variantOptions.length > 0 && (

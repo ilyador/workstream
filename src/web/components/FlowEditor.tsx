@@ -8,6 +8,7 @@ import { FlowStepModal } from './FlowStepModal';
 import { flowToWorkstream, type FlowStepInput } from '../lib/flow-editor';
 import { useFlowBoard } from '../hooks/useFlowBoard';
 import type { RelativeDropSide } from '../lib/optimistic-updates';
+import { useAiRuntimes } from '../hooks/useAiRuntimes';
 import s from './FlowEditor.module.css';
 
 interface FlowEditorProps {
@@ -26,6 +27,8 @@ interface FlowEditorProps {
 const EMPTY_JOB_MAP = {};
 const EMPTY_SET = new Set<string>();
 export function FlowEditor({ flows, setFlows, projectDataEnabled, onSave, onSaveSteps, onCreateFlow, onDeleteFlow, onSwapColumns, projectId, taskTypes }: FlowEditorProps) {
+  const runtimeCatalog = useAiRuntimes();
+  const codingRuntimes = runtimeCatalog.runtimes.filter(runtime => runtime.kind === 'coding');
   const {
     creating,
     drag,
@@ -112,6 +115,8 @@ export function FlowEditor({ flows, setFlows, projectDataEnabled, onSave, onSave
           flow={modalFlow}
           stepIndex={modalTarget.stepIndex}
           projectDataEnabled={projectDataEnabled}
+          codingRuntimes={codingRuntimes}
+          runtimeCatalogError={runtimeCatalog.error}
           onSaveSteps={onSaveSteps}
           onClose={closeStepModal}
         />

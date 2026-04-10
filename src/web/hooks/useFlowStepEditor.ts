@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Flow, FlowStep } from '../lib/api';
 import { useModal } from './modal-context';
+import type { AiRuntimeStatus } from '../../shared/ai-runtimes.js';
 import {
   getErrorMessage,
   makeBlankStep,
@@ -12,6 +13,7 @@ import {
 interface UseFlowStepEditorArgs {
   flow: Flow;
   stepIndex: number;
+  codingRuntimes: AiRuntimeStatus[];
   onSaveSteps: (flowId: string, steps: FlowStepInput[]) => Promise<void>;
   onClose: () => void;
 }
@@ -19,6 +21,7 @@ interface UseFlowStepEditorArgs {
 export function useFlowStepEditor({
   flow,
   stepIndex,
+  codingRuntimes,
   onSaveSteps,
   onClose,
 }: UseFlowStepEditorArgs) {
@@ -26,7 +29,7 @@ export function useFlowStepEditor({
   const modal = useModal();
   const sorted = sortedSteps(flow);
   const [steps, setSteps] = useState<FlowStep[]>(() =>
-    isNew ? [...sorted, makeBlankStep(sorted.length + 1)] : sorted
+    isNew ? [...sorted, makeBlankStep(sorted.length + 1, codingRuntimes)] : sorted
   );
   const activeIndex = isNew ? steps.length - 1 : stepIndex;
   const step = steps[activeIndex];

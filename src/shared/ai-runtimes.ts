@@ -1,6 +1,6 @@
 export type AiRuntimeKind = 'coding' | 'image';
 
-export type AiRuntimeId = 'claude_code';
+export type AiRuntimeId = 'claude_code' | 'codex' | 'qwen_code';
 
 export interface RuntimeVariantOption {
   id: string;
@@ -21,6 +21,11 @@ export interface AiRuntimeDefinition {
   defaultVariant: string | null;
 }
 
+export interface AiRuntimeStatus extends AiRuntimeDefinition {
+  available: boolean;
+  detectedPath: string | null;
+}
+
 export const AI_RUNTIME_DEFINITIONS: AiRuntimeDefinition[] = [
   {
     id: 'claude_code',
@@ -37,6 +42,32 @@ export const AI_RUNTIME_DEFINITIONS: AiRuntimeDefinition[] = [
       { id: 'sonnet', label: 'Sonnet' },
     ],
     defaultVariant: 'opus',
+  },
+  {
+    id: 'codex',
+    kind: 'coding',
+    label: 'Codex',
+    description: 'OpenAI Codex CLI coding agent with file and shell tools.',
+    command: 'codex',
+    implemented: true,
+    supportsTools: true,
+    supportsEffortControl: true,
+    supportsMultiagent: false,
+    variantOptions: [],
+    defaultVariant: null,
+  },
+  {
+    id: 'qwen_code',
+    kind: 'coding',
+    label: 'Qwen Code',
+    description: 'Qwen Code CLI coding agent with file and shell tools.',
+    command: 'qwen',
+    implemented: true,
+    supportsTools: true,
+    supportsEffortControl: false,
+    supportsMultiagent: false,
+    variantOptions: [],
+    defaultVariant: null,
   },
 ];
 
