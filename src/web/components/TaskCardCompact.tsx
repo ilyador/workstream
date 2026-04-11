@@ -99,6 +99,9 @@ export function TaskCardCompact({
           <span className={`${s.tag} ${s.tagHuman}`}>{task.assignee.initials || task.assignee.name || 'human'}</span>
         )}
         <span className={`${s.tag} ${s.tagType}`}>{task.type}</span>
+        {task.subType && (
+          <span className={`${s.tag} ${s.tagType}`}>{task.subType}</span>
+        )}
       </div>
     </div>
   );

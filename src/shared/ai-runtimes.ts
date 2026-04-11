@@ -54,10 +54,12 @@ export const AI_RUNTIME_DEFINITIONS: AiRuntimeDefinition[] = [
     supportsEffortControl: true,
     supportsMultiagent: false,
     variantOptions: [
-      { id: 'gpt-5-codex', label: 'GPT-5 Codex' },
-      { id: 'gpt-5', label: 'GPT-5' },
+      { id: 'gpt-5.4', label: 'GPT-5.4' },
+      { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+      { id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
+      { id: 'gpt-5.2', label: 'GPT-5.2' },
     ],
-    defaultVariant: 'gpt-5-codex',
+    defaultVariant: 'gpt-5.4',
   },
   {
     id: 'qwen_code',

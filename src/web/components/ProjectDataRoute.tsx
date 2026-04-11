@@ -135,6 +135,14 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
     return unsub;
   }, [project.id, loadAll, refreshDocuments]);
 
+  // Auto-dismiss success messages. Errors stay until manually closed so
+  // the user has a chance to read them.
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(''), 3500);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
   async function saveSettings(options: { reindex?: boolean } = {}) {
     setSaving(true);
     setError('');
@@ -144,11 +152,20 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
       const { reindex, ...nextSettings } = response;
       setSettings(nextSettings);
       setSavedSettings(nextSettings);
-      try {
-        await reloadProjectDataSettings();
-        await loadAll();
-      } catch (reloadErr) {
-        setError(reloadErr instanceof Error ? reloadErr.message : 'Project Data settings were saved, but reloading failed');
+      // Sync the parent hook so other consumers (task forms, flow steps)
+      // see the updated projectDataEnabled. Fire-and-forget — we don't
+      // want to swap into the loading view just to mirror state the
+      // response already gave us.
+      void reloadProjectDataSettings();
+      // Reindex changes per-document status; refresh the document list
+      // in place without touching `loading` so the dashboard stays put.
+      if (options.reindex) {
+        try {
+          const nextDocuments = await getProjectDocuments(project.id);
+          setDocuments(nextDocuments);
+        } catch (refreshErr) {
+          setError(refreshErr instanceof Error ? refreshErr.message : 'Project Data settings were saved, but the document list failed to refresh');
+        }
       }
       const nextMessage = options.reindex ? formatReindexMessage(reindex ?? null) : 'Project Data settings saved.';
       if (reindex && reindex.failed > 0) {
@@ -254,10 +271,6 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
         <div className={`${s.card} ${s.loadingCard}`}>Loading Project Data…</div>
       ) : (
         <>
-          {(error || message) && (
-            <div className={error ? s.error : s.message}>{error || message}</div>
-          )}
-
           <div className={s.dashboard}>
             <section className={`${s.card} ${s.settingsCard}`}>
               <div className={s.cardHeader}>
@@ -389,6 +402,24 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
             </div>
           </div>
         </>
+      )}
+
+      {(error || message) && (
+        <div
+          className={`${s.toast} ${error ? s.toastError : s.toastMessage}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className={s.toastText}>{error || message}</span>
+          <button
+            type="button"
+            className={s.toastClose}
+            aria-label="Dismiss notification"
+            onClick={() => (error ? setError('') : setMessage(''))}
+          >
+            ×
+          </button>
+        </div>
       )}
     </div>
   );

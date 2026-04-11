@@ -13,17 +13,17 @@ describe('ai runtime normalization', () => {
 
   it('applies the runtime default variant when no variant is provided', () => {
     expect(normalizeRuntimeVariant('claude_code', null)).toBe('opus');
-    expect(normalizeRuntimeVariant('codex', null)).toBe('gpt-5-codex');
+    expect(normalizeRuntimeVariant('codex', null)).toBe('gpt-5.4');
     expect(normalizeRuntimeVariant('qwen_code', null)).toBe('qwen3-coder-plus');
   });
 
   it('preserves a valid variant choice', () => {
-    expect(normalizeRuntimeVariant('codex', 'gpt-5')).toBe('gpt-5');
+    expect(normalizeRuntimeVariant('codex', 'gpt-5.3-codex')).toBe('gpt-5.3-codex');
     expect(normalizeRuntimeVariant('qwen_code', 'qwen3-coder')).toBe('qwen3-coder');
   });
 
   it('falls back to the default variant when the variant is not in the runtime options', () => {
-    expect(normalizeRuntimeVariant('codex', 'gpt-999')).toBe('gpt-5-codex');
+    expect(normalizeRuntimeVariant('codex', 'gpt-999')).toBe('gpt-5.4');
     expect(normalizeRuntimeVariant('qwen_code', 'qwen-unknown')).toBe('qwen3-coder-plus');
   });
 });

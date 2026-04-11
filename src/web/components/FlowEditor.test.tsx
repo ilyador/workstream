@@ -118,6 +118,8 @@ describe('FlowEditor flow step rendering', () => {
     );
 
     expect(screen.getByText('Draft spec')).toBeTruthy();
+    expect(screen.getByText('Claude Code')).toBeTruthy();
+    expect(screen.getByText('Sonnet')).toBeTruthy();
     expect(useCommentsMock).not.toHaveBeenCalled();
     expect(useArtifactsMock).not.toHaveBeenCalled();
   });

@@ -13,6 +13,7 @@ export interface TaskView {
   title: string;
   description?: string;
   type: string;
+  subType?: string;
   mode: string;
   effort: string;
   multiagent?: string;

@@ -112,7 +112,7 @@ describe('CodexDriver', () => {
     const { codexDriver } = await import('./codex-driver.js');
     const promise = codexDriver.execute({
       jobId: 'j1',
-      step: baseStep({ runtime_variant: 'gpt-5' }),
+      step: baseStep({ runtime_variant: 'gpt-5.4' }),
       task: { effort: null },
       cwd: '/work',
       prompt: 'x',
@@ -121,7 +121,7 @@ describe('CodexDriver', () => {
 
     const args = spawnMock.mock.calls[0][1] as string[];
     expect(args).toContain('--model');
-    expect(args[args.indexOf('--model') + 1]).toBe('gpt-5');
+    expect(args[args.indexOf('--model') + 1]).toBe('gpt-5.4');
     expect(args[args.length - 1]).toBe('-');
     writeFileSync(args[args.indexOf('--output-last-message') + 1], 'ok');
     proc.emit('close', 0);

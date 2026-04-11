@@ -1,7 +1,7 @@
 import type { Flow, FlowStep } from './api';
 import type { TaskView, WorkstreamView } from './task-view';
 import type { TaskCardMetaItem } from '../components/task-card-types';
-import { defaultRuntimeIdForKind, defaultVariantForRuntime, type AiRuntimeStatus } from '../../shared/ai-runtimes.js';
+import { defaultRuntimeIdForKind, defaultVariantForRuntime, getAiRuntime, type AiRuntimeStatus } from '../../shared/ai-runtimes.js';
 
 export type FlowStepInput = Omit<FlowStep, 'id'>;
 
@@ -60,11 +60,17 @@ export function sortedSteps(flow: Flow): FlowStep[] {
 }
 
 export function stepToTask(step: FlowStep, index: number): TaskView {
+  const runtime = getAiRuntime(step.runtime_id);
+  const runtimeLabel = runtime?.label ?? step.runtime_id;
+  const variantLabel = step.runtime_variant
+    ? runtime?.variantOptions.find(option => option.id === step.runtime_variant)?.label ?? step.runtime_variant
+    : undefined;
   return {
     id: step.id,
     title: step.name || `Step ${index + 1}`,
     description: step.instructions || undefined,
-    type: step.runtime_variant || step.runtime_id,
+    type: runtimeLabel,
+    subType: variantLabel,
     mode: 'ai',
     effort: '',
     auto_continue: true,
