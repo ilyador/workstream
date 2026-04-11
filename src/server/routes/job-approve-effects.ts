@@ -64,7 +64,6 @@ export async function runApprovalFollowups(params: {
   if (!workstreamId || taskPosition == null) return;
   try {
     await queueNextWorkstreamTask({
-      completedTaskId: params.taskId,
       projectId: params.projectId,
       localPath: params.projectRootPath,
       workstreamId,

@@ -296,7 +296,6 @@ async function startJob(job: ClaimedJob): Promise<void> {
         if (commitSucceeded && task.workstream_id) {
           try {
             await queueNextWorkstreamTask({
-              completedTaskId: task.id,
               projectId: job.project_id,
               localPath: projectRootPath,
               workstreamId: task.workstream_id,
