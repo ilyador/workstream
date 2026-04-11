@@ -14,7 +14,8 @@ export function workstreamRef(workstreamName: string, workstreamId: string): str
 /**
  * Ensure a git worktree exists for the given workstream slug.
  * Creates `<projectPath>/.worktrees/<slug>` on branch `workstream/<slug>`.
- * Returns the absolute worktree path.
+ * Returns the absolute worktree path. Idempotent — if the worktree is
+ * already set up, this is just an `existsSync` check and no git ops run.
  */
 export function ensureWorktree(projectPath: string, workstreamSlug: string, workstreamId: string): string {
   const refSlug = workstreamRef(workstreamSlug, workstreamId);

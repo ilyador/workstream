@@ -20,14 +20,11 @@ gitWorkstreamRouter.post('/api/git/workstream-review-pr', requireAuth, async (re
   const wsName = stringField(access.record, 'name');
   if (!wsName) return res.status(400).json({ error: 'Workstream name is required' });
 
-  // Review + commit + push all need to run in the workstream's worktree,
-  // not the project root. The client authorizes with the project root;
-  // we resolve the worktree from it. ensureWorktree is idempotent — if
-  // the worktree already exists (it will, because tasks created it), it
-  // just returns the path.
-  const worktreePath = ensureWorktree(projectRootPath, slugify(wsName), workstreamId);
-
   try {
+    // Review + commit + push must run in the workstream's worktree, not the
+    // project root. The client authorizes with the project root.
+    const worktreePath = ensureWorktree(projectRootPath, slugify(wsName), workstreamId);
+
     const { error: updateError } = await supabase.from('workstreams').update({ status: 'reviewing' }).eq('id', workstreamId);
     if (updateError) return res.status(400).json({ error: updateError.message });
     res.json({ ok: true, status: 'reviewing' });
@@ -64,9 +61,8 @@ gitWorkstreamRouter.post('/api/git/workstream-pr', requireAuth, async (req, res)
   const wsName = stringField(access.record, 'name');
   if (!wsName) return res.status(400).json({ error: 'Workstream name is required' });
 
-  const worktreePath = ensureWorktree(projectRootPath, slugify(wsName), workstreamId);
-
   try {
+    const worktreePath = ensureWorktree(projectRootPath, slugify(wsName), workstreamId);
     const prUrl = await pushAndCreatePr(workstreamId, wsName, worktreePath);
     res.json({ ok: true, prUrl });
   } catch (error) {
