@@ -12,6 +12,7 @@ interface ArchivePageProps {
   jobs: JobView[];
   memberMap: Record<string, { name: string; initials: string }>;
   projectId: string | null;
+  focusTaskId: string | null;
   onRestore: (workstreamId: string) => void;
   onUpdateTask: (taskId: string, data: Record<string, unknown>) => void;
 }
@@ -26,7 +27,7 @@ function mapArchiveTask(
   return toTaskView(task, memberMap);
 }
 
-export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, onRestore, onUpdateTask }: ArchivePageProps) {
+export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, focusTaskId, onRestore, onUpdateTask }: ArchivePageProps) {
   const members = useMemo(
     () => Object.entries(memberMap).map(([id, m]) => ({ id, name: m.name, initials: m.initials })),
     [memberMap],
@@ -63,7 +64,7 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
           projectId={projectId}
           members={members}
           mentionedTaskIds={emptySet}
-          focusTaskId={null}
+          focusTaskId={focusTaskId}
           draggedTaskId={null}
           onDragTaskStart={noop}
           onDragTaskEnd={noop}
@@ -89,7 +90,7 @@ export function ArchivePage({ workstreams, tasks, jobs, memberMap, projectId, on
             projectId={projectId}
             members={members}
             mentionedTaskIds={emptySet}
-            focusTaskId={null}
+            focusTaskId={focusTaskId}
             draggedTaskId={null}
             onDragTaskStart={noop}
             onDragTaskEnd={noop}

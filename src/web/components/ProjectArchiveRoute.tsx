@@ -3,7 +3,7 @@ import type { ProjectWorkspaceRoutesProps } from './ProjectWorkspaceRoutes';
 
 type ProjectArchiveRouteProps = Pick<
   ProjectWorkspaceRoutesProps,
-  'allWorkstreams' | 'tasks' | 'jobs' | 'memberMap' | 'project' | 'onRestoreArchiveWorkstream' | 'onUpdateTask'
+  'allWorkstreams' | 'tasks' | 'jobs' | 'memberMap' | 'project' | 'focusTaskId' | 'onRestoreArchiveWorkstream' | 'onUpdateTask'
 >;
 
 export function ProjectArchiveRoute({
@@ -12,6 +12,7 @@ export function ProjectArchiveRoute({
   jobs,
   memberMap,
   project,
+  focusTaskId,
   onRestoreArchiveWorkstream,
   onUpdateTask,
 }: ProjectArchiveRouteProps) {
@@ -22,6 +23,7 @@ export function ProjectArchiveRoute({
       jobs={jobs}
       memberMap={memberMap}
       projectId={project.id}
+      focusTaskId={focusTaskId}
       onRestore={onRestoreArchiveWorkstream}
       onUpdateTask={onUpdateTask}
     />

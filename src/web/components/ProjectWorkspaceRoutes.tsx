@@ -150,6 +150,7 @@ export function ProjectWorkspaceRoutes({
             jobs={jobs}
             memberMap={memberMap}
             project={project}
+            focusTaskId={focusTaskId}
             onRestoreArchiveWorkstream={onRestoreArchiveWorkstream}
             onUpdateTask={onUpdateTask}
           />
