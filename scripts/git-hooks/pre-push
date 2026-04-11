@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Pre-push hook: typecheck + test suite.
+# Bypass with: git push --no-verify
+set -euo pipefail
+
+echo "[pre-push] tsc --noEmit"
+if ! npx tsc --noEmit; then
+  echo "[pre-push] Typecheck failed. Push aborted." >&2
+  exit 1
+fi
+
+echo "[pre-push] vitest run"
+if ! npx vitest run; then
+  echo "[pre-push] Tests failed. Push aborted." >&2
+  exit 1
+fi
+
+echo "[pre-push] OK"

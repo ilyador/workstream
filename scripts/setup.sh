@@ -32,6 +32,17 @@ systemctl --user enable \
 # Bot is optional (needs TELEGRAM_BOT_TOKEN)
 systemctl --user enable codesync-bot.service 2>/dev/null || true
 
+GIT_HOOKS_SRC="$PROJECT_DIR/scripts/git-hooks"
+GIT_HOOKS_DST="$PROJECT_DIR/.git/hooks"
+if [ -d "$GIT_HOOKS_SRC" ] && [ -d "$GIT_HOOKS_DST" ]; then
+  for hook in "$GIT_HOOKS_SRC"/*; do
+    [ -f "$hook" ] || continue
+    name="$(basename "$hook")"
+    ln -sf "$hook" "$GIT_HOOKS_DST/$name"
+    echo "  Linked git hook: $name"
+  done
+fi
+
 echo ""
 echo "Done! Services enabled."
 echo "Start:  systemctl --user start codesync-server codesync-worker codesync-web"

@@ -15,6 +15,10 @@ SERVER_TARGETS=(
   "src/server"
 )
 
+MIGRATIONS_TARGETS=(
+  "supabase/migrations"
+)
+
 snapshot() {
   local rel
   (
@@ -36,6 +40,7 @@ echo "Minimum gap between restarts: ${MIN_RESTART_GAP_SECONDS}s"
 
 last_shared_snapshot="$(snapshot "${SHARED_TARGETS[@]}")"
 last_server_snapshot="$(snapshot "${SERVER_TARGETS[@]}")"
+last_migrations_snapshot="$(snapshot "${MIGRATIONS_TARGETS[@]}")"
 last_restart_epoch=0
 worker_restart_pending=0
 
@@ -53,20 +58,24 @@ while true; do
 
   current_shared_snapshot="$(snapshot "${SHARED_TARGETS[@]}")"
   current_server_snapshot="$(snapshot "${SERVER_TARGETS[@]}")"
+  current_migrations_snapshot="$(snapshot "${MIGRATIONS_TARGETS[@]}")"
 
   shared_changed=0
   server_changed=0
+  migrations_changed=0
 
   [[ "$current_shared_snapshot" != "$last_shared_snapshot" ]] && shared_changed=1
   [[ "$current_server_snapshot" != "$last_server_snapshot" ]] && server_changed=1
+  [[ "$current_migrations_snapshot" != "$last_migrations_snapshot" ]] && migrations_changed=1
 
-  if ((shared_changed == 0 && server_changed == 0)); then
+  if ((shared_changed == 0 && server_changed == 0 && migrations_changed == 0)); then
     continue
   fi
 
   changed_scopes=()
   ((shared_changed)) && changed_scopes+=("shared")
   ((server_changed)) && changed_scopes+=("server")
+  ((migrations_changed)) && changed_scopes+=("migrations")
 
   echo "Code change detected ($(IFS=,; echo "${changed_scopes[*]}")) at $(date --iso-8601=seconds); waiting for debounce window..."
   sleep "$WATCH_DEBOUNCE_SECONDS"
@@ -74,15 +83,26 @@ while true; do
   # Re-snapshot after debounce.
   current_shared_snapshot="$(snapshot "${SHARED_TARGETS[@]}")"
   current_server_snapshot="$(snapshot "${SERVER_TARGETS[@]}")"
+  current_migrations_snapshot="$(snapshot "${MIGRATIONS_TARGETS[@]}")"
 
   shared_changed=0
   server_changed=0
+  migrations_changed=0
 
   [[ "$current_shared_snapshot" != "$last_shared_snapshot" ]] && shared_changed=1
   [[ "$current_server_snapshot" != "$last_server_snapshot" ]] && server_changed=1
+  [[ "$current_migrations_snapshot" != "$last_migrations_snapshot" ]] && migrations_changed=1
 
-  if ((shared_changed == 0 && server_changed == 0)); then
+  if ((shared_changed == 0 && server_changed == 0 && migrations_changed == 0)); then
     continue
+  fi
+
+  # Apply pending migrations before restarting services so the new code
+  # runs against the new schema. Migration failures are non-fatal to the
+  # watcher — they'll be retried on the next detected change.
+  if ((migrations_changed)); then
+    echo "Applying pending migrations..."
+    "$ROOT_DIR/scripts/db-push.sh" || echo "Migration apply failed; will retry on next change."
   fi
 
   # Throttle restarts.
@@ -111,4 +131,5 @@ while true; do
 
   last_shared_snapshot="$current_shared_snapshot"
   last_server_snapshot="$current_server_snapshot"
+  last_migrations_snapshot="$current_migrations_snapshot"
 done
