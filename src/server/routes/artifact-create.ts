@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { requireAuth } from '../auth-middleware.js';
-import { requireTaskAccess } from '../authz.js';
+import { getUserId, requireTaskAccess } from '../authz.js';
 import { supabase } from '../supabase.js';
 import {
   decodeBase64Artifact,
@@ -42,6 +42,7 @@ artifactCreateRouter.post('/api/artifacts', requireAuth, async (req, res) => {
     size_bytes: decoded.buffer.length,
     storage_path: storagePath,
     repo_path: normalizedRepoPath.path,
+    uploaded_by: getUserId(req),
   }).select().single();
   if (error) {
     const { error: cleanupError } = await supabase.storage.from('task-artifacts').remove([storagePath]);
