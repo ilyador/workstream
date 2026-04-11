@@ -128,6 +128,8 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
     const unsub = subscribeProjectEvents(project.id, (event) => {
       if (event.type === 'document_changed') {
         void refreshDocuments();
+      } else if (event.type === 'project_data_changed') {
+        void loadAll({ reloadSettings: true });
       } else if (event.type === 'full_sync') {
         void loadAll();
       }

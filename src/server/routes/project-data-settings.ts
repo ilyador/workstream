@@ -3,6 +3,7 @@ import { requireAuth } from '../auth-middleware.js';
 import { requireProjectAdmin, requireProjectMember, routeParam } from '../authz.js';
 import { projectDataSettingsFromRecord, PROJECT_DATA_SELECT } from '../project-data-settings.js';
 import { reindexProjectDocuments } from '../rag/ingest.js';
+import { broadcast } from '../realtime.js';
 import { supabase } from '../supabase.js';
 import { DEFAULT_PROJECT_DATA_SETTINGS, normalizeProjectDataSettings, projectDataEmbeddingsChanged } from '../../shared/project-data.js';
 
@@ -87,5 +88,7 @@ projectDataSettingsRouter.patch('/api/projects/:id/project-data', requireAuth, a
     }
   }
 
-  res.json({ ...projectDataSettingsFromRecord(data), reindex });
+  const settings = projectDataSettingsFromRecord(data);
+  broadcast(projectId, { type: 'project_data_changed' });
+  res.json({ ...settings, reindex });
 });
