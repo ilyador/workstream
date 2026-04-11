@@ -44,7 +44,15 @@ export async function cleanupOrphanedJobs(): Promise<number> {
         question: failMsg,
       }).eq('id', job.id);
 
-      await supabase.from('tasks').update({ status: 'paused' }).eq('id', job.task_id);
+      const { error: taskErr } = await supabase.from('tasks').update({ status: 'paused' }).eq('id', job.task_id);
+      if (taskErr) {
+        console.error(`[runner] Failed to update task ${job.task_id} to paused, retrying:`, taskErr.message);
+        const { error: retryErr } = await supabase.from('tasks').update({ status: 'paused' }).eq('id', job.task_id);
+        if (retryErr) {
+          console.error(`[runner] Retry also failed for task ${job.task_id}:`, retryErr.message);
+          throw new Error(`Failed to update task ${job.task_id} to paused: ${retryErr.message}`);
+        }
+      }
 
       // Write to job_logs so SSE clients see the terminal event
       await supabase.from('job_logs').insert({
