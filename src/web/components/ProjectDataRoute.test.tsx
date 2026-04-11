@@ -207,29 +207,4 @@ describe('ProjectDataRoute', () => {
     expect(screen.queryByText(/Loading Project Data/i)).toBeNull();
     expect(api.getProjectDocuments).toHaveBeenCalledTimes(2);
   });
-
-  it('refreshes settings in place on project_data_changed without showing the loading state', async () => {
-    const nextSettings: ProjectDataSettings = {
-      ...baseSettings,
-      embeddingModel: 'refreshed-embedding-model',
-    };
-    api.getProjectDataSettings
-      .mockResolvedValueOnce(baseSettings)
-      .mockResolvedValueOnce(nextSettings);
-
-    renderRoute(baseSettings);
-
-    await waitFor(() => {
-      expect(projectEventsMock.subscribeProjectEvents).toHaveBeenCalled();
-    });
-
-    const callback = projectEventsMock.subscribeProjectEvents.mock.calls[0][1];
-    callback({ type: 'project_data_changed' });
-
-    await waitFor(() => {
-      expect(api.getProjectDataSettings).toHaveBeenCalledTimes(2);
-    });
-
-    expect(screen.queryByText(/Loading Project Data/i)).toBeNull();
-  });
 });

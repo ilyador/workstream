@@ -1,24 +1,6 @@
-import { isMissingRowError } from './authz.js';
+import { lookupProjectId } from './realtime-core-handlers.js';
 import { broadcast } from './realtime-listeners.js';
 import { projectRecord, stringField, type RealtimePayload } from './realtime-payload.js';
-import { supabase } from './supabase.js';
-
-async function resolveProjectId(table: 'tasks' | 'workstreams', id: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from(table)
-    .select('project_id')
-    .eq('id', id)
-    .single();
-  if (error) {
-    if (!isMissingRowError(error)) {
-      console.error(`[realtime] Failed to resolve project_id from ${table}:`, error.message);
-    }
-    return null;
-  }
-  if (!data) return null;
-  const projectId = (data as { project_id?: unknown }).project_id;
-  return typeof projectId === 'string' && projectId.length > 0 ? projectId : null;
-}
 
 export async function broadcastNotificationChange(payload: RealtimePayload): Promise<void> {
   const record = projectRecord(payload);
@@ -27,9 +9,9 @@ export async function broadcastNotificationChange(payload: RealtimePayload): Pro
 
   let projectId: string | null = null;
   if (taskId) {
-    projectId = await resolveProjectId('tasks', taskId);
+    projectId = await lookupProjectId('tasks', taskId);
   } else if (workstreamId) {
-    projectId = await resolveProjectId('workstreams', workstreamId);
+    projectId = await lookupProjectId('workstreams', workstreamId);
   }
   if (!projectId) return;
 

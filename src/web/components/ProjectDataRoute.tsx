@@ -116,17 +116,7 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
       const nextDocuments = await getProjectDocuments(project.id);
       setDocuments(nextDocuments);
     } catch {
-      // Silent — error banner still reflects the last known good state.
-    }
-  }, [project.id]);
-
-  const refreshSettings = useCallback(async () => {
-    try {
-      const nextSettings = await getProjectDataSettings(project.id);
-      setSettings(nextSettings);
-      setSavedSettings(nextSettings);
-    } catch {
-      // Silent — last known good state remains visible.
+      // Silent — SSE refresh is best-effort; last known good state remains visible on error.
     }
   }, [project.id]);
 
@@ -138,14 +128,12 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
     const unsub = subscribeProjectEvents(project.id, (event) => {
       if (event.type === 'document_changed') {
         void refreshDocuments();
-      } else if (event.type === 'project_data_changed') {
-        void refreshSettings();
       } else if (event.type === 'full_sync') {
         void loadAll();
       }
     });
     return unsub;
-  }, [project.id, loadAll, refreshDocuments, refreshSettings]);
+  }, [project.id, loadAll, refreshDocuments]);
 
   async function saveSettings(options: { reindex?: boolean } = {}) {
     setSaving(true);
