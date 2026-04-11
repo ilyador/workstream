@@ -26,7 +26,7 @@ export default function App() {
   const auth = useAuth();
   const projects = useProjects(auth.profile?.id);
   const projectResources = useCurrentProjectResources(projects.current?.id || null);
-  const notifs = useNotifications(auth.profile?.id);
+  const notifs = useNotifications(auth.profile?.id, projects.current?.id ?? null);
   const webNotifs = useWebNotifications();
   const modal = useModal();
   const [searchParams, setSearchParams] = useSearchParams();

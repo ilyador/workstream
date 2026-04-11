@@ -35,13 +35,20 @@ export function broadcastWorkstreamChange(payload: RealtimePayload): void {
   broadcast(projectId, { type: 'workstream_changed', workstream: record });
 }
 
+export async function lookupProjectId(table: 'tasks' | 'workstreams', id: string): Promise<string | null> {
+  const { data, error } = await supabase.from(table).select('project_id').eq('id', id).single();
+  if (error) {
+    if (!isMissingRowError(error)) console.error(`[realtime] Failed to resolve project_id from ${table}:`, error.message);
+    return null;
+  }
+  return data && typeof data.project_id === 'string' && data.project_id.length > 0 ? data.project_id : null;
+}
+
 export async function broadcastTaskScopedChange(payload: RealtimePayload, type: string): Promise<void> {
   const record = projectRecord(payload);
   const taskId = stringField(record, 'task_id');
   if (!taskId) return;
-  const { data: task, error } = await supabase.from('tasks').select('project_id').eq('id', taskId).single();
-  if (error && !isMissingRowError(error)) console.error(`[realtime] Failed to load ${type} task project:`, error.message);
-  const projectId = task && typeof task.project_id === 'string' ? task.project_id : null;
+  const projectId = await lookupProjectId('tasks', taskId);
   if (!projectId) return;
   broadcast(projectId, {
     type: payload.eventType === 'DELETE' ? `${type}_deleted` : `${type}_changed`,

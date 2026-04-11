@@ -62,7 +62,8 @@ export function useFlows(projectId: string | null) {
 
   const updateFlowSteps = useCallback(async (flowId: string, steps: FlowStepInput[]) => {
     await apiUpdateSteps(flowId, steps);
-  }, []);
+    await load();
+  }, [load]);
 
   /** Save flow metadata + steps in one go, then reload once. */
   const saveFlow = useCallback(async (id: string, data: Record<string, unknown>, steps: FlowStepInput[]) => {

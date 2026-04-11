@@ -11,6 +11,7 @@ import {
 } from '../lib/api';
 import { projectDataEmbeddingsChanged } from '../../shared/project-data.js';
 import { useModal } from '../hooks/modal-context';
+import { subscribeProjectEvents } from '../hooks/useProjectEvents';
 import s from './ProjectDataRoute.module.css';
 
 interface ProjectDataRouteProps {
@@ -110,9 +111,29 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
     }
   }, [project.id, reloadProjectDataSettings]);
 
+  const refreshDocuments = useCallback(async () => {
+    try {
+      const nextDocuments = await getProjectDocuments(project.id);
+      setDocuments(nextDocuments);
+    } catch {
+      // Silent — SSE refresh is best-effort; last known good state remains visible on error.
+    }
+  }, [project.id]);
+
   useEffect(() => {
     void loadAll({ reloadSettings: true });
   }, [loadAll]);
+
+  useEffect(() => {
+    const unsub = subscribeProjectEvents(project.id, (event) => {
+      if (event.type === 'document_changed') {
+        void refreshDocuments();
+      } else if (event.type === 'full_sync') {
+        void loadAll();
+      }
+    });
+    return unsub;
+  }, [project.id, loadAll, refreshDocuments]);
 
   async function saveSettings(options: { reindex?: boolean } = {}) {
     setSaving(true);

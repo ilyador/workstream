@@ -22,6 +22,7 @@ export function useWorkstreamExecutionActions({
     try {
       if (options?.review) {
         await reviewAndCreatePr(workstreamId, localPath || '');
+        await workstreams.reload();
       } else {
         const result = await createWorkstreamPr(workstreamId, localPath || '');
         if (result.prUrl) {

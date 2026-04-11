@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { getProjectDataSettings, type ProjectDataSettings } from '../lib/api';
 import { useProjectResource } from './useProjectResource';
+import { subscribeProjectEvents } from './useProjectEvents';
 
 const EMPTY_SETTINGS: ProjectDataSettings = {
   enabled: false,
@@ -25,6 +26,16 @@ export function useProjectDataSettings(projectId: string | null) {
 
   useEffect(() => {
     void reload();
+  }, [projectId, reload]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const unsub = subscribeProjectEvents(projectId, (event) => {
+      if (event.type === 'project_data_changed' || event.type === 'full_sync') {
+        void reload();
+      }
+    });
+    return unsub;
   }, [projectId, reload]);
 
   return {
