@@ -12,3 +12,4 @@ export {
   broadcastCustomTypeChange,
   broadcastMemberChange,
 } from './realtime-project-handlers.js';
+export { broadcastDocumentChange } from './realtime-document-handler.js';

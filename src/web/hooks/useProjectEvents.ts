@@ -16,6 +16,7 @@ export type ProjectEvent =
   | { type: 'workstream_deleted'; workstream_id: string }
   | { type: 'member_changed' }
   | { type: 'custom_type_changed' }
+  | { type: 'document_changed' }
   | { type: 'full_sync' }
   | { type: 'unknown' };
 

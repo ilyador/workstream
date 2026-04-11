@@ -1,5 +1,6 @@
 import {
   broadcastCustomTypeChange,
+  broadcastDocumentChange,
   broadcastFlowChange,
   broadcastFlowStepChange,
   broadcastJobChange,
@@ -23,6 +24,7 @@ export function startRealtimeChannel(): void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'project_invites' }, broadcastMemberChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, async payload => broadcastTaskScopedChange(payload, 'comment'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_artifacts' }, async payload => broadcastTaskScopedChange(payload, 'artifact'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'rag_documents' }, broadcastDocumentChange)
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         console.log('[realtime] Subscribed to project database changes');
