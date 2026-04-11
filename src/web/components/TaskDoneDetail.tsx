@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { useState } from 'react';
+import { MemoMarkdown } from './MemoMarkdown';
 import { ReplyInput } from './ReplyInput';
 import { TaskAttachments } from './TaskAttachments';
 import { TaskComments } from './TaskComments';
@@ -36,10 +35,6 @@ export function TaskDoneDetail({
   collapsing,
 }: TaskDoneDetailProps) {
   const [showDoneReject, setShowDoneReject] = useState(false);
-  const descriptionMarkdown = useMemo(
-    () => (task.description ? <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown> : null),
-    [task.description],
-  );
 
   return (
     <div onClick={(e) => e.stopPropagation()} className={`${s.doneWrap} ${collapsing ? s.detailClosing : ''}`}>
@@ -105,7 +100,7 @@ export function TaskDoneDetail({
             )}
           </div>
         )}
-        {descriptionMarkdown && <div className={s.desc}>{descriptionMarkdown}</div>}
+        {task.description && <div className={s.desc}><MemoMarkdown text={task.description} /></div>}
         <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
         {!hideComments && (
           <TaskComments taskId={task.id} projectId={projectId} expectedCount={commentCount} mentionMembers={mentionMembers} />

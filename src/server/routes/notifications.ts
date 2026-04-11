@@ -5,7 +5,10 @@ import { supabase } from '../supabase.js';
 
 export const notificationsRouter = Router();
 
-export type NotificationJoinRow = {
+// `review_request` notifications carry workstream_id but no task_id, so we
+// need both join paths (task → workstream AND notification → workstream)
+// to resolve project_id and archive state.
+type NotificationJoinRow = {
   id: string;
   type: string;
   task_id: string | null;
@@ -13,8 +16,6 @@ export type NotificationJoinRow = {
   message: string;
   read: boolean;
   created_at: string;
-  // `review_request` notifications carry workstream_id but no task_id, so we
-  // need both join paths to resolve project_id and archive state.
   tasks: { project_id?: string; workstreams?: { status?: string } } | null;
   workstreams: { project_id?: string; status?: string } | null;
 };

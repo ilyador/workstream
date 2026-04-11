@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MemoMarkdown } from './MemoMarkdown';
 import { elapsed } from '../lib/time';
 import { capTaskCardToken } from './task-card-status';
 import { LiveLogs } from './LiveLogs';
@@ -52,7 +51,7 @@ export function TaskCardActiveDetail({
   return (
     <div className={`${s.detail} ${collapsing ? s.detailClosing : ''}`} onClick={(e) => e.stopPropagation()}>
       {task.description && (
-        <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>
+        <div className={s.desc}><MemoMarkdown text={task.description} /></div>
       )}
 
       {jobStatus === 'queued' && (
