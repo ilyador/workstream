@@ -9,5 +9,12 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3001',
     },
+    watch: {
+      // Jobs run inside .worktrees/* which contain full checkouts of the
+      // repo including src/. Without this, any file the task writes
+      // triggers HMR and a full page reload mid-task.
+      ignored: ['**/.worktrees/**', '**/supabase/.temp/**'],
+    },
   },
 })
+
