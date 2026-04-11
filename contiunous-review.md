@@ -45,3 +45,47 @@ Two guards: (1) **project membership** — the caller must be a member of the pr
 - `npx tsc --noEmit` — clean
 - `npx vitest run` — 238 tests in 39 files pass (unchanged from baseline)
 - No tests directly cover the authz module or the artifact routes; changes were verified by typecheck and full regression only.
+
+---
+
+## 2026-04-12 — Auto-continue module (`src/server/auto-continue*`)
+
+### Scope
+
+Correctness review of the auto-continue module (`auto-continue.ts`, `auto-continue-next.ts`, `auto-continue-queue.ts`, `auto-continue-human.ts`, `auto-continue-types.ts` — ~162 lines). Traced call sites: `worker.ts:298`, `routes/task-auto-continue.ts:34`, `routes/job-approve-effects.ts:66`. Callers were not reviewed in depth.
+
+### Module shape
+
+Stateless coordinator. Entry point `queueNextWorkstreamTask({projectId, localPath, workstreamId, completedPosition})` is called when a task finishes. It finds the next `backlog`/`todo` task in the workstream whose `position > completedPosition`. If the next task is a human task, it's marked `in_progress` and (optionally) the assignee is notified. Otherwise the function checks that no other job is active on the workstream, resolves the flow, inserts a queued job, and flips the task to `in_progress`.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | HIGH | `auto-continue-next.ts:28` — `checkWorkstreamHasOnlyFinishedTasks` never inspected query result (silent no-op) | **Fixed** (10d5544) |
+| 2 | HIGH | `auto-continue-queue.ts:35`, `auto-continue-human.ts:5` — task status UPDATE had no WHERE guard on prior status | **Fixed** (b58cadf) |
+| 3 | LOW | `auto-continue-types.ts:13` — unused `completedTaskId` parameter silently passed by all 3 callers | **Fixed** (1469232) |
+| 4 | HIGH | `auto-continue.ts:15` + `:28` — TOCTOU race: two concurrent completions can both select the same next task and insert duplicate jobs | Deferred |
+
+### Fixes in this pass
+
+**10d5544 — broken workstream-complete check.** `checkWorkstreamHasOnlyFinishedTasks` destructured only `{ error }` from the `select('id')` query, so the SELECT ran but the result was never examined. The function was effectively a no-op whose name implied a check. Fix: destructure `{ data, error }`, emit a completion log when `data` is empty, and a warning when unfinished tasks exist but no next auto-continuable task was matched.
+
+**b58cadf — unguarded status UPDATE.** Both `queueAiTask` and `markHumanTaskInProgress` did `update({ status: 'in_progress' }).eq('id', task.id)` with no guard on the prior status. A concurrent user cancel or completion would be silently overwritten. Fix: scope the UPDATE to `.in('status', ['backlog','todo'])`, read back the affected row via `.select('id').maybeSingle()`, and treat "zero rows" as "no longer eligible" — rolling back the queued job in `queueAiTask` and skipping the notification in `markHumanTaskInProgress`.
+
+**1469232 — dead `completedTaskId` parameter.** `QueueNextWorkstreamTaskParams.completedTaskId` was never destructured in `queueNextWorkstreamTask` — the next task is located purely by `workstreamId + completedPosition`. All three call sites were passing it for nothing. Removed from the interface and from `worker.ts`, `routes/task-auto-continue.ts`, and `routes/job-approve-effects.ts`.
+
+### Deferred findings
+
+**#4 — TOCTOU on next-task selection.** `queueNextWorkstreamTask` calls `findNextWorkstreamTask` then `hasActiveWorkstreamJob` then `queueAiTask`. Nothing in this path is atomic. Two concurrent completions on the same workstream can both see no active job, both identify the same next task, and both insert a queued job, resulting in duplicate jobs for the same task. The cleanest fix is a DB-level partial unique index on `jobs(task_id) WHERE status IN ('queued','running','paused','review')` — that's a migration change plus a caller-side handling branch for the "someone else already queued this" insert error. Out of scope for this pass; note that the b58cadf fix partially mitigates the task-side race (the second UPDATE will find the task already `in_progress` and roll back its job), but leaves a narrow window where two jobs could both insert before either updates the task.
+
+### Side notes (not fixed)
+
+- `auto-continue-queue.ts`: If `job` insert succeeds but task `update` subsequently fails AND the `delete` cleanup also fails, the job is orphaned in `queued` status with no task advancing. Not worth chasing until it's observed in practice — the cleanup error is logged.
+- `auto-continue.ts:21` treats `nextTask.mode === 'human'` as the branch condition, but `mode` is typed `string | null` in `auto-continue-types.ts`, so any unknown future mode value would fall through to AI queueing. Consider an explicit allow-list when the mode set grows.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run` — 238 tests in 39 files pass (unchanged)
+- `process-lifecycle.test.ts`, `flow-resolution.test.ts`, and `dispatcher.integration.test.ts` exercise adjacent paths but none directly cover auto-continue; changes verified by typecheck + full regression.
