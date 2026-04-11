@@ -70,6 +70,8 @@ export function Header({
         <HeaderNotifications
           notifications={notifications}
           notificationList={notificationList}
+          currentProjectId={currentProjectId}
+          onSwitchProject={onSwitchProject}
           onMarkRead={onMarkRead}
           onMarkAllRead={onMarkAllRead}
         />

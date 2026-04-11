@@ -91,6 +91,8 @@ export interface NotificationRecord {
   message: string;
   read: boolean;
   created_at: string;
+  project_id?: string | null;
+  workstream_archived?: boolean;
 }
 
 export interface MemberRecord {

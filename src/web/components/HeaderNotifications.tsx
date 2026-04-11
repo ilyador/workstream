@@ -8,6 +8,8 @@ import s from './Header.module.css';
 interface HeaderNotificationsProps {
   notifications: number;
   notificationList: NotificationRecord[];
+  currentProjectId: string | null;
+  onSwitchProject: (id: string) => void;
   onMarkRead?: (id: string) => void;
   onMarkAllRead?: () => void;
 }
@@ -15,6 +17,8 @@ interface HeaderNotificationsProps {
 export function HeaderNotifications({
   notifications,
   notificationList,
+  currentProjectId,
+  onSwitchProject,
   onMarkRead,
   onMarkAllRead,
 }: HeaderNotificationsProps) {
@@ -53,8 +57,12 @@ export function HeaderNotifications({
                   className={`${s.notifItem} ${!notification.read ? s.notifUnread : ''}`}
                   onClick={() => {
                     if (!notification.read) onMarkRead?.(notification.id);
-                    if (notification.task_id) navigate(`/?task=${notification.task_id}`);
-                    else if (notification.workstream_id) navigate(`/?ws=${notification.workstream_id}`);
+                    if (notification.project_id && notification.project_id !== currentProjectId) {
+                      onSwitchProject(notification.project_id);
+                    }
+                    const basePath = notification.workstream_archived ? '/archive' : '/';
+                    if (notification.task_id) navigate(`${basePath}?task=${notification.task_id}`);
+                    else if (notification.workstream_id) navigate(`${basePath}?ws=${notification.workstream_id}`);
                     setOpen(false);
                   }}
                 >
