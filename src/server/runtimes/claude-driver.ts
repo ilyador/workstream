@@ -93,6 +93,10 @@ export const claudeDriver: RuntimeDriver = {
       });
       return collected.join('\n') || result.stdout.trim() || 'Completed';
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === 'Job canceled' || message.includes('timed out')) {
+        throw err;
+      }
       const collectedText = collected.join('\n');
       if (collectedText.includes(DONE_PHASE_MARKER)) {
         return collectedText;

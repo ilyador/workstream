@@ -305,6 +305,62 @@ describe('ClaudeDriver', () => {
     expect(logs.length).toBe(0);
   });
 
+  it('rethrows cancellation even when the done marker was already streamed', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const { markJobCanceled, clearJobCancellation } = await import('../process-lifecycle.js');
+    const { claudeDriver } = await import('./claude-driver.js');
+    const promise = claudeDriver.execute({
+      jobId: 'job-cancel-race',
+      step: baseStep(),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'X',
+      onLog: () => {},
+    });
+
+    // Emit the result event so the DONE marker lands in `collected`
+    proc.stdout.emit('data', Buffer.from('{"type":"result","duration_ms":5000}\n'));
+    // Mark the job canceled and then close — runProcess will reject with "Job canceled"
+    markJobCanceled('job-cancel-race');
+    proc.emit('close', 137);
+
+    await expect(promise).rejects.toThrow(/Job canceled/);
+    clearJobCancellation('job-cancel-race');
+  });
+
+  it('rethrows timeout even when the done marker was already streamed', async () => {
+    vi.useFakeTimers();
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const { claudeDriver } = await import('./claude-driver.js');
+    const promise = claudeDriver.execute({
+      jobId: 'job-timeout-race',
+      step: baseStep(),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'X',
+      onLog: () => {},
+    });
+    const settled = promise.catch(err => err);
+
+    // Emit the result event
+    proc.stdout.emit('data', Buffer.from('{"type":"result","duration_ms":5000}\n'));
+
+    // Advance past the default 30-minute timeout
+    await vi.advanceTimersByTimeAsync(31 * 60 * 1000);
+
+    // Close after the timeout fires
+    proc.emit('close', 143);
+
+    const result = await settled;
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toMatch(/timed out/);
+    vi.useRealTimers();
+  });
+
   describe('summarize', () => {
     it('spawns claude in summary mode with --max-turns 1', async () => {
       const proc = new MockProc();
