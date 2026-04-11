@@ -138,10 +138,7 @@ export function AppProjectWorkspace({
         await resources.aiFlows.updateFlow(flowId, updates);
         await resources.aiFlows.reload();
       }}
-      onSaveFlowSteps={async (flowId, steps) => {
-        await resources.aiFlows.updateFlowSteps(flowId, steps);
-        await resources.aiFlows.reload();
-      }}
+      onSaveFlowSteps={resources.aiFlows.updateFlowSteps}
       onCreateFlow={resources.aiFlows.createFlow}
       onDeleteFlow={resources.aiFlows.deleteFlow}
       onSwapFlows={ordering.handleSwapFlows}
