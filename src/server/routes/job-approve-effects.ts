@@ -29,7 +29,11 @@ export async function recordApprovalLog(jobId: string): Promise<void> {
 export async function runApprovalFollowups(params: {
   taskId: string;
   projectId: string;
-  localPath: string;
+  /** Worktree path — used for autoCommit so git ops apply to the job's work. */
+  workDir: string;
+  /** Project root — used for auto-continue so the next job's ensureWorktree
+   * starts from the repo root, not a nested worktree. */
+  projectRootPath: string;
 }): Promise<void> {
   const { data: taskData, error: taskFetchErr } = await supabase
     .from('tasks')
@@ -48,7 +52,7 @@ export async function runApprovalFollowups(params: {
   const title = stringField(task, 'title');
   if (type && title) {
     try {
-      await autoCommit(params.localPath, type, title);
+      await autoCommit(params.workDir, type, title);
     } catch (error) {
       console.error('[approve] Auto-commit failed:', errorMessage(error, 'auto-commit failed'));
     }
@@ -62,7 +66,7 @@ export async function runApprovalFollowups(params: {
     await queueNextWorkstreamTask({
       completedTaskId: params.taskId,
       projectId: params.projectId,
-      localPath: params.localPath,
+      localPath: params.projectRootPath,
       workstreamId,
       completedPosition: taskPosition,
     });
