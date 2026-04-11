@@ -13,6 +13,7 @@ interface FlowStepModalProps {
   projectDataEnabled: boolean;
   codingRuntimes: AiRuntimeStatus[];
   runtimeCatalogError: string | null;
+  runtimeCatalogLoading: boolean;
   onSaveSteps: (flowId: string, steps: FlowStepInput[]) => Promise<void>;
   onClose: () => void;
 }
@@ -23,6 +24,7 @@ export function FlowStepModal({
   projectDataEnabled,
   codingRuntimes,
   runtimeCatalogError,
+  runtimeCatalogLoading,
   onSaveSteps,
   onClose,
 }: FlowStepModalProps) {
@@ -62,6 +64,7 @@ export function FlowStepModal({
           projectDataEnabled={projectDataEnabled}
           codingRuntimes={codingRuntimes}
           runtimeCatalogError={runtimeCatalogError}
+          runtimeCatalogLoading={runtimeCatalogLoading}
           onUpdate={updateStep}
           onToggleTool={toggleTool}
           onToggleContext={toggleContext}

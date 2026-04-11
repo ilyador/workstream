@@ -2,6 +2,7 @@ import { readFileSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
 import { join } from 'path';
 import { supabase } from '../supabase.js';
 import { stagedDiffStat } from '../git-utils.js';
+import { getActiveProcessCount } from '../process-lifecycle.js';
 import type { FlowConfig, FlowStepConfig } from '../flow-config.js';
 import { buildStepPrompt } from './prompt-builder.js';
 import {
@@ -449,6 +450,56 @@ async function savePhases(jobId: string, phasesCompleted: unknown[]): Promise<vo
     ({ error } = await supabase.from('jobs').update({ phases_completed: phasesCompleted }).eq('id', jobId));
     if (error) console.error(`[runner] Retry also failed for job ${jobId}:`, error.message);
   }
+}
+
+/**
+ * Clean up orphaned jobs on server startup.
+ * Any job with status 'running' that has no active process is orphaned
+ * (server was restarted while it was running).
+ */
+export async function cleanupOrphanedJobs(): Promise<number> {
+  const { data: runningJobs } = await supabase
+    .from('jobs')
+    .select('id, task_id, started_at')
+    .in('status', ['running']);
+
+  if (!runningJobs || runningJobs.length === 0) return 0;
+
+  let cleaned = 0;
+  for (const job of runningJobs) {
+    if (getActiveProcessCount(job.id) === 0) {
+      const elapsed = Date.now() - new Date(job.started_at).getTime();
+      const elapsedMin = Math.round(elapsed / 60000);
+
+      const failMsg = `Job failed: worker was restarted while this job was running (after ${elapsedMin}m). Click "Run" on the task to retry.`;
+      await supabase.from('jobs').update({
+        status: 'failed',
+        completed_at: new Date().toISOString(),
+        question: failMsg,
+      }).eq('id', job.id);
+
+      const { error: taskErr } = await supabase.from('tasks').update({ status: 'paused' }).eq('id', job.task_id);
+      if (taskErr) {
+        console.error(`[runner] Failed to update task ${job.task_id} to paused, retrying:`, taskErr.message);
+        const { error: retryErr } = await supabase.from('tasks').update({ status: 'paused' }).eq('id', job.task_id);
+        if (retryErr) {
+          console.error(`[runner] Retry also failed for task ${job.task_id}:`, retryErr.message);
+          throw new Error(`Failed to update task ${job.task_id} to paused: ${retryErr.message}`);
+        }
+      }
+
+      // Write to job_logs so SSE clients see the terminal event
+      await supabase.from('job_logs').insert({
+        job_id: job.id,
+        event: 'failed',
+        data: { error: failMsg },
+      });
+
+      cleaned++;
+      console.log(`Cleaned orphaned job ${job.id} (was running for ${elapsedMin}m)`);
+    }
+  }
+  return cleaned;
 }
 
 // Test-only: expose private helpers for orchestrator.test.ts.
