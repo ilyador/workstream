@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FilePreviewProvider } from './FilePreview';
 import { useFilePreview, type PreviewFile } from './filePreviewContext';
 
@@ -18,6 +18,13 @@ function PreviewButton({ file }: { file: PreviewFile }) {
 }
 
 describe('FilePreviewProvider', () => {
+  // Preload the lazy-loaded MarkdownArtifactEditor so the edit-mode test
+  // doesn't race React.lazy's dynamic import against waitFor's default
+  // 1s timeout under full-suite load.
+  beforeAll(async () => {
+    await import('./MarkdownArtifactEditor');
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
