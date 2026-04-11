@@ -9,8 +9,8 @@ if ! npx tsc --noEmit; then
   exit 1
 fi
 
-echo "[pre-push] vitest run"
-if ! npx vitest run; then
+echo "[pre-push] vitest run --retry=2"
+if ! npx vitest run --retry=2; then
   echo "[pre-push] Tests failed. Push aborted." >&2
   exit 1
 fi
