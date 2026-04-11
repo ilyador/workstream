@@ -53,8 +53,11 @@ export const AI_RUNTIME_DEFINITIONS: AiRuntimeDefinition[] = [
     supportsTools: true,
     supportsEffortControl: true,
     supportsMultiagent: false,
-    variantOptions: [],
-    defaultVariant: null,
+    variantOptions: [
+      { id: 'gpt-5-codex', label: 'GPT-5 Codex' },
+      { id: 'gpt-5', label: 'GPT-5' },
+    ],
+    defaultVariant: 'gpt-5-codex',
   },
   {
     id: 'qwen_code',
@@ -66,8 +69,11 @@ export const AI_RUNTIME_DEFINITIONS: AiRuntimeDefinition[] = [
     supportsTools: true,
     supportsEffortControl: false,
     supportsMultiagent: false,
-    variantOptions: [],
-    defaultVariant: null,
+    variantOptions: [
+      { id: 'qwen3-coder-plus', label: 'Qwen3 Coder Plus' },
+      { id: 'qwen3-coder', label: 'Qwen3 Coder' },
+    ],
+    defaultVariant: 'qwen3-coder-plus',
   },
 ];
 
