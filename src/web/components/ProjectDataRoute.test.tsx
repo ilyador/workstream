@@ -22,9 +22,10 @@ vi.mock('../lib/api', async () => {
   };
 });
 
-vi.mock('../hooks/useProjectEvents', () => ({
+const projectEventsMock = vi.hoisted(() => ({
   subscribeProjectEvents: vi.fn(() => () => {}),
 }));
+vi.mock('../hooks/useProjectEvents', () => projectEventsMock);
 
 const baseSettings: ProjectDataSettings = {
   enabled: true,
@@ -178,5 +179,32 @@ describe('ProjectDataRoute', () => {
       expect(screen.queryByText('Old project result')).toBeNull();
     });
     expect((screen.getByPlaceholderText('Search the indexed project knowledge…') as HTMLInputElement).value).toBe('');
+  });
+
+  it('refreshes documents in place on document_changed without showing the loading state', async () => {
+    const firstDocs = [{ id: 'doc-1', file_name: 'first.md', file_type: 'md', file_size: 100, status: 'ready', chunk_count: 2, error: null, created_at: '2026-04-10T00:00:00.000Z' }];
+    const secondDocs = [
+      ...firstDocs,
+      { id: 'doc-2', file_name: 'second.md', file_type: 'md', file_size: 200, status: 'ready', chunk_count: 3, error: null, created_at: '2026-04-11T00:00:00.000Z' },
+    ];
+    api.getProjectDocuments.mockResolvedValueOnce(firstDocs).mockResolvedValueOnce(secondDocs);
+
+    renderRoute(baseSettings);
+
+    // Wait for initial load: 1 doc, metric card shows "1 ready"
+    await waitFor(() => {
+      expect(screen.getByText('1 ready')).toBeTruthy();
+    });
+    expect(projectEventsMock.subscribeProjectEvents).toHaveBeenCalled();
+
+    const callback = projectEventsMock.subscribeProjectEvents.mock.calls[0][1];
+    callback({ type: 'document_changed' });
+
+    // After silent refresh: 2 docs, metric card shows "2 ready"
+    await waitFor(() => {
+      expect(screen.getByText('2 ready')).toBeTruthy();
+    });
+    expect(screen.queryByText(/Loading Project Data/i)).toBeNull();
+    expect(api.getProjectDocuments).toHaveBeenCalledTimes(2);
   });
 });

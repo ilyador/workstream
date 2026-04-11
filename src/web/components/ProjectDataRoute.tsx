@@ -111,18 +111,29 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
     }
   }, [project.id, reloadProjectDataSettings]);
 
+  const refreshDocuments = useCallback(async () => {
+    try {
+      const nextDocuments = await getProjectDocuments(project.id);
+      setDocuments(nextDocuments);
+    } catch {
+      // Silent — error banner still reflects the last known good state.
+    }
+  }, [project.id]);
+
   useEffect(() => {
     void loadAll({ reloadSettings: true });
   }, [loadAll]);
 
   useEffect(() => {
     const unsub = subscribeProjectEvents(project.id, (event) => {
-      if (event.type === 'document_changed' || event.type === 'full_sync') {
+      if (event.type === 'document_changed') {
+        void refreshDocuments();
+      } else if (event.type === 'full_sync') {
         void loadAll();
       }
     });
     return unsub;
-  }, [project.id, loadAll]);
+  }, [project.id, loadAll, refreshDocuments]);
 
   async function saveSettings(options: { reindex?: boolean } = {}) {
     setSaving(true);
