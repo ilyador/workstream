@@ -13,6 +13,7 @@
     "dev:bot": "tsx src/server/bot.ts",
     "mcp": "tsx src/server/mcp.ts",
     "db:push": "bash scripts/db-push.sh",
+    "smoke:sse": "tsx scripts/smoke-test-sse.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
