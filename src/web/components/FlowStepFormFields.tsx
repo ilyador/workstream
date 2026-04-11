@@ -17,6 +17,7 @@ interface FlowStepFormFieldsProps {
   projectDataEnabled: boolean;
   codingRuntimes: AiRuntimeStatus[];
   runtimeCatalogError: string | null;
+  runtimeCatalogLoading: boolean;
   onUpdate: (patch: Partial<FlowStep>) => void;
   onToggleTool: (tool: string) => void;
   onToggleContext: (source: string) => void;
@@ -33,6 +34,7 @@ export function FlowStepFormFields({
   projectDataEnabled,
   codingRuntimes,
   runtimeCatalogError,
+  runtimeCatalogLoading,
   onUpdate,
   onToggleTool,
   onToggleContext,
@@ -71,6 +73,7 @@ export function FlowStepFormFields({
         <select
           className={s.select}
           value={step.runtime_id}
+          disabled={runtimeCatalogLoading}
           onChange={event => {
             const runtimeId = event.target.value;
             onUpdate({
@@ -86,11 +89,14 @@ export function FlowStepFormFields({
             </option>
           ))}
         </select>
-        {runtimeCatalogError && (
-          <div className={s.hint}>Failed to load runtime availability: {runtimeCatalogError}</div>
+        {runtimeCatalogLoading && (
+          <div className={s.hint} role="status">Detecting available runtimes...</div>
         )}
-        {!runtimeCatalogError && codingRuntimes.every(runtime => !runtime.available) && (
-          <div className={s.hint}>No supported coding runtimes were detected on this server.</div>
+        {runtimeCatalogError && (
+          <div className={s.hint} role="alert">Failed to load runtime availability: {runtimeCatalogError}</div>
+        )}
+        {!runtimeCatalogLoading && !runtimeCatalogError && codingRuntimes.every(runtime => !runtime.available) && (
+          <div className={s.hint} role="alert">No supported coding runtimes were detected on this server.</div>
         )}
       </div>
 

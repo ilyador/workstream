@@ -117,6 +117,7 @@ export function FlowEditor({ flows, setFlows, projectDataEnabled, onSave, onSave
           projectDataEnabled={projectDataEnabled}
           codingRuntimes={codingRuntimes}
           runtimeCatalogError={runtimeCatalog.error}
+          runtimeCatalogLoading={runtimeCatalog.loading}
           onSaveSteps={onSaveSteps}
           onClose={closeStepModal}
         />
