@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth-middleware.js';
 import { requireProjectMember } from '../authz.js';
-import { broadcast } from '../realtime.js';
 import { supabase } from '../supabase.js';
 import { slugifyCustomTypeName, validateCustomTypeInput } from './custom-type-validation.js';
 
@@ -27,6 +26,5 @@ customTypeCreateRouter.post('/api/custom-types', requireAuth, async (req, res) =
     .select()
     .single();
   if (error) return res.status(400).json({ error: error.message });
-  broadcast(project_id, { type: 'custom_type_changed', custom_type: data });
   res.json(data);
 });
