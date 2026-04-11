@@ -74,6 +74,7 @@ export function WorkstreamColumn({
     wsId,
     doneTasks,
     totalTasks,
+    containsAiTasks,
     allDone,
     progressPct,
     wsStatus,
@@ -155,6 +156,7 @@ export function WorkstreamColumn({
         onRunWorkstream={onRunWorkstream}
         wsStatus={wsStatus}
         totalTasks={totalTasks}
+        containsAiTasks={containsAiTasks}
         doneTasks={doneTasks}
         hasBrokenLinks={hasBrokenLinks}
         headerExtra={headerExtra}

@@ -8,6 +8,7 @@ import {
   getFreezeIndex,
   getReorderBlockingTaskId,
   getWorkstreamStatus,
+  hasAiTasks,
 } from './workstream-column-derived';
 import { useWorkstreamColumnEffects } from './useWorkstreamColumnEffects';
 
@@ -44,6 +45,7 @@ export function useWorkstreamColumnState({
   const columnRef = useRef<HTMLDivElement>(null);
 
   const chainGroups = useMemo(() => buildChainGroups(tasks), [tasks]);
+  const containsAiTasks = useMemo(() => hasAiTasks(tasks), [tasks]);
 
   const getChainGroup = useCallback((taskId: string) => {
     return chainGroups.find(group => group.taskIds.includes(taskId)) || null;
@@ -113,6 +115,7 @@ export function useWorkstreamColumnState({
     wsId,
     doneTasks,
     totalTasks,
+    containsAiTasks,
     allDone,
     progressPct,
     wsStatus,

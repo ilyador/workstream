@@ -36,6 +36,25 @@ describe('useWorkstreamColumnState', () => {
     expect(result.current.freezeIndex).toBe(0);
     expect(result.current.chainGroups).toEqual([{ taskIds: ['plan', 'animate'], startIndex: 0 }]);
     expect(result.current.dragDisabledGlobal).toBe(false);
+    expect(result.current.containsAiTasks).toBe(true);
+  });
+
+  it('marks a human-only workstream as having no AI tasks', () => {
+    const tasks = [
+      makeTask({ id: 'human-1', mode: 'human' }),
+      makeTask({ id: 'human-2', mode: 'human' }),
+    ];
+
+    const { result } = renderHook(() => useWorkstreamColumnState({
+      workstream: makeWorkstream(),
+      tasks,
+      taskJobMap: {},
+      isBacklog: false,
+      focusTaskId: null,
+      classes,
+    }));
+
+    expect(result.current.containsAiTasks).toBe(false);
   });
 });
 

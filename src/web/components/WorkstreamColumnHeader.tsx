@@ -18,6 +18,7 @@ interface WorkstreamColumnHeaderProps {
   onRunWorkstream?: () => void;
   wsStatus: string | null;
   totalTasks: number;
+  containsAiTasks: boolean;
   doneTasks: number;
   hasBrokenLinks: boolean;
   headerExtra?: React.ReactNode;
@@ -41,6 +42,7 @@ export function WorkstreamColumnHeader({
   onRunWorkstream,
   wsStatus,
   totalTasks,
+  containsAiTasks,
   doneTasks,
   hasBrokenLinks,
   headerExtra,
@@ -98,7 +100,7 @@ export function WorkstreamColumnHeader({
         </div>
 
         <div className={s.headerRight}>
-          {!isBacklog && canRunAi && onRunWorkstream && wsStatus === 'open' && totalTasks > 0 && !hasBrokenLinks && (
+          {!isBacklog && canRunAi && onRunWorkstream && wsStatus === 'open' && totalTasks > 0 && containsAiTasks && !hasBrokenLinks && (
             <button
               className={s.runBtn}
               onClick={onRunWorkstream}

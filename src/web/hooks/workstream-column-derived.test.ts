@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getActiveTaskId, getReorderBlockingTaskId, getWorkstreamStatus } from './workstream-column-derived';
+import { getActiveTaskId, getReorderBlockingTaskId, getWorkstreamStatus, hasAiTasks } from './workstream-column-derived';
 import type { JobView } from '../components/job-types';
 import type { TaskView } from '../lib/task-view';
 
@@ -56,6 +56,14 @@ describe('getWorkstreamStatus', () => {
 });
 
 describe('task activity selectors', () => {
+  it('detects whether a workstream contains any AI tasks', () => {
+    expect(hasAiTasks([task({ id: 'human-1', mode: 'human' })])).toBe(false);
+    expect(hasAiTasks([
+      task({ id: 'human-1', mode: 'human' }),
+      task({ id: 'ai-1', mode: 'ai' }),
+    ])).toBe(true);
+  });
+
   it('keeps review tasks active for UI without blocking reorder', () => {
     const tasks = [task({ id: 'task-1', status: 'review' })];
     const taskJobMap = { 'task-1': job('task-1', 'review') };

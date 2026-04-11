@@ -51,6 +51,10 @@ export function getFreezeIndex(tasks: TaskView[]) {
   return lastTouched;
 }
 
+export function hasAiTasks(tasks: TaskView[]) {
+  return tasks.some(task => task.mode === 'ai');
+}
+
 export function buildBrokenLinks(tasks: TaskView[], isBacklog: boolean) {
   const map = new Map<string, { up: boolean; down: boolean }>();
   if (isBacklog) return map;
