@@ -1,5 +1,4 @@
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MemoMarkdown } from './MemoMarkdown';
 import type { ArtifactsData } from '../hooks/useArtifacts';
 import { getFileIcon } from '../lib/file-utils';
 import type { TaskView } from '../lib/task-view';
@@ -19,7 +18,7 @@ export function TaskCardPreview({ task, filePreviewArtifactsData }: TaskCardPrev
     <div className={s.preview}>
       {task.description && (
         <div className={s.previewDesc}>
-          <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown>
+          <MemoMarkdown text={task.description} />
         </div>
       )}
       {hasFilePreview && filePreviewArtifactsData && <TaskCardFilePreview artifactsData={filePreviewArtifactsData} />}

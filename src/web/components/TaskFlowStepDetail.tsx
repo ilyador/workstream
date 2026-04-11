@@ -1,5 +1,4 @@
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MemoMarkdown } from './MemoMarkdown';
 import type { TaskView } from '../lib/task-view';
 import type { TaskCardMetaItem } from './task-card-types';
 import s from './TaskCard.module.css';
@@ -19,7 +18,7 @@ export function TaskFlowStepDetail({
 }: TaskFlowStepDetailProps) {
   return (
     <>
-      {task.description && <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>}
+      {task.description && <div className={s.desc}><MemoMarkdown text={task.description} /></div>}
       {metaItems && metaItems.length > 0 && (
         <div className={s.meta}>
           {metaItems.map(item => <span key={item.label}>{item.label}: {item.value}</span>)}

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MemoMarkdown } from './MemoMarkdown';
 import { useComments } from '../hooks/useComments';
 import { useTaskFileGate } from '../hooks/useTaskFileGate';
 import { useModal } from '../hooks/modal-context';
@@ -60,7 +59,7 @@ export function TaskIdleDetail({
 
   return (
     <>
-      {task.description && <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>}
+      {task.description && <div className={s.desc}><MemoMarkdown text={task.description} /></div>}
       <div className={s.meta}>
         {metaItems ? (
           metaItems.map(item => <span key={item.label}>{item.label}: {item.value}</span>)

@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useEffectEvent, useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MemoMarkdown } from './MemoMarkdown';
 import type { PreviewFile } from './filePreviewContext';
 import { isMdFile } from './file-preview-utils';
 import s from './FilePreview.module.css';
@@ -101,7 +100,7 @@ export function FilePreviewContent({ file, editing, onTextChange }: FilePreviewC
     }
     return (
       <div className={s.previewMarkdown}>
-        <Markdown remarkPlugins={[remarkGfm]}>{text || ''}</Markdown>
+        <MemoMarkdown text={text || ''} />
       </div>
     );
   }
