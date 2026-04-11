@@ -302,6 +302,77 @@ try {
     if (error) throw error;
     cleanup.push(() => supabase.from('notifications').delete().eq('id', data.id));
   });
+
+  // workstream insert/update/delete — tests a table whose publication add
+  // was already working
+  let workstreamId = '';
+  await run('workstream insert', 'workstream_changed', async () => {
+    const { data, error } = await supabase
+      .from('workstreams')
+      .insert({
+        project_id: testProject.id,
+        name: `${TEST_TAG} ws`,
+        status: 'active',
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    workstreamId = data.id;
+    cleanup.push(() => supabase.from('workstreams').delete().eq('id', workstreamId));
+  });
+
+  await run('workstream update', 'workstream_changed', async () => {
+    const { error } = await supabase.from('workstreams').update({ name: `${TEST_TAG} ws updated` }).eq('id', workstreamId);
+    if (error) throw error;
+  });
+
+  await run('workstream delete', 'workstream_deleted', async () => {
+    const { error } = await supabase.from('workstreams').delete().eq('id', workstreamId);
+    if (error) throw error;
+  });
+  cleanup.pop();
+
+  // flow + flow_step — tests tables that were missing from the publication
+  let flowId = '';
+  await run('flow insert', 'flow_changed', async () => {
+    const { data, error } = await supabase
+      .from('flows')
+      .insert({
+        project_id: testProject.id,
+        name: `${TEST_TAG} flow`,
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    flowId = data.id;
+    cleanup.push(() => supabase.from('flows').delete().eq('id', flowId));
+  });
+
+  await run('flow update', 'flow_changed', async () => {
+    const { error } = await supabase.from('flows').update({ name: `${TEST_TAG} flow updated` }).eq('id', flowId);
+    if (error) throw error;
+  });
+
+  await run('flow delete', 'flow_deleted', async () => {
+    const { error } = await supabase.from('flows').delete().eq('id', flowId);
+    if (error) throw error;
+  });
+  cleanup.pop();
+
+  // custom_task_type — tests another formerly-missing publication table
+  await run('custom type insert', 'custom_type_changed', async () => {
+    const { data, error } = await supabase
+      .from('custom_task_types')
+      .insert({
+        project_id: testProject.id,
+        name: `${TEST_TAG.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+        description: 'smoke test',
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    cleanup.push(() => supabase.from('custom_task_types').delete().eq('id', data.id));
+  });
 } catch (err) {
   console.error('[smoke] Fatal error during test run:', (err as Error).message);
 } finally {

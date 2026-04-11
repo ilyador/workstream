@@ -81,6 +81,14 @@ function onStatus(table: string, status: string): void {
   }
 }
 
+const DELETE_EVENTS_PURGE_INTERVAL_MS = 5 * 60 * 1000;
+let purgeTimer: NodeJS.Timeout | null = null;
+
+async function purgeOldDeleteEvents(): Promise<void> {
+  const { error } = await supabase.rpc('purge_realtime_delete_events', { p_max_age_seconds: 300 });
+  if (error) console.error('[realtime] Failed to purge old delete events:', error.message);
+}
+
 export function startRealtimeChannel(): void {
   subscribedCount = 0;
   for (const { table, handler } of TABLE_HANDLERS) {
@@ -95,4 +103,8 @@ export function startRealtimeChannel(): void {
       )
       .subscribe((status) => onStatus(table, status));
   }
+
+  if (purgeTimer) clearInterval(purgeTimer);
+  purgeTimer = setInterval(() => void purgeOldDeleteEvents(), DELETE_EVENTS_PURGE_INTERVAL_MS);
+  void purgeOldDeleteEvents();
 }
