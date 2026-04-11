@@ -38,12 +38,51 @@ function buildArgs(
 }
 
 function formatCodexEventBody(event: Record<string, unknown>): string | null {
+  // Legacy shapes (older codex versions)
   if (typeof event.msg === 'string') return event.msg;
   if (typeof event.message === 'string') return event.message;
   if (typeof event.text === 'string') return event.text;
-  if (typeof event.type === 'string' && typeof event.command === 'string') {
-    return `[${event.type}] ${event.command}`;
+
+  const type = typeof event.type === 'string' ? event.type : null;
+
+  // Codex v0.118+ wraps content in `item`: item_started / item_completed /
+  // item.started / item.completed depending on build. The item carries type +
+  // text/command.
+  if (type && (type === 'item.completed' || type === 'item.started' || type === 'item_completed' || type === 'item_started')) {
+    const item = event.item;
+    if (item && typeof item === 'object') {
+      const rec = item as Record<string, unknown>;
+      if (typeof rec.text === 'string' && rec.text.length > 0) return rec.text;
+      if (typeof rec.command === 'string' && rec.command.length > 0) {
+        const itemType = typeof rec.type === 'string' ? rec.type : type;
+        return `[${itemType}] ${rec.command}`;
+      }
+    }
+    return null;
   }
+
+  // Turn completed: surface token usage as a short status line.
+  if (type === 'turn.completed' || type === 'turn_completed') {
+    const usage = event.usage;
+    if (usage && typeof usage === 'object') {
+      const u = usage as Record<string, unknown>;
+      const inTok = typeof u.input_tokens === 'number' ? u.input_tokens : '?';
+      const outTok = typeof u.output_tokens === 'number' ? u.output_tokens : '?';
+      return `[codex] tokens: in=${inTok} out=${outTok}`;
+    }
+    return null;
+  }
+
+  // Quiet lifecycle events — drop silently.
+  if (type === 'thread.started' || type === 'turn.started' || type === 'thread_started' || type === 'turn_started') {
+    return null;
+  }
+
+  // Final fallback for older `[type] command` shape.
+  if (type && typeof event.command === 'string') {
+    return `[${type}] ${event.command}`;
+  }
+
   return null;
 }
 
