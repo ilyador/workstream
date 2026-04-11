@@ -32,7 +32,6 @@ export async function maybeQueueTaskAutoContinue(req: Request, taskValue: unknow
     }
     if (member?.local_path && isLocalPathAllowed({ role: 'dev', local_path: member.local_path }, member.local_path)) {
       await queueNextWorkstreamTask({
-        completedTaskId: taskId,
         projectId,
         localPath: member.local_path,
         workstreamId,
