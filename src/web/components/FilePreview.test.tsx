@@ -66,6 +66,29 @@ describe('FilePreviewProvider', () => {
 
     expect(screen.queryByText('Preview not available for this file type')).toBeNull();
     expect(await screen.findByRole('heading', { name: 'Plan' })).not.toBeNull();
+    const modal = document.querySelector('[style*="--modal-shell-max-width"]') as HTMLDivElement | null;
+    expect(modal?.style.getPropertyValue('--modal-shell-max-width')).toBe('min(1200px, calc(100vw - 48px))');
+    expect(modal?.style.getPropertyValue('--modal-shell-max-height')).toBe('92vh');
+  });
+
+  it('uses a near-fullscreen desktop size for media previews', () => {
+    render(
+      <FilePreviewProvider>
+        <PreviewButton file={{
+          id: 'artifact-4',
+          url: '/api/artifacts/artifact-4/download',
+          filename: 'diagram.png',
+          mime_type: 'image/png',
+          size_bytes: 1024,
+        }} />
+      </FilePreviewProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open file' }));
+
+    const modal = document.querySelector('[style*="--modal-shell-max-width"]') as HTMLDivElement | null;
+    expect(modal?.style.getPropertyValue('--modal-shell-max-width')).toBe('calc(100vw - 48px)');
+    expect(modal?.style.getPropertyValue('--modal-shell-max-height')).toBe('calc(100vh - 48px)');
   });
 
   it('opens markdown artifact edit mode in a rich editor surface', async () => {

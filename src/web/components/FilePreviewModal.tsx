@@ -2,8 +2,8 @@ import { formatFileSize } from '../lib/file-utils';
 import { useExitAnimation } from '../hooks/useExitAnimation';
 import type { PreviewFile } from './filePreviewContext';
 import { FilePreviewContent } from './FilePreviewContent';
-import { isMdFile, isPreviewable } from './file-preview-utils';
-import { ModalShell } from './ModalShell';
+import { isMdFile, isMediaFile, isPreviewable } from './file-preview-utils';
+import { ModalShell, type ModalShellSize } from './ModalShell';
 import s from './FilePreview.module.css';
 
 interface FilePreviewModalProps {
@@ -35,9 +35,17 @@ export function FilePreviewModal({
 }: FilePreviewModalProps) {
   const { closing, closeWithAnimation } = useExitAnimation(onClose);
   const canEdit = isMdFile(file.mime_type, file.filename) && !!file.id;
+  const previewable = isPreviewable(file.mime_type, file.filename);
+  const mediaPreview = isMediaFile(file.mime_type);
+  const previewSize = getPreviewModalSize({ mediaPreview, previewable });
 
   return (
-    <ModalShell closing={closing} onClose={closeWithAnimation} className={s.modal}>
+    <ModalShell
+      closing={closing}
+      onClose={closeWithAnimation}
+      className={s.modal}
+      size={previewSize}
+    >
       <FilePreviewHeader
         file={file}
         canEdit={canEdit}
@@ -49,9 +57,9 @@ export function FilePreviewModal({
         onCancelEdit={onCancelEdit}
         onClose={closeWithAnimation}
       />
-      <div className={s.body}>
+      <div className={`${s.body} ${mediaPreview ? s.mediaBody : ''}`}>
         {error && <div className={s.error}>{error}</div>}
-        {isPreviewable(file.mime_type, file.filename) ? (
+        {previewable ? (
           <FilePreviewContent
             key={contentKey}
             file={file}
@@ -68,6 +76,29 @@ export function FilePreviewModal({
       </div>
     </ModalShell>
   );
+}
+
+const DOCUMENT_PREVIEW_MODAL_SIZE: ModalShellSize = {
+  maxWidth: 'min(1200px, calc(100vw - 48px))',
+  height: 'min(92vh, calc(100vh - 48px))',
+  maxHeight: '92vh',
+};
+
+const MEDIA_PREVIEW_MODAL_SIZE: ModalShellSize = {
+  maxWidth: 'calc(100vw - 48px)',
+  height: 'calc(100vh - 48px)',
+  maxHeight: 'calc(100vh - 48px)',
+};
+
+function getPreviewModalSize({
+  mediaPreview,
+  previewable,
+}: {
+  mediaPreview: boolean;
+  previewable: boolean;
+}): ModalShellSize | undefined {
+  if (!previewable) return undefined;
+  return mediaPreview ? MEDIA_PREVIEW_MODAL_SIZE : DOCUMENT_PREVIEW_MODAL_SIZE;
 }
 
 function FilePreviewHeader({

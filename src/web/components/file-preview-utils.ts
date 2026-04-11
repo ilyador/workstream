@@ -1,7 +1,11 @@
-const PREVIEWABLE = [
+const MEDIA_PREVIEWABLE = [
   'image/',
   'video/',
   'audio/',
+];
+
+const PREVIEWABLE = [
+  ...MEDIA_PREVIEWABLE,
   'text/',
   'application/json',
   'application/pdf',
@@ -13,4 +17,8 @@ export function isPreviewable(mime: string, filename = ''): boolean {
 
 export function isMdFile(mime: string, filename: string): boolean {
   return mime === 'text/markdown' || filename.endsWith('.md');
+}
+
+export function isMediaFile(mime: string): boolean {
+  return MEDIA_PREVIEWABLE.some(prefix => mime.startsWith(prefix));
 }
