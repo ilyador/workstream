@@ -67,9 +67,10 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
   const backendLabel = formatBackendLabel(settings.backend);
   const reindexRequired = documents.length > 0 && projectDataEmbeddingsChanged(savedSettings, settings);
 
+  // Reset all per-project state on project switch. This must NOT depend on
+  // `projectDataSettings` — every parent re-fetch would clobber freshly
+  // loaded documents and strand the page at loading=true forever.
   useEffect(() => {
-    setSettings(projectDataSettings);
-    setSavedSettings(projectDataSettings);
     setDocuments([]);
     setResults([]);
     setSearchQuery('');
@@ -79,7 +80,15 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
     setSaving(false);
     setError('');
     setMessage('');
-  }, [project.id, projectDataSettings]);
+  }, [project.id]);
+
+  // Sync local settings from the parent hook without touching
+  // documents/loading. Fires whenever the parent's settings reference
+  // changes (initial load, manual reload, post-save refresh).
+  useEffect(() => {
+    setSettings(projectDataSettings);
+    setSavedSettings(projectDataSettings);
+  }, [projectDataSettings]);
 
   const loadAll = useCallback(async ({ reloadSettings = false }: { reloadSettings?: boolean } = {}) => {
     setLoading(true);
