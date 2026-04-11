@@ -57,6 +57,10 @@ export function HeaderNotifications({
                   className={`${s.notifItem} ${!notification.read ? s.notifUnread : ''}`}
                   onClick={() => {
                     if (!notification.read) onMarkRead?.(notification.id);
+                    // onSwitchProject must be synchronous — both the state
+                    // update and the navigate() call below land in the same
+                    // React batch so the new project + new URL take effect
+                    // on the same re-render.
                     if (notification.project_id && notification.project_id !== currentProjectId) {
                       onSwitchProject(notification.project_id);
                     }
