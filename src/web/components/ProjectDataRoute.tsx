@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  createProjectTextDocument,
-  deleteProjectDocument,
   getProjectDocuments,
   searchProjectData,
   updateProjectDataSettings,
-  uploadProjectDocument,
   type ProjectDataReindexResult,
   type ProjectDataSearchResult,
   type ProjectDataSettings,
@@ -52,13 +49,10 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
   const [documents, setDocuments] = useState<ProjectDocumentRecord[]>([]);
   const [results, setResults] = useState<ProjectDataSearchResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [draftName, setDraftName] = useState('');
-  const [draftContent, setDraftContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const isAdmin = project.role === 'admin';
   const projectDataEnabled = settings.enabled;
   const readyDocuments = documents.filter(document => document.status === 'ready').length;
@@ -67,19 +61,26 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
   const backendLabel = formatBackendLabel(settings.backend);
   const reindexRequired = documents.length > 0 && projectDataEmbeddingsChanged(savedSettings, settings);
 
+  // Reset all per-project state on project switch. This must NOT depend on
+  // `projectDataSettings` — every parent re-fetch would clobber freshly
+  // loaded documents and strand the page at loading=true forever.
   useEffect(() => {
-    setSettings(projectDataSettings);
-    setSavedSettings(projectDataSettings);
     setDocuments([]);
     setResults([]);
     setSearchQuery('');
-    setDraftName('');
-    setDraftContent('');
     setLoading(true);
     setSaving(false);
     setError('');
     setMessage('');
-  }, [project.id, projectDataSettings]);
+  }, [project.id]);
+
+  // Sync local settings from the parent hook without touching
+  // documents/loading. Fires whenever the parent's settings reference
+  // changes (initial load, manual reload, post-save refresh).
+  useEffect(() => {
+    setSettings(projectDataSettings);
+    setSavedSettings(projectDataSettings);
+  }, [projectDataSettings]);
 
   const loadAll = useCallback(async ({ reloadSettings = false }: { reloadSettings?: boolean } = {}) => {
     setLoading(true);
@@ -158,40 +159,6 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
     await saveSettings({ reindex: true });
   }
 
-  async function handleUploadFile(file: File) {
-    if (!projectDataEnabled) return;
-    setSaving(true);
-    setError('');
-    setMessage('');
-    try {
-      await uploadProjectDocument(project.id, file);
-      setMessage(`Indexed ${file.name}.`);
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload document');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleCreateTextDocument() {
-    if (!projectDataEnabled || !draftName.trim() || !draftContent.trim()) return;
-    setSaving(true);
-    setError('');
-    setMessage('');
-    try {
-      await createProjectTextDocument(project.id, draftName.trim(), draftContent);
-      setDraftName('');
-      setDraftContent('');
-      setMessage('Indexed text document.');
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to index text document');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleSearch() {
     if (!projectDataEnabled || !searchQuery.trim()) return;
     setSaving(true);
@@ -202,27 +169,6 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
       setResults(nextResults);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Project Data search failed');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDeleteDocument(documentId: string) {
-    const confirmed = await modal.confirm(
-      'Delete Project Data document',
-      'Remove this indexed document from the project?',
-      { label: 'Delete', danger: true },
-    );
-    if (!confirmed) return;
-    setSaving(true);
-    setError('');
-    setMessage('');
-    try {
-      await deleteProjectDocument(documentId);
-      setMessage('Document removed.');
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete document');
     } finally {
       setSaving(false);
     }
@@ -374,96 +320,6 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
             </section>
 
             <div className={s.sideColumn}>
-              <section className={`${s.card} ${s.documentsCard}`}>
-                <div className={s.cardHeader}>
-                  <div>
-                    <div className={s.sectionTag}>Source material</div>
-                    <h3 className={s.cardTitle}>Documents</h3>
-                    <p className={s.cardSubtitle}>Upload docs or notes to index them for Project Data retrieval.</p>
-                  </div>
-                  {isAdmin && (
-                    <>
-                      <input
-                        ref={fileInputRef}
-                        className={s.hiddenInput}
-                        type="file"
-                        onChange={event => {
-                          const file = event.target.files?.[0];
-                          if (file) void handleUploadFile(file);
-                          event.currentTarget.value = '';
-                        }}
-                      />
-                      <button className="btn btnSecondary" type="button" disabled={saving || !projectDataEnabled} onClick={() => fileInputRef.current?.click()}>
-                        Upload File
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {!projectDataEnabled && (
-                  <div className={s.hint}>Enable Project Data in project settings before uploading, indexing, or searching documents.</div>
-                )}
-
-                <div className={s.documentsLayout}>
-                  <div className={s.textComposer}>
-                    <div className={s.composerHeader}>
-                      <div className={s.composerTitle}>Quick note</div>
-                      <div className={s.composerHint}>Drop in raw project context, design rules, or specs and make it searchable immediately.</div>
-                    </div>
-                    <input
-                      className={s.input}
-                      placeholder="notes.md"
-                      value={draftName}
-                      disabled={!isAdmin || !projectDataEnabled}
-                      onChange={event => setDraftName(event.target.value)}
-                    />
-                    <textarea
-                      className={s.textarea}
-                      placeholder="Paste project notes, specs, design rules, or lore here..."
-                      value={draftContent}
-                      disabled={!isAdmin || !projectDataEnabled}
-                      onChange={event => setDraftContent(event.target.value)}
-                    />
-                    {isAdmin && (
-                      <div className={s.actions}>
-                        <button className="btn btnSecondary" type="button" disabled={saving || !projectDataEnabled || !draftName.trim() || !draftContent.trim()} onClick={() => void handleCreateTextDocument()}>
-                          Index Text Note
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className={s.listPanel}>
-                    <div className={s.listHeader}>
-                      <div className={s.listTitle}>Indexed files</div>
-                      <div className={s.listCount}>{documents.length}</div>
-                    </div>
-                    <div className={s.list}>
-                      {documents.length === 0 ? (
-                        <div className={s.empty}>No indexed documents yet.</div>
-                      ) : documents.map(document => (
-                        <div key={document.id} className={s.listRow}>
-                          <div className={s.rowContent}>
-                            <div className={s.rowTopline}>
-                              <div className={s.rowTitle}>{document.file_name}</div>
-                              <div className={`${s.statusChip} ${document.status === 'ready' ? s.statusReady : document.status === 'failed' ? s.statusFailed : s.statusWorking}`}>
-                                {document.status}
-                              </div>
-                            </div>
-                            <div className={s.rowMeta}>{document.file_type} · {document.chunk_count} chunks</div>
-                          </div>
-                          {isAdmin && (
-                            <button className="btn btnDanger btnSm" type="button" disabled={saving} onClick={() => void handleDeleteDocument(document.id)}>
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </section>
-
               <section className={`${s.card} ${s.searchCard}`}>
                 <div className={s.cardHeader}>
                   <div>

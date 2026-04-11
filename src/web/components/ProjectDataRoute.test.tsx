@@ -8,12 +8,9 @@ import { ModalContext, type ModalContextValue } from '../hooks/modal-context';
 import type { ProjectDataSettings } from '../lib/api';
 
 const api = vi.hoisted(() => ({
-  createProjectTextDocument: vi.fn(),
-  deleteProjectDocument: vi.fn(),
   getProjectDocuments: vi.fn(),
   searchProjectData: vi.fn(),
   updateProjectDataSettings: vi.fn(),
-  uploadProjectDocument: vi.fn(),
 }));
 
 vi.mock('../lib/api', async () => {
@@ -56,22 +53,19 @@ describe('ProjectDataRoute', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.getProjectDocuments.mockResolvedValue([]);
-    api.deleteProjectDocument.mockResolvedValue(undefined);
     api.searchProjectData.mockResolvedValue([]);
     api.updateProjectDataSettings.mockResolvedValue(baseSettings);
   });
 
-  it('disables document indexing and search until Project Data is enabled', async () => {
+  it('disables search until Project Data is enabled', async () => {
     renderRoute({ ...baseSettings, enabled: false });
 
     await waitFor(() => {
       expect(api.getProjectDocuments).toHaveBeenCalledWith('project-1');
     });
 
-    expect((screen.getByRole('button', { name: 'Upload File' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Index Text Note' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Search' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('Enable Project Data in project settings before uploading, indexing, or searching documents.')).toBeTruthy();
+    expect(screen.getByText('Disabled')).toBeTruthy();
   });
 
   it('confirms and requests reindex when embedding settings change with indexed documents', async () => {
@@ -126,37 +120,15 @@ describe('ProjectDataRoute', () => {
     });
   });
 
-  it('confirms before deleting an indexed document', async () => {
-    const user = userEvent.setup();
-    api.getProjectDocuments.mockResolvedValue([
-      {
-        id: 'doc-1',
-        file_name: 'spec.md',
-        file_type: 'md',
-        file_size: 100,
-        chunk_count: 4,
-        status: 'ready',
-        error: null,
-        created_at: '2026-04-09T10:00:00.000Z',
-      },
-    ]);
-
+  it('shows the Enabled badge and admin hint when Project Data is enabled', async () => {
     renderRoute(baseSettings);
 
     await waitFor(() => {
-      expect(screen.getByText('spec.md')).toBeTruthy();
+      expect(api.getProjectDocuments).toHaveBeenCalledWith('project-1');
     });
 
-    await user.click(screen.getByRole('button', { name: 'Delete' }));
-
-    await waitFor(() => {
-      expect(modalValue.confirm).toHaveBeenCalledWith(
-        'Delete Project Data document',
-        'Remove this indexed document from the project?',
-        { label: 'Delete', danger: true },
-      );
-    });
-    expect(api.deleteProjectDocument).toHaveBeenCalledWith('doc-1');
+    expect(screen.getByText('Enabled')).toBeTruthy();
+    expect(screen.getByText('Tune embeddings, index material, and test retrieval from one place.')).toBeTruthy();
   });
 
   it('clears project-scoped search state when the project changes', async () => {
@@ -177,8 +149,6 @@ describe('ProjectDataRoute', () => {
       expect(api.getProjectDocuments).toHaveBeenCalledWith('project-1');
     });
 
-    await user.type(screen.getByPlaceholderText('notes.md'), 'notes.md');
-    await user.type(screen.getByPlaceholderText('Paste project notes, specs, design rules, or lore here...'), 'Draft content');
     await user.type(screen.getByPlaceholderText('Search the indexed project knowledge…'), 'lore');
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
@@ -199,7 +169,6 @@ describe('ProjectDataRoute', () => {
     await waitFor(() => {
       expect(screen.queryByText('Old project result')).toBeNull();
     });
-    expect((screen.getByPlaceholderText('notes.md') as HTMLInputElement).value).toBe('');
     expect((screen.getByPlaceholderText('Search the indexed project knowledge…') as HTMLInputElement).value).toBe('');
   });
 });
