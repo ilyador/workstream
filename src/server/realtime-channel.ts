@@ -33,7 +33,29 @@ const TABLE_HANDLERS: Array<{ table: string; handler: Handler }> = [
   { table: 'task_artifacts', handler: (payload) => broadcastTaskScopedChange(payload, 'artifact') },
   { table: 'rag_documents', handler: broadcastDocumentChange },
   { table: 'notifications', handler: broadcastNotificationChange },
+  { table: 'realtime_delete_events', handler: handleDeleteEvent },
 ];
+
+// DELETE events lose their row payload through Supabase realtime's RLS
+// stripping (even for service_role). A DB trigger copies the old row into
+// realtime_delete_events on every delete, and this handler routes INSERTs
+// on that table back to the matching broadcast handler with a synthetic
+// DELETE payload. See migration 00039.
+async function handleDeleteEvent(payload: RealtimePayload): Promise<void> {
+  const row = payload.new as { table_name?: string; old_row?: Record<string, unknown> } | null;
+  if (!row || typeof row.table_name !== 'string' || !row.old_row) return;
+
+  const originalTable = row.table_name;
+  const synthetic: RealtimePayload = {
+    eventType: 'DELETE',
+    new: {},
+    old: row.old_row,
+  };
+
+  const entry = TABLE_HANDLERS.find((h) => h.table === originalTable);
+  if (!entry) return;
+  await entry.handler(synthetic);
+}
 
 let subscribedCount = 0;
 let fallbackActive = false;
