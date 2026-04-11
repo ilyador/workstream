@@ -17,6 +17,7 @@ export type ProjectEvent =
   | { type: 'member_changed' }
   | { type: 'custom_type_changed' }
   | { type: 'document_changed' }
+  | { type: 'project_data_changed' }
   | { type: 'full_sync' }
   | { type: 'unknown' };
 
