@@ -217,12 +217,13 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
         // Gate check (verify/review steps)
         if (step.is_gate) {
+          const verdict = extractVerdict(output);
+          if (!verdict) {
+            console.warn(`[runner] Job ${jobId}: gate step '${step.name}' returned no structured verdict, using legacy heuristics`);
+          }
           const gateResult = checkGate(step, output);
           const failed = gateResult.failed;
           const reason = gateResult.reason;
-          if (failed && !extractVerdict(output)) {
-            console.warn(`[runner] Job ${jobId}: gate step '${step.name}' returned no structured verdict, using legacy heuristics`);
-          }
 
           if (failed && displayAttempt < maxAttempts) {
             if (step.on_fail_jump_to != null) {
