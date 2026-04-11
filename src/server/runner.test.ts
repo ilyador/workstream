@@ -45,6 +45,17 @@ import { supabase } from './supabase.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Git hooks (e.g. pre-push) set GIT_DIR / GIT_WORK_TREE in the environment,
+// and child `git` processes honor those over the `cwd:` argument — so a
+// test that runs `git init` in a tempDir would silently operate on the
+// enclosing repo instead. Strip them before spawning git.
+const GIT_ENV_IGNORE = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_COMMON_DIR'] as const;
+function spawnGit(args: string[], cwd: string): string {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of GIT_ENV_IGNORE) delete env[key];
+  return execFileSync('git', args, { cwd, env, encoding: 'utf-8' });
+}
+
 function makeTempDir(): string {
   const dir = join(tmpdir(), `workstream-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
@@ -504,15 +515,15 @@ describe('artifact production without code changes', () => {
 
   it('captures artifacts in a git repo with a clean working tree', async () => {
     // Set up a real git repo to verify artifact capture is independent of git state
-    execFileSync('git', ['init'], { cwd: tempDir });
-    execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: tempDir });
-    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: tempDir });
+    spawnGit(['init'], tempDir);
+    spawnGit(['config', 'user.email', 'test@test.com'], tempDir);
+    spawnGit(['config', 'user.name', 'Test'], tempDir);
     writeFileSync(join(tempDir, 'main.ts'), 'console.log("hello")');
-    execFileSync('git', ['add', '.'], { cwd: tempDir });
-    execFileSync('git', ['commit', '-m', 'init'], { cwd: tempDir });
+    spawnGit(['add', '.'], tempDir);
+    spawnGit(['commit', '-m', 'init'], tempDir);
 
     // git status is now clean — no code changes at all
-    const status = execFileSync('git', ['status', '--porcelain'], { cwd: tempDir, encoding: 'utf-8' }).trim();
+    const status = spawnGit(['status', '--porcelain'], tempDir).trim();
     expect(status).toBe('');
 
     // Simulate AI writing only to .artifacts/ (no code changes)
