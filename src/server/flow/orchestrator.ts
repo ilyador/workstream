@@ -12,6 +12,7 @@ import {
   legacyReviewCheck,
 } from './gate-evaluation.js';
 import { executeFlowStep, summarize } from '../runtimes/index.js';
+import { lookupProjectId } from '../realtime-core-handlers.js';
 
 const PAUSE_KEYWORDS = ['Should I', 'Could you', 'Which', 'clarif'];
 
@@ -66,8 +67,8 @@ export async function scanAndUploadArtifacts(
   if (!existsSync(artifactsDir)) return;
 
   const files = readdirSync(artifactsDir);
-  const { data: taskRow } = await supabase.from('tasks').select('project_id').eq('id', taskId).single();
-  if (!taskRow?.project_id) {
+  const projectId = await lookupProjectId('tasks', taskId);
+  if (!projectId) {
     onLog(`[artifact] Skipping artifacts: could not resolve project_id\n`);
     return;
   }
@@ -85,7 +86,7 @@ export async function scanAndUploadArtifacts(
       const fileBuffer = readFileSync(filePath);
       const ext = filename.split('.').pop()?.toLowerCase() || '';
       const mimeType = MIME_MAP[ext] || 'application/octet-stream';
-      const storagePath = `${taskRow.project_id}/${taskId}/${filename}`;
+      const storagePath = `${projectId}/${taskId}/${filename}`;
 
       const { error: uploadError } = await supabase.storage.from('task-artifacts').upload(storagePath, fileBuffer, {
         contentType: mimeType, upsert: true,

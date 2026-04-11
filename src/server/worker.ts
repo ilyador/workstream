@@ -176,9 +176,8 @@ async function startJob(job: ClaimedJob): Promise<void> {
     localPath = localPath.replace('~', process.env.HOME || homedir());
   }
 
-  // Preserve the original project root before worktree resolution below
-  // mutates `localPath`. Auto-continue uses this to queue the next task
-  // from the project root (not the worktree), avoiding nested worktrees.
+  // Must be captured before ensureWorktree mutates localPath — auto-continue
+  // needs the repo root, not the worktree path, to avoid nested worktrees.
   const projectRootPath = localPath;
 
   // Fetch the task

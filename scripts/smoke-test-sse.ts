@@ -303,8 +303,6 @@ try {
     cleanup.push(() => supabase.from('notifications').delete().eq('id', data.id));
   });
 
-  // workstream insert/update/delete — tests a table whose publication add
-  // was already working
   let workstreamId = '';
   await run('workstream insert', 'workstream_changed', async () => {
     const { data, error } = await supabase
@@ -332,7 +330,6 @@ try {
   });
   cleanup.pop();
 
-  // flow + flow_step — tests tables that were missing from the publication
   let flowId = '';
   await run('flow insert', 'flow_changed', async () => {
     const { data, error } = await supabase
@@ -359,7 +356,6 @@ try {
   });
   cleanup.pop();
 
-  // custom_task_type — tests another formerly-missing publication table
   await run('custom type insert', 'custom_type_changed', async () => {
     const { data, error } = await supabase
       .from('custom_task_types')

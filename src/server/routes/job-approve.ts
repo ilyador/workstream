@@ -34,10 +34,10 @@ jobApproveRouter.post('/api/jobs/:id/approve', requireAuth, async (req, res) => 
   const approvalError = await markJobApproved({ jobId, taskId, now });
   if (approvalError) return res.status(400).json({ error: approvalError });
   await recordApprovalLog(jobId);
-  // workDir = worktree path (from job.local_path) for autoCommit.
-  // projectRootPath = member.local_path (the user's registered project root)
-  // so auto-continue queues the next job from the repo root, not the worktree.
-  const projectRootPath = access.member.local_path ?? localPath;
+  // Auto-continue needs the repo root, not the worktree from job.local_path,
+  // so we don't queue nested worktrees.
+  const projectRootPath = access.member.local_path;
+  if (!projectRootPath) return res.status(500).json({ error: 'member.local_path missing after authorization' });
   await runApprovalFollowups({
     taskId,
     projectId: access.projectId,
