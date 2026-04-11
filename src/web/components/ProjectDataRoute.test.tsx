@@ -8,6 +8,7 @@ import { ModalContext, type ModalContextValue } from '../hooks/modal-context';
 import type { ProjectDataSettings } from '../lib/api';
 
 const api = vi.hoisted(() => ({
+  getProjectDataSettings: vi.fn(),
   getProjectDocuments: vi.fn(),
   searchProjectData: vi.fn(),
   updateProjectDataSettings: vi.fn(),
@@ -52,12 +53,14 @@ function renderRoute(
 describe('ProjectDataRoute', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    api.getProjectDataSettings.mockResolvedValue(baseSettings);
     api.getProjectDocuments.mockResolvedValue([]);
     api.searchProjectData.mockResolvedValue([]);
     api.updateProjectDataSettings.mockResolvedValue(baseSettings);
   });
 
   it('disables search until Project Data is enabled', async () => {
+    api.getProjectDataSettings.mockResolvedValue({ ...baseSettings, enabled: false });
     renderRoute({ ...baseSettings, enabled: false });
 
     await waitFor(() => {
@@ -71,9 +74,10 @@ describe('ProjectDataRoute', () => {
   it('confirms and requests reindex when embedding settings change with indexed documents', async () => {
     const user = userEvent.setup();
     const nextSettings = { ...baseSettings, embeddingModel: 'text-embedding-3-small' };
-    const reload = vi.fn()
+    api.getProjectDataSettings
       .mockResolvedValueOnce(baseSettings)
       .mockResolvedValue(nextSettings);
+    const reload = vi.fn().mockResolvedValue(nextSettings);
 
     api.getProjectDocuments.mockResolvedValue([
       {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  getProjectDataSettings,
   getProjectDocuments,
   searchProjectData,
   updateProjectDataSettings,
@@ -86,13 +87,20 @@ export function ProjectDataRoute({ project, projectDataSettings, reloadProjectDa
     setLoading(true);
     setError('');
     try {
+      // Fetch settings directly. We can't rely on the parent hook's
+      // `reloadProjectDataSettings` because its internal request-id
+      // tracking can race on mount and return undefined, stranding the
+      // child at EMPTY_SETTINGS and showing "Disabled" forever.
       const [nextSettings, nextDocuments] = await Promise.all([
-        reloadSettings ? reloadProjectDataSettings() : Promise.resolve(undefined),
+        reloadSettings ? getProjectDataSettings(project.id) : Promise.resolve(undefined),
         getProjectDocuments(project.id),
       ]);
       if (nextSettings) {
         setSettings(nextSettings);
         setSavedSettings(nextSettings);
+        // Fire-and-forget sync so other consumers of the parent hook
+        // stay up to date; we've already captured the data we need.
+        void reloadProjectDataSettings();
       }
       setDocuments(nextDocuments);
     } catch (err) {
