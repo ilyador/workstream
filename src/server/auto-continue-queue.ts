@@ -32,13 +32,23 @@ export async function queueAiTask(params: {
     return null;
   }
 
-  const { error: taskUpdateError } = await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', task.id);
-  if (taskUpdateError) {
+  const { data: updatedTask, error: taskUpdateError } = await supabase
+    .from('tasks')
+    .update({ status: 'in_progress' })
+    .eq('id', task.id)
+    .in('status', ['backlog', 'todo'])
+    .select('id')
+    .maybeSingle();
+  if (taskUpdateError || !updatedTask) {
     if (job?.id) {
       const { error: cleanupError } = await supabase.from('jobs').delete().eq('id', job.id);
       if (cleanupError) console.error(`[auto-continue] Failed to clean up queued job ${job.id}:`, cleanupError.message);
     }
-    console.error(`[auto-continue] Failed to mark queued task ${task.id} in progress:`, taskUpdateError.message);
+    if (taskUpdateError) {
+      console.error(`[auto-continue] Failed to mark queued task ${task.id} in progress:`, taskUpdateError.message);
+    } else {
+      console.warn(`[auto-continue] Task ${task.id} is no longer eligible for auto-continue (status changed); rolled back queued job`);
+    }
     return null;
   }
   return job?.id || null;
