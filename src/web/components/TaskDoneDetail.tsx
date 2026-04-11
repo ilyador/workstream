@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ReplyInput } from './ReplyInput';
 import { TaskAttachments } from './TaskAttachments';
 import { TaskComments } from './TaskComments';
@@ -99,6 +101,7 @@ export function TaskDoneDetail({
             )}
           </div>
         )}
+        {task.description && <div className={s.desc}><Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown></div>}
         <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
         {!hideComments && (
           <TaskComments taskId={task.id} projectId={projectId} expectedCount={commentCount} mentionMembers={mentionMembers} />

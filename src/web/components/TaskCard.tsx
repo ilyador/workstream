@@ -171,7 +171,7 @@ export function TaskCardView({
       )}
 
       {/* Preview: description only (visible when collapsed and NOT active) */}
-      {((!isActive && (!renderExpandedDetail || taskDone)) || (isReview && !renderExpandedDetail)) && (
+      {((!isActive && !renderExpandedDetail) || (isReview && !renderExpandedDetail)) && (
         <div className={s.previewReveal}>
           <TaskCardPreview
             task={task}

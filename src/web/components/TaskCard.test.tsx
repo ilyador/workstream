@@ -518,4 +518,26 @@ describe('TaskCard review checks', () => {
     expect(screen.getByText('Ran the checks.')).toBeTruthy();
     expect(screen.getByText('Reviewed the result.')).toBeTruthy();
   });
+
+  it('shows the full task description when an expanded done card is opened', () => {
+    render(
+      <TaskCard
+        task={{
+          ...makeTask(),
+          status: 'done',
+          description: 'First paragraph.\n\nSecond paragraph with `code`.',
+        }}
+        job={makeDoneJob()}
+        canRunAi
+        isExpanded
+        onToggleExpand={() => {}}
+      />,
+    );
+
+    const description = screen.getByText('First paragraph.').closest('div');
+    expect(description?.textContent).toContain('First paragraph.');
+    expect(description?.textContent).toContain('Second paragraph with code.');
+    expect(screen.getByText('code')).toBeTruthy();
+    expect(screen.getAllByText('First paragraph.')).toHaveLength(1);
+  });
 });
