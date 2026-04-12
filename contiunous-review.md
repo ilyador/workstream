@@ -632,3 +632,39 @@ Three exports:
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/server/worktree.test.ts` — 9/9 pass (new file)
 - `npx vitest run` — 327/327 pass in 45 files (previously 318/44)
+
+---
+
+## 2026-04-12 — Flow resolution (`src/server/flow-resolution.ts`)
+
+### Scope
+
+Review of the 71-line flow resolution module that determines which flow configuration applies to a given task. Called by `auto-continue-queue.ts:13` and the flow orchestrator. Read the existing 53-line test file for coverage baseline.
+
+### Module shape
+
+Two exports:
+- `findDefaultFlowId(projectId, taskType)` — returns the ID of the default flow for a task type (or null). Enforces uniqueness: if >1 default flow matches, throws.
+- `resolveFlowForTask(task, projectId)` — the main API. Tries (1) `task.flow_id` by explicit lookup, (2) default type flow. Throws if neither exists. Returns `{ flowSnapshot, firstPhase, maxAttempts, flowId }`.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | MEDIUM | `flow-resolution.test.ts` — `resolveFlowForTask` (main API, called by auto-continue and orchestrator) had **zero tests** | **Fixed** (f688eb8) |
+
+### Fix in this pass
+
+**f688eb8 — 6 tests for resolveFlowForTask.** Extended the existing supabase mock to support the `.single()` chain path (needed for `loadFlowById`) alongside `.limit()` (for `loadDefaultTypeFlow`). Tests cover: explicit flow_id lookup, flow_id not found error, null flow_id type-based fallback, no-flow-at-all error, maxAttempts computed as `max(step.max_retries + 1)` across a multi-step flow, and the empty-steps edge case (firstPhase defaults to `'plan'`, maxAttempts to 1). Test count 327 to 333. No production code changed.
+
+### Verified-correct design decisions
+
+- **`loadDefaultTypeFlow` uses `.limit(2)` + length check** — fetches at most 2 rows to detect ambiguity without scanning the full table. Clean pattern.
+- **`resolveFlowForTask` throws on both missing paths** — "Assigned flow X was not found" and "AI tasks require an assigned flow" are clear actionable errors. Callers (auto-continue-queue.ts:14-16) catch and log them.
+- **Error messages from raw Supabase errors at lines 22/36** are thrown as `new Error(error.message)`. These stay server-side (caught by auto-continue-queue, logged via console.error). Not an information-disclosure concern like the route/MCP patterns fixed in earlier passes.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/server/flow-resolution.test.ts` — 9/9 pass (up from 3)
+- `npx vitest run` — 333/333 pass in 45 files (previously 327)
