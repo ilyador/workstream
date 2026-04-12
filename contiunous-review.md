@@ -301,3 +301,48 @@ Test count 257 → 258.
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/server/process-lifecycle.test.ts` — 8/8 pass (up from 7)
 - `npx vitest run` — 258/258 pass in 40 files (previously 257)
+
+---
+
+## 2026-04-12 — File-passing gates (`src/web/lib/file-passing.ts`)
+
+### Scope
+
+Correctness + safety review of the 122-line helper module that computes "can this task accept files yet? / does it need to attach a file before completing?" gates for the workstream task flow. Module is called by `useTaskFileGate.ts`, `WorkstreamTaskChainGroup.tsx`, and `WorkstreamTaskListContent.tsx`. Read those callers just enough to confirm the contract; not reviewed in depth.
+
+### Module shape
+
+Six exports, all pure functions over task/artifact snapshots:
+
+- `taskAcceptsFiles(task)` / `taskProducesFiles(task)` — predicates on `task.chaining` (`'none'|'accept'|'produce'|'both'`).
+- `isTaskApprovedForFilePassing(task, jobStatus?)` — returns true if `task.status === 'done'` OR `jobStatus === 'done'`. Two-source design: one branch for manual approval (task record flipped to `done`), the other for auto-approval (the job finishes and drags the task to `done` out of band).
+- `buildTaskFileDependency(previousTask, previousJobStatus?)` — packages upstream state for the gate helper; normalizes missing inputs to `null`.
+- `getTaskFileGate({task, dependency, ownArtifacts, previousArtifacts})` — computes the blocking gate: an ordered cascade of input-side checks (for `needsInput`) followed by output-side checks (for `needsOutput`). Returns `{ blocked, checking, reason, message }`.
+- `hasFileAwaitingApproval({task, jobStatus, ownArtifacts})` — true iff a producing task currently has a file uploaded and its job is in `review` state.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | MEDIUM | `file-passing.test.ts` — zero tests for any of the three `needsOutput` branches of `getTaskFileGate` (output-file-missing, output-file-loading, output-file-check-failed) | **Fixed** (89c1de0) |
+| 2 | MEDIUM | `file-passing.test.ts` — `hasFileAwaitingApproval` only had its one positive case covered; every negative case was unreached | **Fixed** (89c1de0) |
+| 3 | LOW | four small exported helpers (`taskAcceptsFiles`, `taskProducesFiles`, `isTaskApprovedForFilePassing`, `buildTaskFileDependency`) had no direct tests | **Fixed** (89c1de0) |
+
+### Fixes in this pass
+
+**89c1de0 — comprehensive test coverage.** Added 16 tests, no production code changed. The existing 4 tests walked three narrow paths (two accept-side input gates + the one positive `hasFileAwaitingApproval` case). The new tests exercise every `needsOutput` branch of `getTaskFileGate` (including a happy-path pass-through when an output file is loaded), the `missing-previous-task` / `previous-file-check-failed` / `none`-chaining branches that were unreached, every negative case of `hasFileAwaitingApproval`, both chaining values for each predicate helper, both approval paths (manual `task.status='done'` and auto `jobStatus='done'`) for `isTaskApprovedForFilePassing`, and `buildTaskFileDependency`'s normalization of missing inputs. Test count **258 → 274**.
+
+### Verified false positives
+
+- **Subagent called `isTaskApprovedForFilePassing` a "critical semantic bug"** — claimed the `||` between `task?.status === 'done'` and `jobStatus === 'done'` would silently approve tasks with undefined status when a done jobStatus was present. The agent even contradicted itself mid-analysis ("task.status should always exist if previousTask exists"). Reading the callers confirms this is intentional dual-source approval: a task record can be flipped to `done` manually (task status) OR auto-promoted when its job completes (job status). The OR is correct, and the new `isTaskApprovedForFilePassing` tests pin both paths explicitly so future refactors don't lose them.
+
+### Side notes (not fixed)
+
+- `getTaskFileGate` encodes the precedence "upstream-input gates strictly before downstream-output gates." The existing "prioritizes upstream approval over the accepting task output requirement" test pinned the `'both'` case where the input blocks early; the new `both-chained tasks passing the input gate and then blocking on the output gate` test pins the complementary case. If the cascade order is ever reshuffled, both tests will fail — good.
+- `hasFileAwaitingApproval` hardcodes the single `jobStatus === 'review'` trigger. If a future workflow adds a second "awaiting-review"-style status, this will silently not match. Out of scope.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/web/lib/file-passing.test.ts` — 20/20 pass (up from 4)
+- `npx vitest run` — 274/274 pass in 40 files (previously 258)
