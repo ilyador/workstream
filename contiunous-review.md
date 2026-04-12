@@ -183,3 +183,57 @@ All four are used by `useProjectOrderingMutations.ts` for reorder + rollback flo
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/web/lib/optimistic-updates.test.ts` — 13/13 pass (up from 3)
 - `npx vitest run` — 249/249 pass in 39 files (previously 239)
+
+---
+
+## 2026-04-12 — Git checkpoint module (`src/server/checkpoint.ts`)
+
+### Scope
+
+Correctness + safety review of the git checkpoint module (98 lines) used to snapshot a worktree before a job runs and restore it on job reject/revert. Read `git-utils.ts` for context (thin `execFileSync` wrapper, no shell invocation). Traced callers — `worker.ts`, `flow/orchestrator.ts`, `routes/job-reject.ts`, `routes/job-revert.ts`, `routes/job-approve.ts`, `routes/job-rework-start.ts` — just enough to confirm that all callers gate `localPath` through `requireAuthorizedLocalPath` before invoking the module.
+
+### Module shape
+
+Three exports:
+
+- `createCheckpoint(localPath, jobId)` — reads HEAD SHA, captures current branch name (or null for detached), stages everything (`git add -A`), makes an `--allow-empty` "checkpoint" commit, saves the commit SHA under `refs/workstream/checkpoints/${jobId}`, stores the branch name in git config (`workstream.checkpoint.${jobId}.branch`), then does a `git reset --mixed HEAD~1` to undo the commit while keeping files exactly where they were.
+- `revertToCheckpoint(localPath, jobId)` — verifies the ref exists, runs `git checkout <ref> -- .` to restore tracked files, `git clean -fd --exclude=.codesync` to remove untracked residue, `git reset` to unstage, then optionally re-checks-out the saved branch if HEAD drifted, and finally calls `deleteCheckpoint`.
+- `deleteCheckpoint(localPath, jobId)` — `update-ref -d` and `config --unset`, both in try/catch so a stale ref doesn't prevent cleanup of the config key.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | MEDIUM | `checkpoint.ts:57-61` — `git clean -fd` failure silently swallowed; revert reports success with untracked residue remaining | **Fixed** (fe72a39) |
+| 2 | LOW | `checkpoint.ts:29,43,88` — `jobId` interpolated into ref names / config keys with no format guard | **Fixed** (fe72a39) |
+| 3 | — | entire file had **zero tests** despite running `reset`, `clean -fd`, `checkout` | **Fixed** (2965314) |
+| 4 | LOW | `checkpoint.ts:67-78` — silent catch on branch-restore leaves HEAD wherever the previous `checkout ref -- .` left it if the saved branch was deleted | Deferred |
+| 5 | LOW | deleteCheckpoint failures are only logged, not surfaced; orphaned refs accumulate under `refs/workstream/checkpoints/` | Deferred |
+
+### Fixes in this pass
+
+**fe72a39 — surface git clean failures + validate jobIds.**
+
+*`git clean` swallow.* The revert path wrapped `git clean -fd --exclude=.codesync` in `try { ... } catch { /* not fatal */ }`. When clean actually failed (permission denied on a path, read-only sub-mount), the tracked files had already been restored but untracked residue from the rejected job silently stayed on disk — and there was no log line to tell operators what happened. Changed to a warn-level log with a clear message ("tracked files were restored; untracked residue may remain") and kept the revert non-fatal so callers' existing behavior is preserved.
+
+*JobId validation.* `jobId` is interpolated into `refs/workstream/checkpoints/${jobId}` and `workstream.checkpoint.${jobId}.branch`. All current call sites pass database-issued UUIDs, so there's no known exploit — but `execFileSync('git', […], …)` is only shell-safe, not flag-safe, and a future route that sources jobId from untrusted input could hand git something like `--help` or `foo;bar`. Added a `JOB_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/` guard invoked at the top of `createCheckpoint`, `revertToCheckpoint`, and `deleteCheckpoint`, rejecting empty strings, leading-dash values, and anything containing shell metacharacters. UUIDs pass through unchanged.
+
+**2965314 — test coverage for a previously-untested destructive module.** Added `src/server/checkpoint.test.ts` with `vi.mock('./git-utils.js')` so every git call is redirected through a mock. Eight tests cover: the validation rejections don't reach any git call; the happy-path sequence of git subcommands emitted by `createCheckpoint`; the branch-config write is skipped on detached HEAD; `revertToCheckpoint` throws `'No checkpoint found'` for a missing ref; `revertToCheckpoint` still returns `{ reverted: true }` but emits the new warn log when `git clean` fails; `deleteCheckpoint` unsets both ref and config key and only warns (doesn't throw) on a ref-delete failure. Test file count 39 → 40, test count 249 → 257.
+
+### Not-fixing findings
+
+**#4 — branch restore is best-effort.** Lines 67-78 look up the saved branch, compare against current HEAD, and `git checkout <branch>` if they differ. All of that is wrapped in `try { } catch { }`. If the saved branch was force-pushed, deleted, or had conflicting uncommitted changes created by the restored checkpoint state, the checkout fails and we silently stay on whatever branch HEAD was pointing at when revert started. That's acceptable — the checkpoint's tracked state has already been restored on disk — but it's subtle enough that a comment explaining why the catch is okay would help. Left as-is; too small for a standalone commit.
+
+**#5 — no cleanup path for orphaned refs.** `deleteCheckpoint` runs on the happy path (job approved / job reworked), but if both `update-ref -d` calls fail (ref corrupted, git lockfile stuck), the ref lingers forever under `refs/workstream/checkpoints/`. A periodic background sweep for stale refs older than N days would solve it. Out of scope; flag for whichever review covers background maintenance.
+
+### Side notes (not fixed)
+
+- `git-utils.ts:7-10` — `git()` (the async version) defaults to `timeout = 15000`, but none of the autocommit / checkpoint call sites override it. A 15s git operation is plenty for a clean local repo, but a large checkpoint / worktree with millions of files could hit it. Not worth acting on until it's observed.
+- `createCheckpoint` uses `git config workstream.checkpoint.${jobId}.branch` as its out-of-band storage for the branch name. A slight smell — git notes or a json file under `.git/workstream-checkpoints/` would be more self-contained — but works fine and costs nothing.
+- `git clean -fd --exclude=.codesync` hardcodes the `.codesync` exclusion. If the project ever gets a second path that must survive revert, it needs to be added here. Worth extracting to a named constant when there's a second one.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/server/checkpoint.test.ts` — 8/8 pass (new file)
+- `npx vitest run` — 257/257 pass in 40 files (previously 249 in 39 files)
