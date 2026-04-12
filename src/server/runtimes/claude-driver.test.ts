@@ -280,13 +280,14 @@ describe('ClaudeDriver', () => {
     expect(joined).toMatch(/\[TodoWrite\](\n|$)/);
   });
 
-  it('returns null for non-assistant non-result events', async () => {
-    const proc = new MockProc();
-    spawnMock.mockReturnValue(proc);
+  it('returns raw stdout when no events are recognized and falls back to Completed for empty stdout', async () => {
+    // Unrecognized events: return value is the raw stdout accumulation
+    const proc1 = new MockProc();
+    spawnMock.mockReturnValue(proc1);
 
     const logs: string[] = [];
     const { claudeDriver } = await import('./claude-driver.js');
-    const promise = claudeDriver.execute({
+    const promise1 = claudeDriver.execute({
       jobId: 'j1',
       step: baseStep(),
       task: { effort: null },
@@ -295,14 +296,51 @@ describe('ClaudeDriver', () => {
       onLog: (t) => logs.push(t),
     });
 
-    // system, tool_result, tool_output should produce no log output
-    proc.stdout.emit('data', Buffer.from('{"type":"system","message":"init"}\n'));
-    proc.stdout.emit('data', Buffer.from('{"type":"tool_result","output":"x"}\n'));
-    proc.stdout.emit('data', Buffer.from('{"type":"tool_output","text":"x"}\n'));
+    proc1.stdout.emit('data', Buffer.from('{"type":"system","message":"init"}\n'));
+    proc1.emit('close', 0);
+    const result1 = await promise1;
+
+    // No formatted events → collected is empty → falls back to raw stdout
+    expect(logs.length).toBe(0);
+    expect(result1).toContain('"type":"system"');
+
+    // Completely empty stdout → falls back to "Completed"
+    const proc2 = new MockProc();
+    spawnMock.mockReturnValue(proc2);
+    const promise2 = claudeDriver.execute({
+      jobId: 'j2',
+      step: baseStep(),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'X',
+      onLog: () => {},
+    });
+    proc2.emit('close', 0);
+    expect(await promise2).toBe('Completed');
+  });
+
+  it('blocks all write tools when step.tools is empty', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const { claudeDriver } = await import('./claude-driver.js');
+    const promise = claudeDriver.execute({
+      jobId: 'j1',
+      step: baseStep({ tools: [] }),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'X',
+      onLog: () => {},
+    });
+
+    const args = spawnMock.mock.calls[0][1] as string[];
+    // With an empty tools list, no --allowedTools flag should appear
+    expect(args).not.toContain('--allowedTools');
+    // And no --disallowedTools either (only added when tools.length > 0)
+    expect(args).not.toContain('--disallowedTools');
+
     proc.emit('close', 0);
     await promise;
-
-    expect(logs.length).toBe(0);
   });
 
   it('rethrows cancellation even when the done marker was already streamed', async () => {
