@@ -7,7 +7,19 @@ export interface CheckpointInfo {
   branch: string | null;
 }
 
+// Defense in depth: job IDs are server-issued UUIDs today, but these values
+// are interpolated into git ref names and config keys, so reject anything
+// that could confuse git's arg parsing (leading dashes, dots, slashes, etc.)
+// if a future code path ever sources jobId from untrusted input.
+const JOB_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
+function assertValidJobId(jobId: string): void {
+  if (!JOB_ID_PATTERN.test(jobId)) {
+    throw new Error(`Invalid job id for checkpoint: ${JSON.stringify(jobId)}`);
+  }
+}
+
 export function createCheckpoint(localPath: string, jobId: string): CheckpointInfo {
+  assertValidJobId(jobId);
   const headSha = git(['rev-parse', 'HEAD'], localPath);
 
   // Save current branch name (null if detached HEAD)
@@ -40,6 +52,7 @@ export function createCheckpoint(localPath: string, jobId: string): CheckpointIn
 }
 
 export function revertToCheckpoint(localPath: string, jobId: string): { reverted: boolean } {
+  assertValidJobId(jobId);
   const ref = `refs/workstream/checkpoints/${jobId}`;
 
   // Verify checkpoint exists
@@ -52,12 +65,16 @@ export function revertToCheckpoint(localPath: string, jobId: string): { reverted
   // Restore all tracked files from the checkpoint
   git(['checkout', ref, '--', '.'], localPath);
 
-  // Remove any new files Claude created that weren't in the checkpoint
-  // But only files — don't remove directories that might have been there
+  // Remove any new files the job created that weren't in the checkpoint.
+  // git clean can fail for legitimate reasons (permission denied on a file,
+  // read-only filesystem on a subpath). We don't abort the revert — the
+  // tracked files have already been restored above — but we surface the
+  // error so operators can see when a revert left untracked residue behind.
   try {
     git(['clean', '-fd', '--exclude=.codesync'], localPath);
-  } catch {
-    // git clean can fail if there are permission issues — not fatal
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[checkpoint] git clean failed during revert for job ${jobId} (tracked files were restored; untracked residue may remain):`, message);
   }
 
   // Unstage everything (restore to working directory state)
@@ -84,6 +101,7 @@ export function revertToCheckpoint(localPath: string, jobId: string): { reverted
 }
 
 export function deleteCheckpoint(localPath: string, jobId: string): void {
+  assertValidJobId(jobId);
   try {
     git(['update-ref', '-d', `refs/workstream/checkpoints/${jobId}`], localPath);
   } catch (error) {

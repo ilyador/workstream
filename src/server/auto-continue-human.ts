@@ -2,9 +2,19 @@ import { supabase } from './supabase.js';
 import type { AutoContinueTask } from './auto-continue-types.js';
 
 export async function markHumanTaskInProgress(task: AutoContinueTask, workstreamId: string): Promise<void> {
-  const { error: updateError } = await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', task.id);
+  const { data: updatedTask, error: updateError } = await supabase
+    .from('tasks')
+    .update({ status: 'in_progress' })
+    .eq('id', task.id)
+    .in('status', ['backlog', 'todo'])
+    .select('id')
+    .maybeSingle();
   if (updateError) {
     console.error(`[auto-continue] Failed to mark human task ${task.id} in progress:`, updateError.message);
+    return;
+  }
+  if (!updatedTask) {
+    console.warn(`[auto-continue] Human task ${task.id} is no longer eligible for auto-continue (status changed); skipping notification`);
     return;
   }
 

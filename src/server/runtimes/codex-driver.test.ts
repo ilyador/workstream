@@ -239,6 +239,34 @@ describe('CodexDriver', () => {
     expect(existsSync(outputPath)).toBe(false);
   });
 
+  it('summarize spawns codex exec with the step cwd and returns the output file', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const { codexDriver } = await import('./codex-driver.js');
+    const promise = codexDriver.summarize({
+      jobId: 'j-sum',
+      step: baseStep({ runtime_variant: 'gpt-5.4' }),
+      cwd: '/work',
+      prompt: 'summarize this',
+    });
+
+    const [cmd, args] = spawnMock.mock.calls[0];
+    expect(cmd).toBe('codex');
+    expect(args).toContain('exec');
+    expect(args).toContain('--cd');
+    expect(args[args.indexOf('--cd') + 1]).toBe('/work');
+    expect(args).toContain('--model');
+    expect(args[args.indexOf('--model') + 1]).toBe('gpt-5.4');
+    // summarize passes effort: null, so no -c model_reasoning_effort flag
+    expect(args).not.toContain('-c');
+    expect(proc.stdin.write).toHaveBeenCalledWith('summarize this');
+
+    writeFileSync(args[args.indexOf('--output-last-message') + 1], 'the summary');
+    proc.emit('close', 0);
+    expect(await promise).toBe('the summary');
+  });
+
   it('silently drops valid JSON events with no known message field', async () => {
     const proc = new MockProc();
     spawnMock.mockReturnValue(proc);

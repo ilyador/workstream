@@ -78,6 +78,7 @@ export const claudeDriver: RuntimeDriver = {
         cwd: opts.cwd,
         env: buildRuntimeEnv('claude_code'),
         stdin: opts.prompt,
+        timeoutMs: opts.timeoutMs,
         onLine: (line, stream) => {
           if (stream === 'stdout') {
             const formatted = formatStreamEvent(line);

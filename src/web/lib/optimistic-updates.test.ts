@@ -56,4 +56,99 @@ describe('optimistic updates', () => {
 
     expect(restored).toEqual(tasks);
   });
+
+  it('returns an empty update when the dragged id is not in the list', () => {
+    const workstreams = [
+      { id: 'ws-1', position: 1, name: 'A' },
+      { id: 'ws-2', position: 2, name: 'B' },
+    ];
+    expect(buildRelativeMovePositionUpdates(workstreams, 'missing', 'ws-1', 'left')).toEqual({});
+  });
+
+  it('returns an empty update when the target id is not in the list', () => {
+    const workstreams = [
+      { id: 'ws-1', position: 1, name: 'A' },
+      { id: 'ws-2', position: 2, name: 'B' },
+    ];
+    expect(buildRelativeMovePositionUpdates(workstreams, 'ws-1', 'missing', 'right')).toEqual({});
+  });
+
+  it('returns an empty update when dropping an item onto its own current separator', () => {
+    const workstreams = [
+      { id: 'ws-1', position: 1, name: 'A' },
+      { id: 'ws-2', position: 2, name: 'B' },
+      { id: 'ws-3', position: 3, name: 'C' },
+    ];
+    expect(buildRelativeMovePositionUpdates(workstreams, 'ws-2', 'ws-1', 'right')).toEqual({});
+    expect(buildRelativeMovePositionUpdates(workstreams, 'ws-2', 'ws-3', 'left')).toEqual({});
+  });
+
+  it('halves the next position when dropped at the start of the list', () => {
+    const workstreams = [
+      { id: 'ws-1', position: 10, name: 'A' },
+      { id: 'ws-2', position: 20, name: 'B' },
+    ];
+    expect(buildRelativeMovePositionUpdates(workstreams, 'ws-2', 'ws-1', 'left')).toEqual({ 'ws-2': 5 });
+  });
+
+  it('adds one to the previous position when dropped at the end of the list', () => {
+    const workstreams = [
+      { id: 'ws-1', position: 1, name: 'A' },
+      { id: 'ws-2', position: 2, name: 'B' },
+      { id: 'ws-3', position: 3, name: 'C' },
+    ];
+    expect(buildRelativeMovePositionUpdates(workstreams, 'ws-1', 'ws-3', 'right')).toEqual({ 'ws-1': 4 });
+  });
+
+  it('falls back to full reordering when adjacent gap is smaller than EPSILON', () => {
+    const a = 1;
+    const b = 1 + Number.EPSILON / 2;
+    const workstreams = [
+      { id: 'ws-1', position: a, name: 'A' },
+      { id: 'ws-2', position: b, name: 'B' },
+      { id: 'ws-3', position: 5, name: 'C' },
+    ];
+    const updates = buildRelativeMovePositionUpdates(workstreams, 'ws-3', 'ws-1', 'right');
+    expect(updates).toEqual({ 'ws-1': 1, 'ws-3': 2, 'ws-2': 3 });
+  });
+
+  it('applyPositionUpdates preserves input order when sort is not requested', () => {
+    const workstreams = [
+      { id: 'ws-1', position: 1, name: 'A' },
+      { id: 'ws-2', position: 2, name: 'B' },
+      { id: 'ws-3', position: 3, name: 'C' },
+    ];
+    const updated = applyPositionUpdates(workstreams, { 'ws-1': 99 });
+    expect(updated.map(w => w.id)).toEqual(['ws-1', 'ws-2', 'ws-3']);
+    expect(updated[0].position).toBe(99);
+  });
+
+  it('applyPositionUpdates preserves references for items without updates', () => {
+    const workstreams = [
+      { id: 'ws-1', position: 1, name: 'A' },
+      { id: 'ws-2', position: 2, name: 'B' },
+    ];
+    const updated = applyPositionUpdates(workstreams, { 'ws-1': 99 });
+    expect(updated[1]).toBe(workstreams[1]);
+    expect(updated[0]).not.toBe(workstreams[0]);
+  });
+
+  it('applyTaskMove is a no-op when the task id is not found', () => {
+    const tasks = [
+      { id: 'task-1', workstream_id: 'ws-1', position: 1, title: 'A' },
+    ];
+    const updated = applyTaskMove(tasks, 'missing', 'ws-2', 5);
+    expect(updated).toEqual(tasks);
+    expect(updated[0]).toBe(tasks[0]);
+  });
+
+  it('replaceItemById is a no-op when the replacement id is not found', () => {
+    const tasks = [
+      { id: 'task-1', workstream_id: 'ws-1', position: 1, title: 'A' },
+    ];
+    const replacement = { id: 'missing', workstream_id: 'ws-2', position: 9, title: 'X' };
+    const updated = replaceItemById(tasks, replacement);
+    expect(updated).toEqual(tasks);
+    expect(updated[0]).toBe(tasks[0]);
+  });
 });

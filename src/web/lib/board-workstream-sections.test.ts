@@ -56,6 +56,20 @@ describe('board workstream sections', () => {
     ).toBe('active');
   });
 
+  it('treats a complete workstream with no tasks as complete', () => {
+    expect(getBoardWorkstreamSection(ws({ status: 'complete' }), [], {})).toBe('complete');
+  });
+
+  it('treats a complete workstream as complete when all tasks and jobs are closed', () => {
+    expect(
+      getBoardWorkstreamSection(
+        ws({ status: 'merged' }),
+        [task({ id: 'task-1', status: 'done' }), task({ id: 'task-2', status: 'canceled' })],
+        { 'task-1': { status: 'done' }, 'task-2': null },
+      ),
+    ).toBe('complete');
+  });
+
   it('builds stable workstream and task section maps', () => {
     const workstreams = [ws({ id: 'active', status: 'active', position: 1 }), ws({ id: 'done', status: 'merged', position: 2 })];
     const tasksByWorkstream = {

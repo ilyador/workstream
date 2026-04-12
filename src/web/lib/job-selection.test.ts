@@ -41,6 +41,26 @@ describe('job selection', () => {
     expect(jobs.map(job => job.id)).toEqual(['paused-new', 'review-new']);
   });
 
+  it('returns an empty array for empty input', () => {
+    expect(pickPrimaryJobs([])).toEqual([]);
+  });
+
+  it('uses id as a stable tiebreak when status and timestamps match', () => {
+    const jobs = pickPrimaryJobs([
+      makeJob({ id: 'b', taskId: 'task-1', status: 'review' }),
+      makeJob({ id: 'a', taskId: 'task-1', status: 'review' }),
+    ]);
+    expect(jobs[0]?.id).toBe('a');
+  });
+
+  it('treats invalid timestamp strings as zero (no crash)', () => {
+    const jobs = pickPrimaryJobs([
+      makeJob({ id: 'j-1', taskId: 'task-1', status: 'done', completedAt: 'not-a-date' }),
+      makeJob({ id: 'j-2', taskId: 'task-1', status: 'done', completedAt: '2026-04-06T10:00:00Z' }),
+    ]);
+    expect(jobs[0]?.id).toBe('j-2');
+  });
+
   it('builds a stable task-id lookup for board consumers', () => {
     const map = mapPrimaryJobsByTask([
       makeJob({ id: 'failed-1', taskId: 'task-1', status: 'failed', startedAt: '2026-04-06T07:00:00Z' }),

@@ -1,6 +1,6 @@
 import type { JobStatus, JobView } from '../components/job-types';
 
-const JOB_STATUS_PRIORITY: Record<JobStatus, number> = {
+export const JOB_STATUS_PRIORITY: Record<JobStatus, number> = {
   running: 0,
   queued: 1,
   paused: 2,

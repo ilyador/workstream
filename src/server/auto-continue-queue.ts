@@ -16,6 +16,23 @@ export async function queueAiTask(params: {
     return null;
   }
 
+  const { data: updatedTask, error: taskUpdateError } = await supabase
+    .from('tasks')
+    .update({ status: 'in_progress' })
+    .eq('id', task.id)
+    .in('status', ['backlog', 'todo'])
+    .select('id')
+    .maybeSingle();
+
+  if (taskUpdateError) {
+    console.error(`[auto-continue] Failed to mark task ${task.id} in progress:`, taskUpdateError.message);
+    return null;
+  }
+  if (!updatedTask) {
+    console.warn(`[auto-continue] Task ${task.id} is no longer eligible for auto-continue (status changed)`);
+    return null;
+  }
+
   const { data: job, error } = await supabase.from('jobs').insert({
     task_id: task.id,
     project_id: projectId,
@@ -29,17 +46,15 @@ export async function queueAiTask(params: {
 
   if (error) {
     console.error(`[auto-continue] Failed to queue next task ${task.id}:`, error.message);
+    const { error: rollbackError } = await supabase
+      .from('tasks')
+      .update({ status: 'todo' })
+      .eq('id', task.id)
+      .select('id')
+      .maybeSingle();
+    if (rollbackError) console.error(`[auto-continue] Failed to roll back task ${task.id} to todo:`, rollbackError.message);
     return null;
   }
 
-  const { error: taskUpdateError } = await supabase.from('tasks').update({ status: 'in_progress' }).eq('id', task.id);
-  if (taskUpdateError) {
-    if (job?.id) {
-      const { error: cleanupError } = await supabase.from('jobs').delete().eq('id', job.id);
-      if (cleanupError) console.error(`[auto-continue] Failed to clean up queued job ${job.id}:`, cleanupError.message);
-    }
-    console.error(`[auto-continue] Failed to mark queued task ${task.id} in progress:`, taskUpdateError.message);
-    return null;
-  }
   return job?.id || null;
 }

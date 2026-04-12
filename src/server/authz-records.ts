@@ -22,7 +22,8 @@ async function requireRecordAccess<T extends DbRecord>(
       res.status(404).json({ error: 'Record not found' });
       return null;
     }
-    res.status(500).json({ error: error.message });
+    console.error(`[authz] Failed to load ${table} ${id}:`, error.message);
+    res.status(500).json({ error: 'Failed to load record' });
     return null;
   }
   const record = asRecord(data) as T | null;
@@ -33,7 +34,8 @@ async function requireRecordAccess<T extends DbRecord>(
 
   const projectId = stringField(record, 'project_id');
   if (!projectId) {
-    res.status(500).json({ error: 'Record is missing project_id' });
+    console.error(`[authz] Record ${table}/${id} is missing project_id`);
+    res.status(500).json({ error: 'Failed to load record' });
     return null;
   }
 

@@ -127,14 +127,18 @@ async function runCodex(
   }
 
   let output = '';
+  let readError: NodeJS.ErrnoException | null = null;
   try {
     output = readFileSync(outputPath, 'utf8').trim();
-  } catch {
-    output = '';
+  } catch (err) {
+    readError = err as NodeJS.ErrnoException;
   }
   try { unlinkSync(outputPath); } catch { /* ignore */ }
 
   if (caught) throw caught;
+  if (readError && readError.code !== 'ENOENT') {
+    throw new Error(`Failed to read codex output file: ${readError.message}`);
+  }
   if (!output) throw new Error('codex produced no output');
   return output;
 }
@@ -145,7 +149,7 @@ export const codexDriver: RuntimeDriver = {
   async execute(opts: ExecuteStepOptions): Promise<string> {
     const outputPath = allocateOutputPath(opts.jobId, 'step');
     const args = buildArgs(opts.step, opts.task, opts.cwd, outputPath);
-    return runCodex(opts.jobId, args, outputPath, opts.cwd, opts.prompt, opts.onLog);
+    return runCodex(opts.jobId, args, outputPath, opts.cwd, opts.prompt, opts.onLog, opts.timeoutMs);
   },
 
   async summarize(opts: SummarizeOptions): Promise<string> {

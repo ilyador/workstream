@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth-middleware.js';
-import { asRecord, requireTaskAccess, routeParam } from '../authz.js';
+import { asRecord, getUserId, requireTaskAccess, routeParam, stringField } from '../authz.js';
 import { supabase } from '../supabase.js';
 import { readArtifactError, requireStringField } from './artifact-utils.js';
 
@@ -17,6 +17,12 @@ artifactDeleteRouter.delete('/api/artifacts/:id', requireAuth, async (req, res) 
   if (!taskId || !storagePath) return;
   const access = await requireTaskAccess(req, res, taskId, 'id, project_id');
   if (!access) return;
+  const uploadedBy = stringField(artifactRecord, 'uploaded_by');
+  const isUploader = !!uploadedBy && uploadedBy === getUserId(req);
+  const isAdmin = access.member.role === 'admin';
+  if (!isUploader && !isAdmin) {
+    return res.status(403).json({ error: 'Only the uploader or a project admin can delete this artifact' });
+  }
   const { error: removeError } = await supabase.storage.from('task-artifacts').remove([storagePath]);
   if (removeError) return res.status(400).json({ error: removeError.message });
   const { error } = await supabase.from('task_artifacts').delete().eq('id', artifactId);

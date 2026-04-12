@@ -65,9 +65,16 @@ export async function cancelJob(jobId: string): Promise<void> {
   clearJobCancellation(jobId);
 }
 
-export function cancelAllJobs(): void {
-  for (const [jobId, processes] of activeProcesses) {
-    activeProcesses.delete(jobId);
-    for (const proc of processes) terminateProcess(proc).catch(() => {});
+export async function cancelAllJobs(): Promise<void> {
+  const entries = Array.from(activeProcesses.entries());
+  activeProcesses.clear();
+  const terminations: Promise<void>[] = [];
+  for (const [jobId, processes] of entries) {
+    markJobCanceled(jobId);
+    for (const proc of processes) {
+      terminations.push(terminateProcess(proc).catch(() => {}));
+    }
   }
+  await Promise.all(terminations);
+  for (const [jobId] of entries) clearJobCancellation(jobId);
 }

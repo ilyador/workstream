@@ -20,6 +20,7 @@ export const qwenDriver: RuntimeDriver = {
       cwd: opts.cwd,
       env: buildRuntimeEnv('qwen_code'),
       stdin: opts.prompt,
+      timeoutMs: opts.timeoutMs,
       onLine: (line, _stream) => {
         if (line.trim()) opts.onLog(`${line}\n`);
       },

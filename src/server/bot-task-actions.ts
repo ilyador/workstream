@@ -14,7 +14,11 @@ export async function createTask(action: BotAction, projectId: string): Promise<
   if (!BOT_TASK_TYPES.has(type)) return `Failed to create task: type must be one of ${Array.from(BOT_TASK_TYPES).join(', ')}`;
   if (workstreamId) {
     const { data: workstream, error: workstreamError } = await supabase.from('workstreams').select('project_id').eq('id', workstreamId).single();
-    if (workstreamError) return `Failed to create task: ${isMissingRowError(workstreamError) ? 'workstream_id not found' : workstreamError.message}`;
+    if (workstreamError) {
+      if (isMissingRowError(workstreamError)) return 'Failed to create task: workstream_id not found';
+      console.error(`[bot] Failed to load workstream ${workstreamId}:`, workstreamError.message);
+      return 'Failed to create task: could not load workstream';
+    }
     if (workstream?.project_id !== projectId) return 'Failed to create task: workstream_id does not belong to this project';
   }
   const { data: maxTask, error: maxTaskError } = await supabase
@@ -24,7 +28,10 @@ export async function createTask(action: BotAction, projectId: string): Promise<
     .order('position', { ascending: false })
     .limit(1)
     .single();
-  if (maxTaskError && !isMissingRowError(maxTaskError)) return `Failed to create task: ${maxTaskError.message}`;
+  if (maxTaskError && !isMissingRowError(maxTaskError)) {
+    console.error('[bot] Failed to load max task position:', maxTaskError.message);
+    return 'Failed to create task: could not load project tasks';
+  }
 
   const { data, error } = await supabase.from('tasks').insert({
     project_id: projectId,
@@ -35,7 +42,10 @@ export async function createTask(action: BotAction, projectId: string): Promise<
     position: (maxTask?.position ?? 0) + 1,
   }).select().single();
 
-  if (error) return `Failed to create task: ${error.message}`;
+  if (error) {
+    console.error('[bot] Failed to insert task:', error.message);
+    return 'Failed to create task';
+  }
   return `Created task "${data.title}" (${data.id})`;
 }
 
@@ -43,7 +53,11 @@ export async function updateTask(action: BotAction, projectId: string): Promise<
   const taskId = typeof action.params.task_id === 'string' ? action.params.task_id : '';
   if (!taskId) return 'Failed to update task: task_id is required';
   const { data: taskRow, error: taskError } = await supabase.from('tasks').select('project_id').eq('id', taskId).single();
-  if (taskError) return `Failed to update task: ${isMissingRowError(taskError) ? 'task_id not found' : taskError.message}`;
+  if (taskError) {
+    if (isMissingRowError(taskError)) return 'Failed to update task: task_id not found';
+    console.error(`[bot] Failed to load task ${taskId}:`, taskError.message);
+    return 'Failed to update task: could not load task';
+  }
   if (taskRow?.project_id !== projectId) return 'Failed to update task: task_id does not belong to this project';
 
   const clean: Record<string, unknown> = {};
@@ -57,7 +71,10 @@ export async function updateTask(action: BotAction, projectId: string): Promise<
   if (clean.status === 'done') clean.completed_at = new Date().toISOString();
   else if (typeof clean.status === 'string') clean.completed_at = null;
   const { error } = await supabase.from('tasks').update(clean).eq('id', taskId);
-  if (error) return `Failed to update task: ${error.message}`;
+  if (error) {
+    console.error(`[bot] Failed to update task ${taskId}:`, error.message);
+    return 'Failed to update task';
+  }
   return `Updated task ${taskId}`;
 }
 
@@ -74,15 +91,25 @@ export async function addComment(action: BotAction, projectId: string): Promise<
     .eq('name', 'WorkStream Bot')
     .limit(1)
     .single();
-  if (botProfileError && !isMissingRowError(botProfileError)) return `Failed to add comment: ${botProfileError.message}`;
+  if (botProfileError && !isMissingRowError(botProfileError)) {
+    console.error('[bot] Failed to load bot profile:', botProfileError.message);
+    return 'Failed to add comment: could not resolve commenter';
+  }
   let userId = botProfile?.id;
   if (!userId && taskRow?.project_id) {
     const { data: proj, error: projectError } = await supabase.from('projects').select('created_by').eq('id', taskRow.project_id).single();
-    if (projectError) return `Failed to add comment: ${isMissingRowError(projectError) ? 'project not found' : projectError.message}`;
+    if (projectError) {
+      if (isMissingRowError(projectError)) return 'Failed to add comment: project not found';
+      console.error('[bot] Failed to load project for comment:', projectError.message);
+      return 'Failed to add comment: could not load project';
+    }
     userId = proj?.created_by;
   }
   if (!userId) return 'No user found for comments';
   const { error } = await supabase.from('comments').insert({ task_id: taskId, user_id: userId, body: message });
-  if (error) return `Failed to add comment: ${error.message}`;
+  if (error) {
+    console.error(`[bot] Failed to insert comment on task ${taskId}:`, error.message);
+    return 'Failed to add comment';
+  }
   return `Comment added to ${taskId}`;
 }

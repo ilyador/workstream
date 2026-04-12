@@ -10,7 +10,8 @@ async function getRequestMemberships(req: Request, res: Response): Promise<Proje
     .select('role, local_path')
     .eq('user_id', getUserId(req));
   if (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[authz] Failed to load project memberships:', error.message);
+    res.status(500).json({ error: 'Failed to load memberships' });
     return null;
   }
   return Array.isArray(data) ? data.map(projectMemberFromRow).filter((member): member is ProjectMember => !!member) : [];

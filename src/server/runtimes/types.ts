@@ -8,6 +8,7 @@ export interface ExecuteStepOptions {
   cwd: string;
   prompt: string;
   onLog: (text: string) => void;
+  timeoutMs?: number;
 }
 
 export interface SummarizeOptions {

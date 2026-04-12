@@ -106,16 +106,16 @@ export function useArtifacts(taskId: string | null, projectId?: string | null): 
     };
   }, [cacheKey, taskId, projectId, load]);
 
-  async function upload(file: File) {
+  const upload = useCallback(async (file: File) => {
     if (!taskId) return;
     await apiUpload(taskId, file);
     await load({ force: true });
-  }
+  }, [taskId, load]);
 
-  async function remove(artifactId: string) {
+  const remove = useCallback(async (artifactId: string) => {
     await apiDelete(artifactId);
     await load({ force: true });
-  }
+  }, [load]);
 
   return { artifacts, loading, loaded, error, upload, remove, reload: load };
 }

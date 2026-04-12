@@ -1,6 +1,7 @@
 /** Format a date string as relative time (e.g., "5m ago", "2h ago") */
 export function timeAgo(date: string): string {
   const ms = Date.now() - new Date(date).getTime();
+  if (Number.isNaN(ms)) return '';
   const s = Math.floor(ms / 1000);
   if (s < 60) return 'just now';
   const m = Math.floor(s / 60);
@@ -14,6 +15,7 @@ export function timeAgo(date: string): string {
 /** Format elapsed time from a start timestamp (e.g., "45s", "3m", "1h 12m") */
 export function elapsed(startedAt: string): string {
   const ms = Date.now() - new Date(startedAt).getTime();
+  if (Number.isNaN(ms)) return '';
   const secs = Math.floor(ms / 1000);
   if (secs < 60) return `${secs}s`;
   const mins = Math.floor(secs / 60);

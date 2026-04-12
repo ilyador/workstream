@@ -6,16 +6,17 @@ import type { Artifact } from '../lib/api';
 import { clearArtifactCacheForTests, useArtifacts } from './useArtifacts';
 import type { ProjectEvent } from './useProjectEvents';
 
-const { getArtifactsMock, uploadArtifactMock, subscribeProjectEventsMock } = vi.hoisted(() => ({
+const { getArtifactsMock, uploadArtifactMock, deleteArtifactMock, subscribeProjectEventsMock } = vi.hoisted(() => ({
   getArtifactsMock: vi.fn(),
   uploadArtifactMock: vi.fn(),
+  deleteArtifactMock: vi.fn(),
   subscribeProjectEventsMock: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
   getArtifacts: getArtifactsMock,
   uploadArtifact: uploadArtifactMock,
-  deleteArtifact: vi.fn(),
+  deleteArtifact: deleteArtifactMock,
 }));
 
 vi.mock('./useProjectEvents', () => ({
@@ -102,6 +103,74 @@ describe('useArtifacts', () => {
 
     await waitFor(() => expect(second.result.current.artifacts[0]?.id).toBe('file-2'));
     expect(getArtifactsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('remove() deletes the artifact and reloads from the server', async () => {
+    deleteArtifactMock.mockResolvedValue(undefined);
+    getArtifactsMock
+      .mockResolvedValueOnce([makeArtifact('file-1'), makeArtifact('file-2')])
+      .mockResolvedValueOnce([makeArtifact('file-2')]);
+    const { result } = renderHook(() => useArtifacts('task-1', 'project-1'));
+
+    await waitFor(() => expect(result.current.artifacts).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.remove('file-1');
+    });
+
+    expect(deleteArtifactMock).toHaveBeenCalledWith('file-1');
+    await waitFor(() => expect(result.current.artifacts).toHaveLength(1));
+    expect(result.current.artifacts[0].id).toBe('file-2');
+    expect(getArtifactsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces a load error and then clears it on a successful retry', async () => {
+    getArtifactsMock
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce([makeArtifact('file-1')]);
+    const { result } = renderHook(() => useArtifacts('task-1', 'project-1'));
+
+    await waitFor(() => expect(result.current.error).toBe('boom'));
+    expect(result.current.loaded).toBe(false);
+    expect(result.current.loading).toBe(false);
+
+    await act(async () => {
+      await result.current.reload({ force: true });
+    });
+
+    await waitFor(() => expect(result.current.error).toBeNull());
+    expect(result.current.loaded).toBe(true);
+    expect(result.current.artifacts[0].id).toBe('file-1');
+  });
+
+  it('resets local state when taskId transitions to null', async () => {
+    getArtifactsMock.mockResolvedValue([makeArtifact('file-1')]);
+    const { result, rerender } = renderHook(
+      ({ taskId }: { taskId: string | null }) => useArtifacts(taskId, 'project-1'),
+      { initialProps: { taskId: 'task-1' as string | null } },
+    );
+
+    await waitFor(() => expect(result.current.artifacts).toHaveLength(1));
+
+    rerender({ taskId: null });
+
+    expect(result.current.artifacts).toEqual([]);
+    expect(result.current.loaded).toBe(false);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('exposes stable upload and remove identities across renders when deps are unchanged', async () => {
+    getArtifactsMock.mockResolvedValue([makeArtifact('file-1')]);
+    const { result, rerender } = renderHook(() => useArtifacts('task-1', 'project-1'));
+
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    const firstUpload = result.current.upload;
+    const firstRemove = result.current.remove;
+
+    rerender();
+
+    expect(result.current.upload).toBe(firstUpload);
+    expect(result.current.remove).toBe(firstRemove);
   });
 
   it('does not let stale in-flight loads overwrite a newer force reload', async () => {

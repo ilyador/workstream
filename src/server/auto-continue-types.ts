@@ -10,7 +10,6 @@ export interface AutoContinueTask {
 }
 
 export interface QueueNextWorkstreamTaskParams {
-  completedTaskId: string;
   projectId: string;
   localPath: string;
   workstreamId: string;
