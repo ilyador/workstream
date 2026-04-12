@@ -18,6 +18,9 @@ export async function transitionJobAndTask(params: {
     p_task_id: params.taskId ?? null,
     p_task_updates: params.taskUpdates ?? null,
   });
-  if (error) return { data: null, error: error.message };
+  if (error) {
+    console.error(`[job-transition] RPC failed for job ${params.jobId}:`, error.message);
+    return { data: null, error: 'Failed to update job status' };
+  }
   return { data: data as Record<string, unknown> | null, error: null };
 }
