@@ -583,3 +583,52 @@ Parses `CORS_ORIGINS` env var into a `Set<string>` allowlist at import time. Nul
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/server/cors.test.ts` — 10/10 pass (new file)
 - `npx vitest run` — 318/318 pass in 44 files (previously 308/43)
+
+---
+
+## 2026-04-12 — Worktree manager (`src/server/worktree.ts`)
+
+### Scope
+
+Review of the 81-line git worktree management module that creates and destroys isolated working directories for AI runtime jobs. Callers: `worker.ts:206` (ensureWorktree before running a job), `worker.ts:507` (cleanupWorktree after workstream completes), `routes/git-workstream.ts` (REST endpoints), `routes/git-workstream-pr.ts` (workstreamRef for branch naming). No subagent — file small enough to review inline.
+
+### Module shape
+
+Three exports:
+- `workstreamRef(name, id)` — builds a slug like `build-a1b2c3d4` from the workstream name + first 8 alphanumeric chars of the ID.
+- `ensureWorktree(projectPath, slug, id)` — creates `<project>/.worktrees/<refSlug>` on branch `workstream/<refSlug>`. Idempotent via `existsSync(.git)` check.
+- `cleanupWorktree(projectPath, slug, id)` — prunes stale git metadata, `git worktree remove --force`, and `git branch -d`. All steps are best-effort (wrapped in try/catch).
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | MEDIUM | `worktree.ts:49` — `git worktree add` fails when a stale directory (from partial cleanup) exists without `.git` | **Fixed** (01f1ab5) |
+| 2 | — | `worktree.test.ts` — module had **zero tests** | **Fixed** (01f1ab5, 9 tests) |
+| 3 | LOW | `cleanupWorktree` uses `git branch -d` (lowercase), only deleting merged branches; unmerged branches persist | Deferred |
+
+### Fix in this pass
+
+**01f1ab5 — clear stale directories + first test file.**
+
+*Stale directory handling.* If a previous `cleanupWorktree` partially succeeded (e.g., `git worktree remove` ran but the directory wasn't fully cleaned due to permission issues or lock files), `ensureWorktree` would pass the `existsSync(.git)` idempotency check (no `.git` present), but `git worktree add` at line 49 would refuse to create into the existing non-empty directory. Added a `rmSync(worktreePath, { recursive: true, force: true })` step after the prune but before branch/add. The path is always under `.worktrees/` (system-managed by this module), so removing stale contents is safe.
+
+*Test coverage.* Added `worktree.test.ts` (9 tests) using mock git-utils and real filesystem temp dirs. Covers: `workstreamRef` slug construction (normal, stripped chars, empty-id fallback); `ensureWorktree` early return when `.git` exists; the full git command sequence (prune, branch, worktree add); stale directory removal before add; branch-already-exists error tolerance; `cleanupWorktree` command sequence (prune, remove --force, branch -d); and resilience when every git command fails (no throw). Test count 318 to 327.
+
+### Verified-correct design decisions
+
+- **Slug safety.** All callers pass `slugify(ws.name)` as the workstream slug, which produces `[a-z0-9-]` only. `shortWorkstreamId` further restricts the ID suffix to `[a-z0-9]{0,8}`. Path construction via `path.join(projectPath, '.worktrees', refSlug)` is safe.
+- **Best-effort cleanup.** Every step in `cleanupWorktree` is in try/catch. This is intentional — a failed prune or branch delete shouldn't block the workstream completion flow. The caller (`worker.ts:507`) also wraps the call.
+- **`--force` on worktree remove.** Documented intent: worktree is being torn down after work is committed or abandoned; uncommitted changes should be discarded.
+- **Race between concurrent ensureWorktree calls.** Two simultaneous calls for the same workstream could race on `git worktree add`. In practice, `hasActiveWorkstreamJob` prevents concurrent jobs per workstream, and the REST endpoint is scoped to authenticated project members. Documented, not fixed.
+
+### Side notes (not fixed)
+
+- **`git branch -d` (lowercase) at line 77 only deletes merged branches.** If the workstream branch was never merged (job failed before PR merge), the branch persists forever. Using `-D` (force) would clean up more aggressively but could destroy work the user intended to recover. The current behavior is safe by default; flag when a periodic branch-cleanup job is added.
+- **No cleanup of the `.worktrees` parent directory when empty.** After the last worktree is removed, the `.worktrees` directory stays. Harmless (it's gitignored) but slightly untidy.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/server/worktree.test.ts` — 9/9 pass (new file)
+- `npx vitest run` — 327/327 pass in 45 files (previously 318/44)
