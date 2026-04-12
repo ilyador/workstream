@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Restart codesync services.
+# Restart workstream services.
 # Usage: restart-systemd-services.sh [--no-reload] [server|worker|both]
 #
 # The worker is only restarted if idle (no child processes beyond its base
@@ -37,7 +37,7 @@ fi
 
 worker_is_busy() {
   local pid
-  pid="$(/usr/bin/systemctl --user show codesync-worker.service --property=MainPID --value 2>/dev/null)"
+  pid="$(/usr/bin/systemctl --user show workstream-worker.service --property=MainPID --value 2>/dev/null)"
   if [[ -z "$pid" || "$pid" == "0" ]]; then
     return 1  # not running, not busy
   fi
@@ -52,10 +52,10 @@ worker_is_busy() {
 }
 
 restart_server() {
-  echo "Restarting codesync-server..."
-  /usr/bin/systemctl --user restart codesync-server.service
-  echo "Restarting codesync-web..."
-  /usr/bin/systemctl --user restart codesync-web.service
+  echo "Restarting workstream-server..."
+  /usr/bin/systemctl --user restart workstream-server.service
+  echo "Restarting workstream-web..."
+  /usr/bin/systemctl --user restart workstream-web.service
 }
 
 restart_worker() {
@@ -63,8 +63,8 @@ restart_worker() {
     echo "Worker is busy (running job); deferring restart."
     return 1
   fi
-  echo "Restarting codesync-worker..."
-  /usr/bin/systemctl --user restart codesync-worker.service
+  echo "Restarting workstream-worker..."
+  /usr/bin/systemctl --user restart workstream-worker.service
 }
 
 case "$TARGET" in

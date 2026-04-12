@@ -39,6 +39,7 @@ export function TaskDoneDetail({
   return (
     <div onClick={(e) => e.stopPropagation()} className={`${s.doneWrap} ${collapsing ? s.detailClosing : ''}`}>
       <div className={s.doneSection}>
+        {task.description && <div className={s.desc}><MemoMarkdown text={task.description} /></div>}
         {job && (
           <>
             <div className={s.doneHeader}>
@@ -100,7 +101,6 @@ export function TaskDoneDetail({
             )}
           </div>
         )}
-        {task.description && <div className={s.desc}><MemoMarkdown text={task.description} /></div>}
         <TaskAttachments taskId={task.id} projectId={projectId} legacyImages={task.images} readOnly />
         {!hideComments && (
           <TaskComments taskId={task.id} projectId={projectId} expectedCount={commentCount} mentionMembers={mentionMembers} />

@@ -128,7 +128,7 @@
 }
 
 .cardHighlight {
-  animation: highlightPulse 5s ease-out;
+  animation: highlightPulse 5s ease-out !important;
 }
 
 @keyframes highlightPulse {
@@ -593,7 +593,7 @@
   .reviewingBanner,
   .cardHighlight,
   .columnHighlight {
-    animation: none;
+    animation: none !important;
     transition: none;
   }
   .column:hover {

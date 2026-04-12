@@ -26,7 +26,7 @@ export function useProjectWorkspaceEffects({
 }: UseProjectWorkspaceEffectsArgs) {
   useEffect(() => {
     if (!focusTaskId && !focusWsId) return;
-    const timer = setTimeout(() => setSearchParams({}, { replace: true }), 1000);
+    const timer = setTimeout(() => setSearchParams({}, { replace: true }), 6000);
     return () => clearTimeout(timer);
   }, [focusTaskId, focusWsId, setSearchParams]);
 

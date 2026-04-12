@@ -19,6 +19,27 @@ interface UseWorkstreamColumnEffectsArgs {
   };
 }
 
+const HIGHLIGHT_DURATION_MS = 5000;
+const EXPAND_SETTLE_MS = 150;
+
+function addHighlightClass(el: HTMLElement, className: string, animNameSubstring: string) {
+  el.classList.remove(className);
+  void el.offsetWidth;
+  el.classList.add(className);
+  const onEnd = (e: AnimationEvent) => {
+    if (e.animationName.includes(animNameSubstring)) {
+      el.classList.remove(className);
+      el.removeEventListener('animationend', onEnd);
+    }
+  };
+  el.addEventListener('animationend', onEnd);
+  // Fallback cleanup if animation never fires (e.g. prefers-reduced-motion)
+  setTimeout(() => {
+    el.classList.remove(className);
+    el.removeEventListener('animationend', onEnd);
+  }, HIGHLIGHT_DURATION_MS + 200);
+}
+
 export function useWorkstreamColumnEffects({
   activeTaskId,
   focusTaskId,
@@ -49,20 +70,27 @@ export function useWorkstreamColumnEffects({
   }, [activeTaskId, setExpandedIds]);
 
   const focusedTaskRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!focusTaskId || focusedTaskRef.current === focusTaskId) return;
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const matchingTask = tasks.find(task => task.id === focusTaskId);
-    if (!matchingTask) return;
+  useEffect(() => {
+    if (!focusTaskId) {
+      focusedTaskRef.current = null;
+      return;
+    }
+    if (focusedTaskRef.current === focusTaskId) return;
+
+    if (!tasks.some(task => task.id === focusTaskId)) return;
 
     focusedTaskRef.current = focusTaskId;
-    const frameId = requestAnimationFrame(() => {
-      setExpandedIds(prev => {
-        const next = new Set(prev);
-        next.add(focusTaskId);
-        return next;
-      });
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      next.add(focusTaskId);
+      return next;
+    });
 
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => {
+      highlightTimerRef.current = null;
       const container = tasksRef.current;
       if (!container) return;
 
@@ -75,11 +103,15 @@ export function useWorkstreamColumnEffects({
       const card = element.querySelector<HTMLElement>('[data-task-card="true"]');
       if (!card) return;
 
-      card.classList.add(classes.cardHighlight);
-      card.addEventListener('animationend', () => card.classList.remove(classes.cardHighlight), { once: true });
-    });
+      addHighlightClass(card, classes.cardHighlight, 'highlightPulse');
+    }, EXPAND_SETTLE_MS);
 
-    return () => cancelAnimationFrame(frameId);
+    return () => {
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = null;
+      }
+    };
   }, [classes.cardHighlight, classes.cardWrap, focusTaskId, setExpandedIds, tasks, tasksRef]);
 
   const focusedWorkstreamRef = useRef<string | null>(null);
@@ -93,8 +125,7 @@ export function useWorkstreamColumnEffects({
     if (!column) return;
 
     column.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    column.classList.add(classes.columnHighlight);
-    column.addEventListener('animationend', () => column.classList.remove(classes.columnHighlight), { once: true });
+    addHighlightClass(column, classes.columnHighlight, 'columnPulse');
   }, [classes.columnHighlight, columnRef, focusWsId, workstreamId]);
 
   useEffect(() => {
