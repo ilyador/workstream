@@ -798,3 +798,31 @@ Single export `transitionJobAndTask(params)` — calls `supabase.rpc('transition
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/server/job-task-transition.test.ts` — 4/4 pass (new file)
 - `npx vitest run` — 348/348 pass in 46 files (previously 344/45)
+
+---
+
+## 2026-04-12 — Workstream column derived state (`src/web/hooks/workstream-column-derived.ts`)
+
+### Scope
+
+Review of the 144-line module that derives computed board-column state (chain groups, freeze indices, broken chain links, workstream status labels, active/blocking task selectors). Read the 92-line test file.
+
+### Module shape
+
+Six exports: `buildChainGroups` (groups adjacent produce→accept file-passing chains), `getFreezeIndex` (last touched task index), `buildBrokenLinks` (detects missing chain partners), `getWorkstreamStatus` (derives a human-readable status label from workstream/task/job state), `getReorderBlockingTaskId`, `getActiveTaskId`.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | MEDIUM | Three functions (`buildChainGroups`, `getFreezeIndex`, `buildBrokenLinks`) had **zero** tests | **Fixed** (aeb52ee) |
+| 2 | LOW | `getWorkstreamStatus` had 8 untested branches out of its 11-branch cascade | **Fixed** (aeb52ee) |
+
+### Fix
+
+**aeb52ee — 22 tests covering all six exports.** buildChainGroups (5 tests), getFreezeIndex (4), buildBrokenLinks (5), getWorkstreamStatus (8 new branches: backlog null, lifecycle statuses, empty tasks, pending review, failed, allDone-pending-review, partial progress, open fallback). Test count 348 to 370. No production code changed — cascade logic is correct.
+
+### Verification
+
+- `npx vitest run src/web/hooks/workstream-column-derived.test.ts` — 27/27 pass (up from 7)
+- `npx vitest run` — 370/370 pass in 46 files (previously 348)
