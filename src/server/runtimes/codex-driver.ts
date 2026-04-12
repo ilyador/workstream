@@ -127,14 +127,18 @@ async function runCodex(
   }
 
   let output = '';
+  let readError: NodeJS.ErrnoException | null = null;
   try {
     output = readFileSync(outputPath, 'utf8').trim();
-  } catch {
-    output = '';
+  } catch (err) {
+    readError = err as NodeJS.ErrnoException;
   }
   try { unlinkSync(outputPath); } catch { /* ignore */ }
 
   if (caught) throw caught;
+  if (readError && readError.code !== 'ENOENT') {
+    throw new Error(`Failed to read codex output file: ${readError.message}`);
+  }
   if (!output) throw new Error('codex produced no output');
   return output;
 }
