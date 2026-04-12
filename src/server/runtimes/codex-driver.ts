@@ -149,7 +149,7 @@ export const codexDriver: RuntimeDriver = {
   async execute(opts: ExecuteStepOptions): Promise<string> {
     const outputPath = allocateOutputPath(opts.jobId, 'step');
     const args = buildArgs(opts.step, opts.task, opts.cwd, outputPath);
-    return runCodex(opts.jobId, args, outputPath, opts.cwd, opts.prompt, opts.onLog);
+    return runCodex(opts.jobId, args, outputPath, opts.cwd, opts.prompt, opts.onLog, opts.timeoutMs);
   },
 
   async summarize(opts: SummarizeOptions): Promise<string> {

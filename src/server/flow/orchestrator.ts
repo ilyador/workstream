@@ -190,6 +190,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
           cwd: localPath,
           prompt,
           onLog,
+          timeoutMs: 15 * 60 * 1000,
         });
         if (!await isJobStillRunning(jobId)) return;
 
