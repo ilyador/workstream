@@ -1,4 +1,4 @@
-import { pickPrimaryJobs } from './job-selection';
+import { JOB_STATUS_PRIORITY, pickPrimaryJobs } from './job-selection';
 import { timeAgo } from './time';
 import type { CompletedPhaseRecord, FlowSnapshotRecord, JobRecord, JobView } from '../components/job-types';
 
@@ -82,8 +82,9 @@ export function buildJobViews(
   jobs: JobRecord[],
   taskTitleMap: Record<string, string>,
 ) {
-  const order: Record<string, number> = { running: 0, queued: 1, paused: 2, review: 3, done: 4, failed: 5 };
-  const sorted = [...jobs].sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5));
+  const sorted = [...jobs].sort((a, b) =>
+    (JOB_STATUS_PRIORITY[a.status as keyof typeof JOB_STATUS_PRIORITY] ?? 99) -
+    (JOB_STATUS_PRIORITY[b.status as keyof typeof JOB_STATUS_PRIORITY] ?? 99));
 
   return sorted.map(job => ({
     id: job.id,
