@@ -11,7 +11,7 @@ export interface CheckpointInfo {
 // are interpolated into git ref names and config keys, so reject anything
 // that could confuse git's arg parsing (leading dashes, dots, slashes, etc.)
 // if a future code path ever sources jobId from untrusted input.
-const JOB_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const JOB_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 function assertValidJobId(jobId: string): void {
   if (!JOB_ID_PATTERN.test(jobId)) {
     throw new Error(`Invalid job id for checkpoint: ${JSON.stringify(jobId)}`);
