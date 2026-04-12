@@ -16,9 +16,9 @@ export function buildRuntimeEnv(runtimeId: AiRuntimeId): NodeJS.ProcessEnv {
     if (value !== undefined) env[key] = value;
   }
 
-  const homePath = process.env.HOME ?? '';
-  const originalPath = process.env.PATH ?? '';
-  env.PATH = `${homePath}/.local/bin:${originalPath}`;
+  const homePath = process.env.HOME;
+  const originalPath = process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin';
+  env.PATH = homePath ? `${homePath}/.local/bin:${originalPath}` : originalPath;
 
   for (const key of RUNTIME_SECRET_KEYS[runtimeId] ?? []) {
     const value = process.env[key];
