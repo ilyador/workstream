@@ -877,3 +877,26 @@ Static data (`AI_RUNTIME_DEFINITIONS`, `AVAILABLE_AI_RUNTIMES`, `CODING/IMAGE_RU
 
 - `npx vitest run src/shared/ai-runtimes.test.ts` — 22/22 pass (up from 5)
 - `npx vitest run` — 398/398 pass in 47 files (previously 381)
+
+---
+
+## 2026-04-12 — Project data settings (`src/shared/project-data.ts`)
+
+### Scope
+
+Review of the 66-line shared module defining RAG project-data settings schema, normalization, and change detection. Used by both server (project-data-settings.ts) and web (settings modal).
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | LOW | `project-data.test.ts` — normalization functions, default fallbacks, and status label all untested | **Fixed** (778bf41) |
+
+### Fix
+
+**778bf41 — 11 tests.** normalizeProjectDataBackend (valid preserved, invalid falls back). normalizeProjectDataSettings (null/undefined/non-object defaults, empty object, partial input, topK validation, whitespace trimming/fallback). projectDataStatusLabel (enabled/disabled). Test count 398 to 409. No production code changed.
+
+### Verification
+
+- `npx vitest run src/shared/project-data.test.ts` — 13/13 pass (up from 2)
+- `npx vitest run` — 409/409 pass in 47 files (previously 398)
