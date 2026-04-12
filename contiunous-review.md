@@ -452,3 +452,58 @@ Test file count 40 → 42, test count 278 → 296.
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/server/bot-action-parser.test.ts src/server/bot-actions.test.ts` — 18/18 pass (new files)
 - `npx vitest run` — 296/296 pass in 42 files (previously 278/40)
+
+---
+
+## 2026-04-12 — MCP authz + task_create tool (`src/server/mcp-authz.ts`, `mcp-task-create-tool.ts`)
+
+### Scope
+
+Correctness + safety review of the shared MCP project-scope helper (`mcp-authz.ts`, 17 lines) and the `task_create` MCP tool (`mcp-task-create-tool.ts`, 49 lines). ~66 lines total. Read `mcp-system-user.ts`, `mcp-task-log-tool.ts`, `mcp-task-update-tool.ts`, and the web-route `routes/task-create.ts` for convention comparison — not reviewed in depth.
+
+### Module shape
+
+**`mcp-authz.ts`** — one helper `isMcpProjectAllowed(projectId)` that checks `projectId` against `process.env.MCP_ALLOWED_PROJECT_IDS` (comma-separated), plus `mcpText()` (response wrapper) and `mcpProjectScopeError()` (stringy error). The "authorization" is coarse: the MCP server trusts whoever can talk to it over stdio/transport, and the env allowlist is a blast-radius limiter.
+
+**`mcp-task-create-tool.ts`** — registers a single MCP tool `task_create` that takes `{ project_id, title, type?, description?, workstream_id? }`, validates `title`/`workstream_id` project membership, fetches `max(position)` to append the task at the end, and inserts into `tasks`. Returns `{ content: [{ type: 'text', text }] }` per the MCP protocol.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | HIGH | `mcp-task-create-tool.ts:37-44` (old) — `created_by` was never set on insert; every MCP-created task had NULL creator, breaking audit trails and `auto-continue-human.ts:11`'s assignee-vs-creator compare | **Fixed** (875ccf3) |
+| 2 | MEDIUM | `mcp-task-create-tool.ts:24,35,46` (old) — raw Supabase error messages leaked to MCP clients (same pattern as the authz-pass fix) | **Fixed** (875ccf3) |
+| 3 | MEDIUM | `mcp-task-create-tool.ts:9-13` (old) — `title`/`type`/`description` were `z.string()` with no `.max()` bound; no DoS protection against huge payloads | **Fixed** (875ccf3) |
+| 4 | — | `mcp-task-create-tool.ts` had zero tests | **Fixed** (875ccf3, 8 new tests) |
+
+### Fix in this pass
+
+**875ccf3 — create-tool hardening + first test file.**
+
+*Missing `created_by` (HIGH).* The insert at old lines 37-44 built a task record without the `created_by` column. The convention elsewhere is clear: `routes/task-create.ts:73` sets `created_by: userId` (authenticated user), and the sibling `mcp-task-log-tool.ts:19` already resolves a "WorkStream Bot" identity via `getSystemUserId(projectId)` and uses it for the comment's `user_id`. The create tool was the outlier — tasks inserted through MCP had NULL creator, which silently broke `auto-continue-human.ts:11` (`task.assignee && task.assignee !== task.created_by` always evaluates the second half to true when `created_by` is null, so the notify-on-assigned-human-task path would fire for tasks assigned to the same agent that created them). Resolved via `getSystemUserId(project_id)` and wired into the insert payload.
+
+*Length bounds (MEDIUM).* Swapped `z.string()` for `z.string().max(500)` on title, `.max(50)` on type, `.max(20000)` on description. Generous above any real UI limit, but bounds every field to guarantee the table can't grow in unbounded chunks from a single MCP request.
+
+*Error-message sanitization (MEDIUM).* Three paths returned raw `error.message` in the MCP text response (workstream lookup failure, max-position fetch failure, insert failure). Each now uses the same pattern the authz review already established: `console.error` the detail server-side with project/id context, return a generic `Error: failed to …` string to the client. The `workstreamError` path preserves the `PGRST116 → 'workstream_id not found'` branch because that's a legitimate 404-equivalent, not internal detail.
+
+*First test file (8 tests).* Wrote `mcp-task-create-tool.test.ts` with a fake `McpServer` that captures the registered tool handler and a factory-based Supabase mock. Tests: (1) allowlist reject stops before any DB call, (2) empty/whitespace title rejected, (3) happy path calls `getSystemUserId` and inserts with `position = max + 1` and the resolved `created_by`, (4) workstream id from another project rejected, (5) missing workstream returns `'workstream_id not found'`, (6) non-missing workstream error is redacted server-side (assertion: response does *not* contain `permission denied`), (7) insert error is redacted (response does *not* contain `check constraint`), (8) `getSystemUserId` returning null falls through to `created_by: null` (documented behavior, matches the Postgres FK which is nullable). Test file count 42 → 43, test count 296 → 304.
+
+### Verified false positives / overcalls
+
+The review subagent flagged a few things as CRITICAL that aren't:
+
+- **"No authorization check before insert"** (agent's #2). The MCP server's trust model is process-boundary: whoever runs the MCP server (via CLI stdio, typically) is trusted. `isMcpProjectAllowed` is a blast-radius limiter for misconfiguration, not an authentication gate. Flagging this as a CRITICAL bug misunderstands MCP's design. The web routes run with per-request user identity (JWT); MCP runs with a service account. Different trust model, not a bypass.
+- **"No idempotency"** (agent's #4). True — repeated calls create duplicate tasks — but this is intentional for a generic "create" tool and is the behavior of every peer MCP tool. Would require a client-supplied nonce protocol that the MCP spec doesn't define.
+- **"Unconstrained `type`"** (agent's #3). Worth noting as a data-integrity smell, but validating against both the core set and the project's `custom_task_types` table requires a DB lookup and cross-file coordination. Out of scope for this pass. Added `.max(50)` as a mild mitigation.
+
+### Side notes (not fixed)
+
+- **`mcp-task-log-tool.ts:17,27` and `mcp-task-update-tool.ts:17,22,36` have the same raw-error-message leak pattern.** Same recipe as the fix in this pass — log server-side, return generic. Flag for the next MCP-tools review pass.
+- **`mcp-authz.ts:10` has a confusing fallback:** `allowedMcpProjectIds.size === 0 || allowedMcpProjectIds.has(projectId)` means "if the env var is empty, allow any project." This is the permissive-by-default fallback the agent partially misread. Intentional for dev ergonomics (running the MCP server without setting `MCP_ALLOWED_PROJECT_IDS` shouldn't hard-fail) but deserves a comment explaining the fail-open default. Not touching the code; flagged here for future hardening.
+- **`type` field validation deferred.** A legitimate task type could be one of the core values (`feature`, `bug-fix`, etc.) OR a custom type from `custom_task_types`. Validating requires a per-project lookup and is big enough to bundle with a broader MCP-tools review. Flag noted.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/server/mcp-task-create-tool.test.ts` — 8/8 pass (new file)
+- `npx vitest run` — 304/304 pass in 43 files (previously 296/42)
