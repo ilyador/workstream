@@ -237,3 +237,67 @@ Three exports:
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/server/checkpoint.test.ts` — 8/8 pass (new file)
 - `npx vitest run` — 257/257 pass in 40 files (previously 249 in 39 files)
+
+---
+
+## 2026-04-12 — Process lifecycle (`src/server/process-lifecycle.ts`)
+
+### Scope
+
+Correctness review of the 73-line process-lifecycle module that tracks live child processes by `jobId` and coordinates cancellation. Read `process-runner.ts`, `worker.ts:532-540`, and `runner.ts` for context — just enough to understand how callers register procs, check cancellation flags, and hook the shutdown signal. Did not review those files in depth.
+
+### Module shape
+
+Two maps of module-level state:
+
+- `activeProcesses: Map<jobId, Set<ChildProcess>>` — every child process registered by a runtime driver (via `process-runner.ts:46`). One jobId can hold multiple procs (rare but supported).
+- `canceledJobs: Set<jobId>` — a flag so that in-flight `close` handlers in `process-runner.ts:100` can distinguish "exited cleanly" from "killed because the job was canceled."
+
+Exports: `registerActiveProcess` / `unregisterActiveProcess` / `getActiveProcessCount` / `isJobCanceled` / `markJobCanceled` / `clearJobCancellation` / `terminateProcess` (private) / `cancelJob` / `cancelAllJobs`. `terminateProcess` sends SIGTERM, escalates to SIGKILL after 5s, and self-finishes after a 6s fallback timer regardless.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | HIGH | `process-lifecycle.ts:68-73` (old) / `worker.ts:538` — `cancelAllJobs()` was fire-and-forget; shutdown exited before child processes died | **Fixed** (34da943) |
+| 2 | MEDIUM | `process-lifecycle.ts:68-73` (old) — `cancelAllJobs()` didn't call `markJobCanceled` for the jobs it was killing, so in-flight runner close handlers saw them as normal exits | **Fixed** (34da943) |
+| 3 | LOW | `process-lifecycle.test.ts` — no test pinned that the cancellation flag stays set *while* termination is in-flight | **Fixed** (34da943, added test) |
+
+### Fixes in this pass
+
+**34da943 — async cancelAllJobs + cancellation marking.** Two coupled issues, one commit.
+
+*Fire-and-forget shutdown.* The old `cancelAllJobs` body was:
+
+```ts
+for (const [jobId, processes] of activeProcesses) {
+  activeProcesses.delete(jobId);
+  for (const proc of processes) terminateProcess(proc).catch(() => {});
+}
+```
+
+It returned synchronously while `terminateProcess` promises were still in-flight. `worker.ts:538` then called `cancelAllJobs()` (no await), `await flushLogs()`, and `process.exit(0)`. Any child proc that hadn't died within a few microtasks got orphaned by the exit. Rewrote it to collect the termination promises into an array and `await Promise.all(...)` before returning. `worker.ts:538` now `await cancelAllJobs()`.
+
+*Missing cancellation mark.* Between the snapshot and the terminate loop, the new implementation calls `markJobCanceled(jobId)` for each affected job. That way, the close handler in `process-runner.ts:100` sees `isJobCanceled(jobId) === true` and rejects with `'Job canceled'` instead of letting the SIGTERM'd process look like a clean exit. After `Promise.all` resolves, the flags are cleared so a re-queued job of the same id isn't poisoned.
+
+*Test hook.* `process-lifecycle.test.ts`'s `beforeEach(cancelAllJobs)` was synchronous; after the async change, state from one test (canceled flags set mid-termination) was leaking into the next. Made `beforeEach` await. Reworked the existing `cancelAllJobs kills processes across all jobs` test to await the promise directly (was sleeping 10ms as a workaround). Added a new test that uses a stubborn MockProc to observe the cancellation flag while a proc is still closing — pins the invariant that the flag stays `true` until `await Promise.all(...)` resolves, then flips to `false`.
+
+Test count 257 → 258.
+
+### Verified false positives
+
+- **"Race between spawn and register"** — the subagent flagged a window between `spawn(...)` at `process-runner.ts:40` and `registerActiveProcess(...)` at `:46`. Those two lines are fully synchronous in one microtask; nothing in Node can interleave between them, so no cancel can arrive in that window.
+- **"`canceledJobs` leaks forever"** — the subagent claimed this set grew unbounded. In practice the only production caller of `markJobCanceled` is `cancelJob` itself (and now `cancelAllJobs`), both of which clean up via `clearJobCancellation` after terminating. Test code calls `markJobCanceled` directly but resets between tests. No production leak.
+- **"`cancelJob` clears cancellation too early"** — the subagent worried that `clearJobCancellation` at the end of `cancelJob` could race with live procs. But `clearJobCancellation` runs *after* `await Promise.all([...processes].map(terminateProcess))`, and the `terminateProcess` resolve happens after the proc's `close` event — which is also the same tick that `process-runner.ts`'s close handler reads `isJobCanceled`. The read is guaranteed to happen before the clear.
+
+### Side notes (not fixed)
+
+- `terminateProcess` has a 6s fallback `setTimeout` that resolves the promise even if the proc never emits `close`. This is a graceful-shutdown guarantee (you can't wait forever on a stuck child), but it means a truly unkillable proc leaves the promise resolved and the parent moves on. Keep as-is.
+- `cancelJob` calls `activeProcesses.delete(jobId)` after awaiting the terminations — this is redundant because `process-runner.ts`'s close handler calls `unregisterActiveProcess` which removes the entry when empty. Redundant but harmless.
+- `getActiveProcessCount` is only referenced from tests. Could be removed, but it's a one-line utility and deleting it would be churn for no production benefit.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/server/process-lifecycle.test.ts` — 8/8 pass (up from 7)
+- `npx vitest run` — 258/258 pass in 40 files (previously 257)
