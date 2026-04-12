@@ -14,7 +14,11 @@ export function registerMcpTaskLogTool(server: McpServer): void {
     if (!cleanMessage) return mcpText('Error: message is required.');
 
     const { data: taskRow, error: taskError } = await supabase.from('tasks').select('project_id').eq('id', task_id).single();
-    if (taskError) return mcpText(`Error: ${isMissingRowError(taskError) ? 'task_id not found' : taskError.message}`);
+    if (taskError) {
+      if (isMissingRowError(taskError)) return mcpText('Error: task_id not found');
+      console.error(`[mcp] Failed to load task ${task_id}:`, taskError.message);
+      return mcpText('Error: failed to load task');
+    }
     if (!isMcpProjectAllowed(taskRow?.project_id)) return mcpText(mcpProjectScopeError(taskRow?.project_id));
     const userId = await getSystemUserId(taskRow?.project_id);
     if (!userId) return mcpText('Error: Could not resolve a system user for comments. Create a profile named "WorkStream Bot" or ensure the project has a creator.');
@@ -24,7 +28,10 @@ export function registerMcpTaskLogTool(server: McpServer): void {
       user_id: userId,
       body: cleanMessage,
     });
-    if (error) return mcpText(`Error: ${error.message}`);
+    if (error) {
+      console.error(`[mcp] Failed to insert comment on task ${task_id}:`, error.message);
+      return mcpText('Error: failed to add note');
+    }
     return mcpText('Note added.');
   });
 }
