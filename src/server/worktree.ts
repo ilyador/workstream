@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync } from 'fs';
+import { mkdirSync, existsSync, rmSync } from 'fs';
 import path from 'path';
 import { gitSync } from './git-utils.js';
 
@@ -36,6 +36,13 @@ export function ensureWorktree(projectPath: string, workstreamSlug: string, work
     gitSync(['worktree', 'prune'], projectPath);
   } catch {
     // best effort
+  }
+
+  // Remove a leftover directory from a partial cleanup (e.g. `git worktree
+  // remove` succeeded but the directory wasn't fully cleaned).  Without this,
+  // `git worktree add` refuses to create into a non-empty existing directory.
+  if (existsSync(worktreePath)) {
+    rmSync(worktreePath, { recursive: true, force: true });
   }
 
   // Create the branch if it doesn't exist (based off current HEAD)
