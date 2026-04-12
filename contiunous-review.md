@@ -769,3 +769,32 @@ Review of the 69-line module that classifies workstreams into `active` / `comple
 
 - `npx vitest run src/web/lib/board-workstream-sections.test.ts` — 7/7 pass (up from 5)
 - `npx vitest run` — 344/344 pass in 45 files (previously 342)
+
+---
+
+## 2026-04-12 — Job-task transition (`src/server/job-task-transition.ts`)
+
+### Scope
+
+Review of the 23-line RPC wrapper that atomically updates job and task status via a Postgres function. Read both callers (`routes/job-reply.ts`, `routes/job-continue.ts`) to trace how the return value is used.
+
+### Module shape
+
+Single export `transitionJobAndTask(params)` — calls `supabase.rpc('transition_job_and_task', {...})`. Returns `{ data, error }` where `data` is the updated job row or `null` (guard failed — job not in expected status), and `error` is a string or `null`.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | MEDIUM | `job-task-transition.ts:21` — raw Supabase RPC `error.message` returned as the error string; both callers (`job-reply.ts:28`, `job-continue.ts:42`) send it directly in HTTP responses | **Fixed** (0b0eb1a) |
+| 2 | — | zero tests | **Fixed** (0b0eb1a, 4 tests) |
+
+### Fix
+
+**0b0eb1a — sanitize error + 4 tests.** Log the raw RPC error server-side via `console.error`, return a generic `'Failed to update job status'` string. Both callers forward the error field unchanged, so this fix protects every HTTP response without touching the routes. Tests cover: correct RPC parameter mapping, null-default for omitted taskId/taskUpdates, guard-failed path (data=null without error), and error-sanitization path (response gets generic string, `console.error` gets the raw detail, response does NOT contain schema info).
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/server/job-task-transition.test.ts` — 4/4 pass (new file)
+- `npx vitest run` — 348/348 pass in 46 files (previously 344/45)
