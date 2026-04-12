@@ -740,3 +740,32 @@ Three exports: `comparePrimaryJobs(a, b)` (status-priority, then timestamp, then
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/web/lib/job-selection.test.ts` — 6/6 pass (up from 3)
 - `npx vitest run` — 342/342 pass in 45 files (previously 339)
+
+---
+
+## 2026-04-12 — Board workstream sections (`src/web/lib/board-workstream-sections.ts`)
+
+### Scope
+
+Review of the 69-line module that classifies workstreams into `active` / `complete` board sections based on workstream status, task status, and job status. Read the 76-line test file.
+
+### Module shape
+
+- `getBoardWorkstreamSection(ws, tasks, jobMap)` — returns `'active'` for non-complete workstreams; for complete/merged ones, checks `hasOpenWork` (any non-closed task or non-closed job) and downgrades back to `'active'` if there's open work.
+- `splitWorkstreamsByBoardSection(...)` — splits an array into active/complete buckets.
+- `buildTaskSectionMap(...)` — assigns each task its workstream's section; backlog tasks always `'active'`.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | LOW | `board-workstream-sections.test.ts` — empty-workstream and fully-closed happy paths untested | **Fixed** (d0a0fb2) |
+
+### Fix
+
+**d0a0fb2 — 2 edge-case tests.** (1) Complete workstream with zero tasks stays `'complete'` (pins `hasOpenWork([], ...)` → false). (2) Merged workstream with all tasks done/canceled and all jobs done/null stays `'complete'`. Test count 342 to 344. No production code changed — module is correct.
+
+### Verification
+
+- `npx vitest run src/web/lib/board-workstream-sections.test.ts` — 7/7 pass (up from 5)
+- `npx vitest run` — 344/344 pass in 45 files (previously 342)
