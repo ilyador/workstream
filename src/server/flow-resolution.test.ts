@@ -32,13 +32,15 @@ vi.mock('./flow-config.js', () => ({
 
 import { findDefaultFlowId, resolveFlowForTask } from './flow-resolution.js';
 
+function resetSupabaseState() {
+  supabaseMock.state.defaultFlows = [];
+  supabaseMock.state.singleFlow = null;
+  supabaseMock.state.singleError = null;
+  vi.clearAllMocks();
+}
+
 describe('findDefaultFlowId', () => {
-  beforeEach(() => {
-    supabaseMock.state.defaultFlows = [];
-    supabaseMock.state.singleFlow = null;
-    supabaseMock.state.singleError = null;
-    vi.clearAllMocks();
-  });
+  beforeEach(resetSupabaseState);
 
   it('returns null when no default flow exists for the task type', async () => {
     await expect(findDefaultFlowId('project-1', 'feature')).resolves.toBeNull();
@@ -60,12 +62,7 @@ describe('findDefaultFlowId', () => {
 });
 
 describe('resolveFlowForTask', () => {
-  beforeEach(() => {
-    supabaseMock.state.defaultFlows = [];
-    supabaseMock.state.singleFlow = null;
-    supabaseMock.state.singleError = null;
-    vi.clearAllMocks();
-  });
+  beforeEach(resetSupabaseState);
 
   it('resolves a task with an explicit flow_id by loading that flow', async () => {
     supabaseMock.state.singleFlow = { id: 'flow-1', name: 'Coding' };
