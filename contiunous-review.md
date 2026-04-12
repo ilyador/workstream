@@ -826,3 +826,27 @@ Six exports: `buildChainGroups` (groups adjacent produce→accept file-passing c
 
 - `npx vitest run src/web/hooks/workstream-column-derived.test.ts` — 27/27 pass (up from 7)
 - `npx vitest run` — 370/370 pass in 46 files (previously 348)
+
+---
+
+## 2026-04-12 — Time formatting utils (`src/web/lib/time.ts`)
+
+### Scope
+
+Review of the 23-line time formatting utility (two functions: `timeAgo`, `elapsed`). No existing tests. Used by `project-job-view-models.ts`, `TaskCardActiveDetail.tsx`, `TaskCommentList.tsx`.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | MEDIUM | `time.ts:3,16` — invalid date input produces `"NaNd ago"` / `"NaNs"` visible in the UI | **Fixed** (59f9ec0) |
+| 2 | — | zero tests | **Fixed** (59f9ec0, 11 tests) |
+
+### Fix
+
+**59f9ec0 — NaN guard + 11 tests.** Added `if (Number.isNaN(ms)) return '';` at the top of both `timeAgo` and `elapsed`. Empty string renders as nothing in React, matching the convention of optional UI fields. Tests use `vi.useFakeTimers` for deterministic `Date.now()` and cover every time bracket (just now / minutes / hours / days), the zero-elapsed edge case, future timestamps (clock skew), and invalid date input. Test count 370 to 381, test files 46 to 47.
+
+### Verification
+
+- `npx vitest run src/web/lib/time.test.ts` — 11/11 pass (new file)
+- `npx vitest run` — 381/381 pass in 47 files (previously 370/46)
