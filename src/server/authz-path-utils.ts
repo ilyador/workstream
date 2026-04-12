@@ -1,4 +1,4 @@
-import { realpathSync } from 'fs';
+import { lstatSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 
@@ -20,6 +20,20 @@ export function existingRealPath(input: string): string {
 export function pathInside(parent: string, candidate: string): boolean {
   const relative = path.relative(parent, candidate);
   return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+export function containsSymlink(resolvedPath: string): boolean {
+  const parts = resolvedPath.split(path.sep).filter(Boolean);
+  let current = path.sep;
+  for (const part of parts) {
+    current = path.join(current, part);
+    try {
+      if (lstatSync(current).isSymbolicLink()) return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 export function configuredProjectRoots(): string[] {
