@@ -507,3 +507,45 @@ The review subagent flagged a few things as CRITICAL that aren't:
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/server/mcp-task-create-tool.test.ts` — 8/8 pass (new file)
 - `npx vitest run` — 304/304 pass in 43 files (previously 296/42)
+
+---
+
+## 2026-04-12 — Runtime environment builder (`src/server/runtimes/env.ts`)
+
+### Scope
+
+Security-focused review of the 29-line environment builder that constructs the `ProcessEnv` for spawned AI runtimes. Paired with the 80-line test file.
+
+### Module shape
+
+Single export `buildRuntimeEnv(runtimeId)`. Starts with a CLEAN env (`TERM: 'dumb'`), then selectively copies through: (a) system basics — `HOME`, `USER`, `LANG`, `LC_ALL`, `TMPDIR`, `SHELL`; (b) PATH with `$HOME/.local/bin` prepended; (c) per-runtime secrets keyed by a `RUNTIME_SECRET_KEYS` record (`ANTHROPIC_API_KEY` for claude, `OPENAI_API_KEY` for codex, `DASHSCOPE_API_KEY` for qwen, plus each runtime's `*_CONFIG_DIR`). Nothing else from the parent process leaks through — `DATABASE_URL`, `GITHUB_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, etc. are all excluded.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | LOW | `env.ts:19-21` (old) — empty `HOME` produced `/.local/bin:...` in PATH (system-root, not user) | **Fixed** (58684d1) |
+| 2 | LOW | `env.ts:20-21` (old) — undefined `PATH` produced trailing colon (includes CWD in search, mild path-injection concern) | **Fixed** (58684d1) |
+| 3 | LOW | `env.test.ts` — `LC_ALL`, `SHELL`, `*_CONFIG_DIR`, and missing-PATH edge case were untested | **Fixed** (58684d1) |
+
+### Fix in this pass
+
+**58684d1 — PATH edge cases + test backfill.**
+
+*Empty HOME.* `const homePath = process.env.HOME ?? '';` followed by interpolation produced `/.local/bin` as a PATH prefix. Changed to `const homePath = process.env.HOME` (undefined when missing) with a conditional prepend: only add `${homePath}/.local/bin:` when `homePath` is truthy. When HOME is unset, PATH equals `originalPath` with no leading garbage entry.
+
+*Missing PATH.* `const originalPath = process.env.PATH ?? '';` produced an empty string, and the constructed PATH ended with a trailing colon. On Unix, a trailing (or empty) PATH component means "search the current directory" — since `process-runner.ts` sets `cwd` to the project's `local_path`, a malicious binary at `{project-root}/codex` or `{project-root}/claude` could shadow the real CLI. Changed the fallback to `'/usr/local/bin:/usr/bin:/bin'` — a safe POSIX default.
+
+*Test coverage.* Added five test cases: (1) missing PATH safe-fallback, (2) LC_ALL present forwarded, (3) LC_ALL + SHELL absent omitted, (4) SHELL present forwarded, (5) CONFIG_DIR variables (`CLAUDE_CONFIG_DIR`, `CODEX_CONFIG_DIR`, `QWEN_CONFIG_DIR`) forwarded only to their respective runtime (cross-runtime isolation). Test count 304 to 308.
+
+### Side notes (not fixed)
+
+- **SHELL forwarding.** The child process receives the user's SHELL. If a driver ever needs shell-based execution, that shell would be used. This is fine today since no driver spawns with `shell: true`, but worth remembering.
+- **No XDG variables.** `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, etc. are not forwarded. Tools relying on XDG instead of hardcoded config dirs might not find their config. Low priority since the `*_CONFIG_DIR` env vars override defaults for all three supported runtimes.
+- **Module is well-designed overall.** The allowlist approach (start from empty, explicitly add known-safe keys) is the correct security posture — the only issues were two edge cases in a three-line PATH-construction block.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/server/runtimes/env.test.ts` — 12/12 pass (up from 7)
+- `npx vitest run` — 308/308 pass in 43 files (previously 304)
