@@ -402,3 +402,53 @@ The review subagent flagged several things as "critical" that weren't. Verified 
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/web/hooks/useArtifacts.test.tsx` — 9/9 pass (up from 5)
 - `npx vitest run` — 278/278 pass in 40 files (previously 274)
+
+---
+
+## 2026-04-12 — Bot action parser + dispatcher (`src/server/bot-action-parser.ts`, `bot-actions.ts`, `bot-action-types.ts`)
+
+### Scope
+
+Correctness + safety review of the bot-action plumbing — the parser that pulls `ACTION:` lines out of LLM responses, the four-line type, and the three-branch dispatcher. ~44 lines total across three files. `bot-task-actions.ts` and `bot-message-handler.ts` were read only to confirm the contract (handlers return strings; the handler iterates actions and concatenates results into a chat reply).
+
+### Module shape
+
+- **`bot-action-parser.ts`** — `parseActions(response)` splits on newlines, runs each against `/^ACTION:\s+(\w+)\s+(.+)$/`, `JSON.parse`s the captured params, and packages them as `{ name, params }`. Lines that don't match the regex, or match but fail to parse, fall through to the text output.
+- **`bot-action-types.ts`** — four-line interface: `{ name: string; params: Record<string, unknown> }`.
+- **`bot-actions.ts`** — `executeAction(action, projectId)` is a three-case whitelist switch (`create_task`, `update_task`, `add_comment`) with a stringy `Unknown action: ${name}` fallback. Delegates to handlers in `bot-task-actions.ts`.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | MEDIUM | `bot-action-parser.ts:12` — `JSON.parse` result assigned to `params` without validating it's a plain object; `null`/primitive/array payloads pass the type check and crash handlers at first property access | **Fixed** (3a0e0cb) |
+| 2 | LOW | `bot-action-parser.ts:13-15` — malformed action lines silently dropped into text with no diagnostic signal | **Fixed** (3a0e0cb, warn log) |
+| 3 | — | all three files had **zero tests** | **Fixed** (3a0e0cb, two new test files) |
+
+### Fix in this pass
+
+**3a0e0cb — reject non-object params + backfill tests.**
+
+*Production change.* Added an `isPlainObject` type guard and used it after `JSON.parse`. Payloads that parse to `null`, a primitive, an array, or anything other than a plain object are now rejected the same way malformed JSON already was: the line falls back to text and a `console.warn` is emitted naming the offending line. Before the fix, an LLM emitting `ACTION: create_task null` (or `42`, or `"hello"`, or `[1,2,3]`) would get `{ name: 'create_task', params: null }` assigned to an action that is typed as `Record<string, unknown>`, and the first handler access like `typeof action.params.title === 'string'` would throw a TypeError (for `null`) or silently read `undefined` (for primitives/arrays — since boxed numbers and strings have no `.title`). The consumer's try/catch in `bot-message-handler.ts:58-62` would surface the TypeError as an opaque `Error: Cannot read properties of null` in chat; the "silent undefined" cases would instead produce misleading "title is required" errors with no hint that the payload wasn't even shaped correctly.
+
+Both rejection branches (invalid JSON, not an object) now emit a console.warn with the offending line, so operators at least see the drift in server logs when the LLM slips out of format.
+
+*Test coverage backfill.* Added two new test files.
+
+`bot-action-parser.test.ts` (13 tests): happy paths (empty response, single action, multi-action with interleaved text, nested params, empty `{}` params, whitespace trimming) and rejection paths (invalid JSON → warn, null → warn, every JSON primitive → warn, arrays → warn, case sensitivity on the `ACTION:` prefix, indented-line non-match).
+
+`bot-actions.test.ts` (5 tests): mocks `./bot-task-actions.js` so each dispatch branch is verified without touching the database — `create_task`/`update_task`/`add_comment` each hit exactly one handler, the unknown-action fallback returns a descriptive string and calls *no* handler, and prototype-chain names (`__proto__`, `constructor`, `toString`) all fall through to the unknown-action branch. That last case is defensive: the switch statement compares `action.name` to string literals, so prototype properties can't execute, but pinning it in a test documents the guarantee.
+
+Test file count 40 → 42, test count 278 → 296.
+
+### Side notes (not fixed)
+
+- **Bot handlers leak Supabase error messages.** `bot-task-actions.ts:28,39,55`-ish path has `return \`Failed to create task: ${error.message}\`;` style code paths — same information-disclosure pattern I fixed in the authz module pass. Out of scope for this review; flag when the `bot-task-actions` layer is the review target.
+- **`ACTION:` prefix is case-sensitive and position-sensitive.** A bot that emits `action:` lowercase, or indents a bullet-list item starting with `ACTION:`, won't match. Tests pin the current behavior. If LLM drift becomes a problem, a tolerant regex with `^\s*ACTION:`/`/i` would be the fix — but tolerance has its own risks (false-positive parsing of conversational mentions of "ACTION:"). Leaving the strict matcher as-is.
+- **Dispatcher hardcodes the action list in the switch.** Adding a new action requires editing both `bot-actions.ts` and `bot-task-actions.ts`. A registry-based dispatch would decouple them, but with three actions the switch is fine.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/server/bot-action-parser.test.ts src/server/bot-actions.test.ts` — 18/18 pass (new files)
+- `npx vitest run` — 296/296 pass in 42 files (previously 278/40)
