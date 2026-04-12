@@ -73,8 +73,48 @@ describe('buildRuntimeEnv', () => {
     }
   });
 
-  it('handles missing HOME by falling back to PATH as-is (no leading colon)', () => {
+  it('skips the ~/.local/bin prefix when HOME is not set', () => {
     delete process.env.HOME;
-    expect(buildRuntimeEnv('claude_code').PATH).toBe('/.local/bin:/usr/bin:/bin');
+    expect(buildRuntimeEnv('claude_code').PATH).toBe('/usr/bin:/bin');
+  });
+
+  it('falls back to a safe default PATH when process.env.PATH is not set', () => {
+    delete process.env.PATH;
+    expect(buildRuntimeEnv('claude_code').PATH).toBe('/home/test/.local/bin:/usr/local/bin:/usr/bin:/bin');
+  });
+
+  it('forwards LC_ALL and SHELL when set', () => {
+    process.env.LC_ALL = 'C.UTF-8';
+    process.env.SHELL = '/bin/zsh';
+    const env = buildRuntimeEnv('claude_code');
+    expect(env.LC_ALL).toBe('C.UTF-8');
+    expect(env.SHELL).toBe('/bin/zsh');
+  });
+
+  it('omits LC_ALL and SHELL when not set', () => {
+    delete process.env.LC_ALL;
+    delete process.env.SHELL;
+    const env = buildRuntimeEnv('claude_code');
+    expect(env.LC_ALL).toBeUndefined();
+    expect(env.SHELL).toBeUndefined();
+  });
+
+  it('forwards runtime-specific config dirs alongside API keys', () => {
+    process.env.CLAUDE_CONFIG_DIR = '/custom/claude';
+    process.env.CODEX_CONFIG_DIR = '/custom/codex';
+    process.env.QWEN_CONFIG_DIR = '/custom/qwen';
+
+    const claudeEnv = buildRuntimeEnv('claude_code');
+    expect(claudeEnv.CLAUDE_CONFIG_DIR).toBe('/custom/claude');
+    expect(claudeEnv.CODEX_CONFIG_DIR).toBeUndefined();
+    expect(claudeEnv.QWEN_CONFIG_DIR).toBeUndefined();
+
+    const codexEnv = buildRuntimeEnv('codex');
+    expect(codexEnv.CODEX_CONFIG_DIR).toBe('/custom/codex');
+    expect(codexEnv.CLAUDE_CONFIG_DIR).toBeUndefined();
+
+    const qwenEnv = buildRuntimeEnv('qwen_code');
+    expect(qwenEnv.QWEN_CONFIG_DIR).toBe('/custom/qwen');
+    expect(qwenEnv.CODEX_CONFIG_DIR).toBeUndefined();
   });
 });
