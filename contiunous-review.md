@@ -89,3 +89,51 @@ Stateless coordinator. Entry point `queueNextWorkstreamTask({projectId, localPat
 - `npx tsc --noEmit` — clean
 - `npx vitest run` — 238 tests in 39 files pass (unchanged)
 - `process-lifecycle.test.ts`, `flow-resolution.test.ts`, and `dispatcher.integration.test.ts` exercise adjacent paths but none directly cover auto-continue; changes verified by typecheck + full regression.
+
+---
+
+## 2026-04-12 — Codex runtime driver (`src/server/runtimes/codex-driver.ts`)
+
+### Scope
+
+Correctness + safety review of the Codex runtime driver (156 lines) and its test file. Read `types.ts` and `process-runner.ts` for context (invariants and the shared spawn helper) but did not review them in depth. Peer drivers `claude-driver.ts` and `qwen-driver.ts` were read only to understand module-wide conventions.
+
+### Module shape
+
+Implements the `RuntimeDriver` contract for the `codex` CLI. `execute()` and `summarize()` both shell out to `codex exec --json --cd <cwd> --dangerously-bypass-approvals-and-sandbox --output-last-message <tmpfile> [--model ...] [-c model_reasoning_effort="..."]`, pipe the prompt via stdin, parse streaming JSON events from stdout to drive the `onLog` callback, and read the final answer from the `--output-last-message` temp file when the process closes cleanly. Sandboxing is delegated to the caller (the driver trusts that `opts.cwd` has already been validated by the runner layer).
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | MEDIUM | `codex-driver.ts:129–135` — non-ENOENT read errors silently coerced into `'codex produced no output'` | **Fixed** (e0b2c25) |
+| 2 | MEDIUM | `codex-driver.test.ts` — `summarize()` had zero test coverage | **Fixed** (6fda108) |
+| 3 | MEDIUM | `codex-driver.ts:148` — `execute()` has no caller-provided timeout; falls back to `runProcess`'s 30-minute default | Deferred |
+| 4 | LOW | `codex-driver.ts:33` — `--dangerously-bypass-approvals-and-sandbox` is hardcoded with no comment explaining the sandbox assumption | Deferred |
+| 5 | LOW | `codex-driver.ts:25` — `runtime_variant` passed as `--model` with no shape validation (safe from injection due to spawn args, but typos fail opaquely) | Deferred |
+
+### Fixes in this pass
+
+**e0b2c25 — surface real output-read errors.** `runCodex` wrapped `readFileSync(outputPath)` in a bare `catch { output = ''; }`, so permission-denied, disk-full, or any other `fs` error was silently replaced by a misleading `'codex produced no output'` message downstream. Changed the catch to capture the error and, if its `code` is anything other than `ENOENT`, re-throw with `Failed to read codex output file: ${err.message}`. The ENOENT branch is preserved so the existing "codex exited clean but didn't write the file" path still reports as "no output," which is what the test at `codex-driver.test.ts:201` asserts.
+
+**6fda108 — test coverage for summarize().** Every existing test in `codex-driver.test.ts` exercised `execute()`; `summarize()` was entirely untested. Added a test that asserts summarize() spawns `codex exec` with the right `--cd`, forwards `runtime_variant` as `--model`, omits the `-c model_reasoning_effort` flag (because summarize passes `effort: null`), pipes the prompt via stdin, and returns the contents of the output file on a clean exit. Test count: 238 → 239.
+
+### Deferred findings
+
+**#3 — `execute()` has no caller-provided timeout.** `runCodex` accepts `timeoutMs?`, `summarize()` passes `60_000`, but `execute()` passes nothing, falling through to `DEFAULT_PROCESS_TIMEOUT_MS = 30 * 60 * 1000` in `process-runner.ts:9`. A stuck codex run can block a worker for half an hour. **Not fixed here because this is a module-wide pattern, not codex-specific**: `claude-driver.execute()` and `qwen-driver.execute()` both behave identically. A proper fix would add `timeoutMs?: number` to `ExecuteStepOptions` in `types.ts`, thread it through all three drivers, and have the runner set a reasonable per-step default. Outside the scope of a codex-only review; flag for the next runtimes pass.
+
+**#4 — undocumented `--dangerously-bypass-approvals-and-sandbox`.** The flag is present at `codex-driver.ts:33` with no comment. The driver relies on the caller having validated `cwd` against an authorized path, but nothing in the code points a future reader at that contract. Low-risk cleanup, not worth a standalone commit.
+
+**#5 — `runtime_variant` shape.** Passed as a separate spawn arg, so immune to shell injection, but a typo lets codex fail obscurely. A regex guard (`^[a-zA-Z0-9._-]+$`) would catch typos early. Not worth touching without a recurring incident.
+
+### Side notes (not fixed)
+
+- `formatCodexEventBody` silently drops JSON events with no `msg`/`message`/`text`/recognized `type` — intentional per the comment at `codex-driver.ts:114`, and already covered by the test at `:242`. If codex ever adds a new event shape, the driver will go quiet but keep working.
+- `allocateOutputPath` uses `jobId + Date.now()` for the temp filename; not collision-free in theory but fine in practice since `jobId` is unique per run.
+- On `runProcess` throw, `runCodex` still runs the `unlinkSync` cleanup for the temp file in a `try/catch`, which is good. The `writeFileSync → spawn fails → read-throws-ENOENT → we throw the caught error` path is correct.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/server/runtimes/codex-driver.test.ts` — 10/10 pass (up from 9)
+- `npx vitest run` — 239/239 pass in 39 files (previously 238)
