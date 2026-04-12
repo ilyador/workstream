@@ -346,3 +346,59 @@ Six exports, all pure functions over task/artifact snapshots:
 - `npx tsc --noEmit` — clean
 - `npx vitest run src/web/lib/file-passing.test.ts` — 20/20 pass (up from 4)
 - `npx vitest run` — 274/274 pass in 40 files (previously 258)
+
+---
+
+## 2026-04-12 — useArtifacts hook (`src/web/hooks/useArtifacts.ts`)
+
+### Scope
+
+React-correctness review of the 182-line `useArtifacts` hook. Callers: `TaskAttachments.tsx`, `TaskAttachmentsEditor.tsx`. Mock-based test file (`useArtifacts.test.tsx`) with 5 pre-existing tests covering cache reuse, project-event-driven refetch, pub/sub fanout, and stale in-flight load suppression.
+
+### Hook shape
+
+Module-level cache: four `Map`s keyed by `${projectId||'global'}:${taskId}` — `artifactCache` (loaded snapshots), `artifactRequests` (in-flight promises for dedup), `artifactSubscribers` (set of cache-change callbacks per key), `artifactRequestVersions` (stale-suppression counter). A `getCachedArtifacts` helper dedupes concurrent fetches via `artifactRequests` and versions each request so late-resolving older requests can't clobber a newer write.
+
+The hook itself owns `artifacts`/`loading`/`loaded`/`error` local state (seeded from cache on first render), a `requestRef` counter that invalidates in-flight loads across effect re-runs, a `useCallback`-memoized `load(options?)`, a subscribe-to-cache effect (line 83) that also subscribes to project events when `projectId` is provided and triggers force-reloads on `artifact_changed`/`artifact_deleted`, plus `upload(file)` and `remove(artifactId)` mutation helpers.
+
+### Findings
+
+| # | Severity | File | Status |
+|---|---|---|---|
+| 1 | LOW | `useArtifacts.ts:109-118` (old) — `upload` and `remove` were inner functions, not memoized → unstable identities broke downstream `React.memo` consumers | **Fixed** (d0d94c5) |
+| 2 | LOW | `useArtifacts.test.tsx` — `remove()` path, error-state clearing on retry, and null-taskId reset were untested | **Fixed** (d0d94c5) |
+
+### Fixes in this pass
+
+**d0d94c5 — memoize upload/remove and backfill four tests.**
+
+*Memoization.* Both helpers are passed from `TaskAttachments`/`TaskAttachmentsEditor` down to memoized attachment-list children. Inner-function definitions created a new identity on every parent render, so children that used `React.memo` or `useEffect` dependencies re-ran unnecessarily. Wrapped `upload` in `useCallback(..., [taskId, load])` (it captures `taskId` and calls `load`) and `remove` in `useCallback(..., [load])` (only captures `load`).
+
+*Test coverage backfill.* Added four tests:
+
+- `remove() deletes the artifact and reloads from the server` — verifies the second `getArtifacts` fires and the new artifact set is reflected. Only `upload` had test coverage previously.
+- `surfaces a load error and then clears it on a successful retry` — rejects the first fetch, asserts `error === 'boom'` and `loaded === false`, then force-reloads and asserts error clears via the subscription/cache propagation path. This pins behavior that the subagent mis-flagged as broken.
+- `resets local state when taskId transitions to null` — rerenders with `taskId: null` and asserts all state resets via `load`'s early-return branch at lines 49-55.
+- `exposes stable upload and remove identities across renders when deps are unchanged` — captures `upload`/`remove` refs, rerenders without prop changes, asserts `toBe` (identity equality). Pins the `useCallback` change and will fail immediately if anyone inlines these again.
+
+Test count 274 → 278.
+
+### Verified false positives
+
+The review subagent flagged several things as "critical" that weren't. Verified each against the actual code before acting:
+
+- **"Missing `load` in useEffect dep array."** Line 107 already lists `load`. The dep is strictly redundant (`load` is memoized over `[cacheKey, taskId]`, both of which are also effect deps), but it's not a bug.
+- **"Error state persists across successful reloads."** The subscription callback on line 90-95 propagates `entry.error` on every cache write, and `getCachedArtifacts`'s success write on line 163 sends `error: null`. So any component with a live subscription sees the error clear immediately when a retry succeeds. The new `surfaces a load error and then clears it on a successful retry` test pins this.
+- **"Circular dep / stale closure in subscription callback."** The effect re-runs whenever `load`'s identity changes (because `load` is in its dep array), so the project-events subscription is torn down and re-registered with the fresh `load` closure. No stale closure.
+
+### Side notes (not fixed)
+
+- **Module-level cache has no eviction.** `artifactCache`, `artifactRequests`, `artifactSubscribers`, and `artifactRequestVersions` grow unbounded over the lifetime of the tab. For typical usage (tens-to-hundreds of tasks) this is fine; for a long-running session with many taskId transitions it's a slow leak. Not worth fixing without evidence.
+- **`remove()` doesn't validate `taskId`.** If called on a hook whose `taskId` is `null`, it still sends the DELETE to the server (fine — the API takes `artifactId` only), then calls `load({ force: true })` which hits the early-return branch and resets local state. Harmless but slightly weird; no current caller does this.
+- **`getCachedArtifacts` version check silently suppresses stale errors.** On fetch failure, if the version has moved, the older request's error is swallowed (`return artifactCache.get(cacheKey)?.artifacts ?? []` at line 168). Intentional — a newer request is in flight and its result should win — but worth noting as a "silent drop" path.
+
+### Verification
+
+- `npx tsc --noEmit` — clean
+- `npx vitest run src/web/hooks/useArtifacts.test.tsx` — 9/9 pass (up from 5)
+- `npx vitest run` — 278/278 pass in 40 files (previously 274)
