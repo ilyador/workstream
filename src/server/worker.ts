@@ -535,7 +535,7 @@ async function shutdown() {
   clearInterval(cancelInterval);
   clearInterval(prMergeInterval);
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-  cancelAllJobs();
+  await cancelAllJobs();
   await flushLogs();
   process.exit(0);
 }

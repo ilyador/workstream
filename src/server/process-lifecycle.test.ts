@@ -28,8 +28,8 @@ function makeProc(): ChildProcess {
 }
 
 describe('process-lifecycle', () => {
-  beforeEach(() => {
-    cancelAllJobs();
+  beforeEach(async () => {
+    await cancelAllJobs();
   });
 
   it('registers and unregisters processes by jobId', () => {
@@ -73,15 +73,38 @@ describe('process-lifecycle', () => {
     await expect(cancelJob('unknown-job')).resolves.toBeUndefined();
   });
 
-  it('cancelAllJobs kills processes across all jobs', async () => {
+  it('cancelAllJobs kills processes across all jobs and awaits termination', async () => {
     const a = new MockProc();
     const b = new MockProc();
     registerActiveProcess('job-1', a as unknown as ChildProcess);
     registerActiveProcess('job-2', b as unknown as ChildProcess);
-    cancelAllJobs();
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await cancelAllJobs();
     expect(a.killCalls.length).toBeGreaterThan(0);
     expect(b.killCalls.length).toBeGreaterThan(0);
+    // Cancellation flags are cleared after termination, so a re-queued
+    // job id won't be reported as canceled.
+    expect(isJobCanceled('job-1')).toBe(false);
+    expect(isJobCanceled('job-2')).toBe(false);
+    expect(getActiveProcessCount('job-1')).toBe(0);
+    expect(getActiveProcessCount('job-2')).toBe(0);
+  });
+
+  it('cancelAllJobs marks jobs canceled while processes are still closing', async () => {
+    // Use a stubborn proc whose close() only fires when we tell it to, so
+    // we can observe the flag state in the middle of termination.
+    const stubborn = new MockProc();
+    stubborn.kill = function(signal?: string) {
+      this.killCalls.push(signal ?? 'SIGTERM');
+      return true;
+    };
+    registerActiveProcess('job-x', stubborn as unknown as ChildProcess);
+    const all = cancelAllJobs();
+    // At this point the flag must be set so any in-flight close handler
+    // sees the job as canceled, not a normal exit.
+    expect(isJobCanceled('job-x')).toBe(true);
+    stubborn.emit('close', 0);
+    await all;
+    expect(isJobCanceled('job-x')).toBe(false);
   });
 
   it('escalates to SIGKILL if process does not close within 5s', async () => {
