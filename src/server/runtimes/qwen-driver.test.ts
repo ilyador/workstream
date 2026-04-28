@@ -63,7 +63,29 @@ describe('QwenDriver', () => {
     await promise;
   });
 
-  it('passes --prompt to trigger one-shot mode', async () => {
+  it('passes prompt via --prompt argument', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const { qwenDriver } = await import('./qwen-driver.js');
+    const promise = qwenDriver.execute({
+      jobId: 'j1',
+      step: baseStep(),
+      task: { effort: null },
+      cwd: '/work',
+      prompt: 'implement the feature',
+      onLog: () => {},
+    });
+
+    const args = spawnMock.mock.calls[0][1] as string[];
+    expect(args).toContain('--prompt');
+    expect(args[args.indexOf('--prompt') + 1]).toBe('implement the feature');
+
+    proc.emit('close', 0);
+    await promise;
+  });
+
+  it('does not pipe prompt via stdin', async () => {
     const proc = new MockProc();
     spawnMock.mockReturnValue(proc);
 
@@ -77,50 +99,7 @@ describe('QwenDriver', () => {
       onLog: () => {},
     });
 
-    const args = spawnMock.mock.calls[0][1] as string[];
-    expect(args).toContain('--prompt');
-
-    proc.emit('close', 0);
-    await promise;
-  });
-
-  it('pipes the prompt via stdin', async () => {
-    const proc = new MockProc();
-    spawnMock.mockReturnValue(proc);
-
-    const { qwenDriver } = await import('./qwen-driver.js');
-    const promise = qwenDriver.execute({
-      jobId: 'j1',
-      step: baseStep(),
-      task: { effort: null },
-      cwd: '/work',
-      prompt: 'pipe me',
-      onLog: () => {},
-    });
-
-    expect(proc.stdin.write).toHaveBeenCalledWith('pipe me');
-    expect(proc.stdin.end).toHaveBeenCalled();
-    proc.emit('close', 0);
-    await promise;
-  });
-
-  it('does not leak prompt content in command-line args', async () => {
-    const proc = new MockProc();
-    spawnMock.mockReturnValue(proc);
-
-    const { qwenDriver } = await import('./qwen-driver.js');
-    const promise = qwenDriver.execute({
-      jobId: 'j1',
-      step: baseStep(),
-      task: { effort: null },
-      cwd: '/work',
-      prompt: 'SECRET-PROMPT-LEAK-CANARY-12345',
-      onLog: () => {},
-    });
-
-    const args = spawnMock.mock.calls[0][1] as string[];
-    expect(args.join('\x00')).not.toContain('SECRET-PROMPT-LEAK-CANARY-12345');
-
+    expect(proc.stdin.write).not.toHaveBeenCalled();
     proc.emit('close', 0);
     await promise;
   });

@@ -3,8 +3,8 @@ import type { RuntimeDriver, ExecuteStepOptions, SummarizeOptions } from './type
 import { buildRuntimeEnv } from './env.js';
 import { runProcess } from './process-runner.js';
 
-function buildArgs(step: FlowStepConfig): string[] {
-  const args = ['--output-format', 'text', '--approval-mode', 'yolo', '--prompt', '.'];
+function buildArgs(step: FlowStepConfig, prompt: string): string[] {
+  const args = ['--output-format', 'text', '--approval-mode', 'yolo', '--prompt', prompt];
   if (step.runtime_variant) args.push('--model', step.runtime_variant);
   return args;
 }
@@ -16,10 +16,9 @@ export const qwenDriver: RuntimeDriver = {
     const result = await runProcess({
       jobId: opts.jobId,
       command: 'qwen',
-      args: buildArgs(opts.step),
+      args: buildArgs(opts.step, opts.prompt),
       cwd: opts.cwd,
       env: buildRuntimeEnv('qwen_code'),
-      stdin: opts.prompt,
       timeoutMs: opts.timeoutMs,
       onLine: (line, _stream) => {
         if (line.trim()) opts.onLog(`${line}\n`);
@@ -33,10 +32,9 @@ export const qwenDriver: RuntimeDriver = {
     const result = await runProcess({
       jobId: opts.jobId,
       command: 'qwen',
-      args: buildArgs(opts.step),
+      args: buildArgs(opts.step, opts.prompt),
       cwd: opts.cwd,
       env: buildRuntimeEnv('qwen_code'),
-      stdin: opts.prompt,
       timeoutMs: 60_000,
       onLine: () => {},
       onLog: () => {},
