@@ -42,7 +42,7 @@ export async function buildStepPrompt(
   }
 
   for (const source of step.context_sources) {
-    const block = await buildContextSource(source, task, previousOutputs, localPath);
+    const block = await buildContextSource(source, step, task, previousOutputs, localPath);
     if (block) parts.push(block);
   }
 
@@ -73,6 +73,7 @@ export async function buildStepPrompt(
 
 async function buildContextSource(
   source: string,
+  step: FlowStepConfig,
   task: any,
   previousOutputs: any[],
   localPath: string,
@@ -81,7 +82,7 @@ async function buildContextSource(
     case 'agents':             return buildAgentsContext(localPath);
     case 'task_description':   return buildTaskDescriptionContext(task);
     case 'task_images':        return buildTaskImagesContext(task);
-    case 'skills':             return buildSkillsContext(task, localPath);
+    case 'skills':             return buildSkillsContext(step, localPath);
     case 'followup_notes':     return buildFollowupNotesContext(task);
     case 'architecture_md':    return buildArchitectureContext(localPath);
     case 'review_criteria':    return buildReviewCriteriaContext(localPath);
@@ -117,9 +118,9 @@ function buildTaskImagesContext(task: any): string | null {
   return null;
 }
 
-function buildSkillsContext(task: any, localPath: string): string | null {
-  if (task.description) {
-    const skillRefs = [...task.description.matchAll(/(?:^|[\s\n])\/([a-zA-Z0-9_][\w:-]*)/g)].map((m: RegExpMatchArray) => m[1]);
+function buildSkillsContext(step: FlowStepConfig, localPath: string): string | null {
+  if (step.instructions) {
+    const skillRefs = [...step.instructions.matchAll(/(?:^|[\s\n])\/([a-zA-Z0-9_][\w:-]*)/g)].map((m: RegExpMatchArray) => m[1]);
     if (skillRefs.length > 0) {
       const available = discoverSkills(localPath);
       const skillMap = new Map(available.map((s: any) => [s.name, s]));
