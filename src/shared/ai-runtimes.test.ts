@@ -105,7 +105,7 @@ describe('ai runtime normalization', () => {
   it('applies the runtime default variant when no variant is provided', () => {
     expect(normalizeRuntimeVariant('claude_code', null)).toBe('opus');
     expect(normalizeRuntimeVariant('codex', null)).toBe('gpt-5.4');
-    expect(normalizeRuntimeVariant('qwen_code', null)).toBe('qwen3-coder-next');
+    expect(normalizeRuntimeVariant('qwen_code', null)).toBe('qwen3.6:35b-a3b-q4_K_M');
   });
 
   it('preserves a valid variant choice', () => {
@@ -115,7 +115,7 @@ describe('ai runtime normalization', () => {
 
   it('falls back to the default variant when the variant is not in the runtime options', () => {
     expect(normalizeRuntimeVariant('codex', 'gpt-999')).toBe('gpt-5.4');
-    expect(normalizeRuntimeVariant('qwen_code', 'qwen-unknown')).toBe('qwen3-coder-next');
+    expect(normalizeRuntimeVariant('qwen_code', 'qwen-unknown')).toBe('qwen3.6:35b-a3b-q4_K_M');
   });
 
   it('normalizeRuntimeId preserves a valid runtime id that matches the kind', () => {
