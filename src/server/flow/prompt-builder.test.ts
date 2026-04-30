@@ -152,4 +152,37 @@ describe('buildStepPrompt', () => {
     expect(prompt).toContain('## Human Answer to Your Question');
     expect(prompt).toContain('Yes, do X.');
   });
+
+  it('adds an unattended execution contract for non-gate coding steps', async () => {
+    const { buildStepPrompt } = await import('./prompt-builder.js');
+    const step = baseStep({ name: 'develop' });
+    const previousOutputs = [{ phase: 'plan', attempt: 1, output: 'Implement the filter in the board toolbar.' }];
+    const prompt = await buildStepPrompt(step, baseFlow(), baseTask(), previousOutputs, testDir);
+
+    expect(prompt).toContain('## Execution Contract');
+    expect(prompt).toContain('Do not ask the user clarification questions.');
+    expect(prompt).toContain('Do not respond with "Before I begin" or a list of questions.');
+    expect(prompt).toContain('Previous step outputs are binding context.');
+    expect(prompt).toContain('implement that plan directly');
+    expect(prompt).toContain('Ignore any previous-plan instruction that asks for subagents, skills, TodoWrite/todo lists');
+    expect(prompt).toContain('Do not create a new plan or task checklist');
+  });
+
+  it('lists the current step tools in the execution contract', async () => {
+    const { buildStepPrompt } = await import('./prompt-builder.js');
+    const step = baseStep({ tools: ['Read', 'Edit', 'Write', 'Bash'] });
+    const prompt = await buildStepPrompt(step, baseFlow(), baseTask(), [], testDir);
+
+    expect(prompt).toContain('Use only these step tools: Read, Edit, Write, Bash.');
+    expect(prompt).toContain('Do not attempt tools that are not listed.');
+  });
+
+  it('does not add the unattended execution contract for gate steps', async () => {
+    const { buildStepPrompt } = await import('./prompt-builder.js');
+    const step = baseStep({ name: 'verify', is_gate: true });
+    const prompt = await buildStepPrompt(step, baseFlow(), baseTask(), [], testDir);
+
+    expect(prompt).not.toContain('## Execution Contract');
+    expect(prompt).not.toContain('Do not ask the user clarification questions.');
+  });
 });

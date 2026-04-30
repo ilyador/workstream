@@ -27,7 +27,7 @@ vi.mock('./prompt-builder.js', () => ({
 }));
 
 import { __test__ } from './orchestrator.js';
-const { detectPauseQuestion, checkGate } = __test__;
+const { detectPauseQuestion, checkGate, stepTimeoutMs } = __test__;
 
 function baseStep(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -50,36 +50,32 @@ function baseStep(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe('detectPauseQuestion', () => {
-  it('returns the pause question when the tail contains "Should I"', () => {
-    const output = 'I did work.\nShould I also run the migrations?';
-    expect(detectPauseQuestion(output)).toContain('Should I');
+  it('returns the inline question after an explicit pause marker', () => {
+    const output = 'I checked the tests.\n[pause] Should I treat this unrelated failure as blocking?';
+    expect(detectPauseQuestion(output)).toBe('Should I treat this unrelated failure as blocking?');
   });
 
-  it('returns the pause question when the tail contains "Could you"', () => {
-    const output = 'Analysis done.\nCould you confirm the approach?';
-    expect(detectPauseQuestion(output)).toContain('Could you');
+  it('returns a block question after an explicit pause marker', () => {
+    const output = 'I checked the tests.\n[pause]\nShould I treat this unrelated failure as blocking?\nIt appears unrelated.';
+    expect(detectPauseQuestion(output)).toBe('Should I treat this unrelated failure as blocking?\nIt appears unrelated.');
   });
 
-  it('returns the pause question when the tail contains "Which"', () => {
-    const output = 'Done.\nWhich option should I use?';
-    expect(detectPauseQuestion(output)).toContain('Which');
+  it('ignores text after the summary marker', () => {
+    const output = '[pause] Should I pause here?\n[summary] Asked for user input\n[pause] ignored';
+    expect(detectPauseQuestion(output)).toBe('Should I pause here?');
   });
 
-  it('returns null when there is no question mark', () => {
+  it('returns null when there is no explicit pause marker', () => {
     expect(detectPauseQuestion('work done.\nAll tests pass.')).toBeNull();
   });
 
-  it('returns null when question keywords are absent even with a question mark', () => {
-    expect(detectPauseQuestion('Really?')).toBeNull();
-  });
-
-  it('skips bullet-list and RULES lines when computing the tail', () => {
-    const output = 'work done, ran tests\n- do this\n- do that\nRULES: follow them\nIMPORTANT: test first';
+  it('returns null for unmarked clarification questions', () => {
+    const output = 'Before I begin, should I put this in Board.tsx or a new component?';
     expect(detectPauseQuestion(output)).toBeNull();
   });
 
-  it('only looks at the last 5 lines', () => {
-    const output = 'Should I do this?\n' + 'line\n'.repeat(10) + 'work complete';
+  it('returns null for an empty pause marker', () => {
+    const output = 'work done\n[pause]\n[summary] no question';
     expect(detectPauseQuestion(output)).toBeNull();
   });
 });
@@ -119,5 +115,41 @@ describe('checkGate', () => {
     const result = checkGate(step, '3 tests fail');
     expect(result.failed).toBe(true);
     expect(result.reason).toContain('verify');
+  });
+});
+
+describe('stepTimeoutMs', () => {
+  it('uses the default step timeout for non-Qwen steps', () => {
+    const step = baseStep({ runtime_id: 'claude_code' });
+    expect(stepTimeoutMs(step)).toBe(45 * 60 * 1000);
+  });
+
+  it('uses the longer default timeout for Qwen steps', () => {
+    const step = baseStep({ runtime_id: 'qwen_code' });
+    expect(stepTimeoutMs(step)).toBe(120 * 60 * 1000);
+  });
+
+  it('allows Qwen timeout override from the environment', () => {
+    const previous = process.env.WORKSTREAM_QWEN_STEP_TIMEOUT_MINUTES;
+    process.env.WORKSTREAM_QWEN_STEP_TIMEOUT_MINUTES = '75';
+    try {
+      const step = baseStep({ runtime_id: 'qwen_code' });
+      expect(stepTimeoutMs(step)).toBe(75 * 60 * 1000);
+    } finally {
+      if (previous === undefined) delete process.env.WORKSTREAM_QWEN_STEP_TIMEOUT_MINUTES;
+      else process.env.WORKSTREAM_QWEN_STEP_TIMEOUT_MINUTES = previous;
+    }
+  });
+
+  it('allows default timeout override from the environment', () => {
+    const previous = process.env.WORKSTREAM_STEP_TIMEOUT_MINUTES;
+    process.env.WORKSTREAM_STEP_TIMEOUT_MINUTES = '30';
+    try {
+      const step = baseStep({ runtime_id: 'claude_code' });
+      expect(stepTimeoutMs(step)).toBe(30 * 60 * 1000);
+    } finally {
+      if (previous === undefined) delete process.env.WORKSTREAM_STEP_TIMEOUT_MINUTES;
+      else process.env.WORKSTREAM_STEP_TIMEOUT_MINUTES = previous;
+    }
   });
 });

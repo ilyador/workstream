@@ -26,6 +26,27 @@ const SUMMARY_INSTRUCTIONS =
   '\nAt the very end of your response, write a one-line summary of what you did in this step using this exact format:\n' +
   '[summary] Your short summary here\n';
 
+function buildExecutionContract(step: FlowStepConfig, previousOutputs: any[]): string | null {
+  if (step.runtime_kind !== 'coding' || step.is_gate) return null;
+
+  const planInstruction = previousOutputs.length > 0
+    ? '- Previous step outputs are binding context. If they contain a plan, implement that plan directly and do not reopen its decisions.\n'
+    : '';
+  const toolInstruction = step.tools.length > 0
+    ? `- Use only these step tools: ${step.tools.join(', ')}. Do not attempt tools that are not listed.\n`
+    : '';
+
+  return `## Execution Contract
+- This is an unattended execution step. Do not ask the user clarification questions.
+- Do not respond with "Before I begin" or a list of questions. Start doing the work.
+${planInstruction}- Treat the task description, current step instructions, repository instructions, and available project context as sufficient.
+- Ignore any previous-plan instruction that asks for subagents, skills, TodoWrite/todo lists, checklist tracking, or other unavailable tools. Execute directly with the current step tools.
+${toolInstruction}- Do not create a new plan or task checklist; keep implementation moving.
+- If a detail is not explicit, inspect the existing codebase and choose the smallest implementation that follows established local patterns.
+- Only stop for user input if this exact current step explicitly instructs you to ask a question. Otherwise, report any true blocker as a failed step.
+`;
+}
+
 /** Build prompt for a single flow step, including only the requested context sources. */
 export async function buildStepPrompt(
   step: FlowStepConfig,
@@ -66,6 +87,9 @@ export async function buildStepPrompt(
   if (answer) {
     parts.push(`## Human Answer to Your Question\n${answer}\n`);
   }
+
+  const executionContract = buildExecutionContract(step, previousOutputs);
+  if (executionContract) parts.push(executionContract);
 
   parts.push(SUMMARY_INSTRUCTIONS);
   return parts.join('\n');

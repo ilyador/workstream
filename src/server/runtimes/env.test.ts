@@ -13,6 +13,9 @@ describe('buildRuntimeEnv', () => {
       TMPDIR: '/tmp',
       ANTHROPIC_API_KEY: 'sk-ant-secret',
       OPENAI_API_KEY: 'sk-openai-secret',
+      OPENAI_BASE_URL: 'http://localhost:11434/v1',
+      OPENAI_MODEL: 'qwen-local',
+      OLLAMA_API_KEY: 'ollama-secret',
       DASHSCOPE_API_KEY: 'sk-dashscope-secret',
       DATABASE_URL: 'postgres://secret',
       GITHUB_TOKEN: 'github-secret',
@@ -41,10 +44,24 @@ describe('buildRuntimeEnv', () => {
     expect(buildRuntimeEnv('qwen_code').ANTHROPIC_API_KEY).toBeUndefined();
   });
 
-  it('forwards OPENAI_API_KEY only to codex', () => {
+  it('forwards OPENAI_API_KEY to OpenAI-compatible runtimes', () => {
     expect(buildRuntimeEnv('codex').OPENAI_API_KEY).toBe('sk-openai-secret');
     expect(buildRuntimeEnv('claude_code').OPENAI_API_KEY).toBeUndefined();
-    expect(buildRuntimeEnv('qwen_code').OPENAI_API_KEY).toBeUndefined();
+    expect(buildRuntimeEnv('qwen_code').OPENAI_API_KEY).toBe('sk-openai-secret');
+  });
+
+  it('forwards local OpenAI-compatible Qwen settings to qwen_code only', () => {
+    const qwenEnv = buildRuntimeEnv('qwen_code');
+    expect(qwenEnv.OPENAI_BASE_URL).toBe('http://localhost:11434/v1');
+    expect(qwenEnv.OPENAI_MODEL).toBe('qwen-local');
+    expect(qwenEnv.OLLAMA_API_KEY).toBe('ollama-secret');
+
+    expect(buildRuntimeEnv('claude_code').OPENAI_BASE_URL).toBeUndefined();
+    expect(buildRuntimeEnv('claude_code').OPENAI_MODEL).toBeUndefined();
+    expect(buildRuntimeEnv('claude_code').OLLAMA_API_KEY).toBeUndefined();
+    expect(buildRuntimeEnv('codex').OPENAI_BASE_URL).toBeUndefined();
+    expect(buildRuntimeEnv('codex').OPENAI_MODEL).toBeUndefined();
+    expect(buildRuntimeEnv('codex').OLLAMA_API_KEY).toBeUndefined();
   });
 
   it('forwards DASHSCOPE_API_KEY only to qwen_code', () => {

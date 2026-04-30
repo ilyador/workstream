@@ -15,6 +15,8 @@ import { executeFlowStep, summarize } from '../runtimes/index.js';
 import { lookupProjectId } from '../realtime-core-handlers.js';
 
 const TOOL_LINE_RE = /^\[(?:Bash|Read|Write|Edit|Glob|Grep|Agent|ToolSearch|TodoWrite|Skill|NotebookEdit|EnterPlanMode|ExitPlanMode)\b/;
+const DEFAULT_STEP_TIMEOUT_MINUTES = 45;
+const DEFAULT_QWEN_STEP_TIMEOUT_MINUTES = 120;
 
 function stripToolCallLines(text: string): string {
   return text.split('\n')
@@ -24,20 +26,45 @@ function stripToolCallLines(text: string): string {
     .trim();
 }
 
-const PAUSE_KEYWORDS = ['Should I', 'Could you', 'Which', 'clarif'];
+const PAUSE_MARKER_RE = /^\s*\[pause\]\s*(.*)$/i;
 
 function detectPauseQuestion(output: string): string | null {
   let text = output.trim();
   const summaryIdx = text.search(/\[summary]/i);
   if (summaryIdx > 0) text = text.substring(0, summaryIdx).trim();
-  const candidateLines = text.split('\n').slice(-5).filter(l => {
-    const trimmed = l.trim();
-    return !trimmed.startsWith('- ') && !trimmed.startsWith('RULES:') && !trimmed.startsWith('IMPORTANT:');
-  });
-  const lastLines = candidateLines.join('\n');
-  if (!lastLines.includes('?')) return null;
-  if (!PAUSE_KEYWORDS.some(kw => lastLines.includes(kw))) return null;
-  return lastLines;
+  const lines = text.split('\n');
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const marker = lines[i].match(PAUSE_MARKER_RE);
+    if (!marker) continue;
+
+    const inlineQuestion = marker[1].trim();
+    if (inlineQuestion) return inlineQuestion;
+
+    const blockQuestion = lines
+      .slice(i + 1)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+    return blockQuestion || null;
+  }
+
+  return null;
+}
+
+function timeoutMinutesFromEnv(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function stepTimeoutMs(step: FlowStepConfig): number {
+  const defaultMinutes = timeoutMinutesFromEnv('WORKSTREAM_STEP_TIMEOUT_MINUTES', DEFAULT_STEP_TIMEOUT_MINUTES);
+  const qwenMinutes = timeoutMinutesFromEnv('WORKSTREAM_QWEN_STEP_TIMEOUT_MINUTES', DEFAULT_QWEN_STEP_TIMEOUT_MINUTES);
+  const timeoutMinutes = step.runtime_id === 'qwen_code' ? qwenMinutes : defaultMinutes;
+  return Math.round(timeoutMinutes * 60 * 1000);
 }
 
 interface GateResult {
@@ -203,7 +230,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
           cwd: localPath,
           prompt,
           onLog,
-          timeoutMs: 45 * 60 * 1000,
+          timeoutMs: stepTimeoutMs(step),
         });
         if (!await isJobStillRunning(jobId)) return;
 
@@ -218,7 +245,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         if (!await isJobStillRunning(jobId)) return;
         onPhaseComplete(step.name, phaseOutput);
 
-        // Check if claude asked a question
+        // Only explicit pause markers stop unattended jobs.
         const pauseQuestion = detectPauseQuestion(output);
         if (pauseQuestion) {
           if (await updateRunningJob(jobId, {
@@ -522,4 +549,5 @@ export async function cleanupOrphanedJobs(): Promise<number> {
 export const __test__ = {
   detectPauseQuestion,
   checkGate,
+  stepTimeoutMs,
 };

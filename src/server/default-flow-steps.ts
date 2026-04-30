@@ -37,8 +37,8 @@ End with:
 \`\`\`
 
 UNRELATED or UNSURE failure:
-Do NOT include any JSON verdict block. Instead, end your response with a question like:
-"Should I treat this as a failure? The failing test [name] appears unrelated because [reason]."
+Do NOT include any JSON verdict block. Instead, end your response with an explicit pause marker:
+[pause] Should I treat this as a failure? The failing test [name] appears unrelated because [reason].
 This will pause the job so the user can decide. Do NOT include a verdict block when asking.`,
 };
 

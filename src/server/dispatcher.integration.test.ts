@@ -120,7 +120,7 @@ function makeFakeProcess(): ChildProcess {
       proc.stderr.emit('data', Buffer.from('Something went wrong\n'));
       proc.emit('close', 1);
     } else if (spawnBehavior === 'question') {
-      const text = 'Should I proceed with the changes?\n[summary] Asked a question\n';
+      const text = '[pause] Should I proceed with the changes?\n[summary] Asked a question\n';
       const event = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text }] } });
       proc.stdout.emit('data', Buffer.from(event + '\n'));
       const result = JSON.stringify({ type: 'result', duration_ms: 500 });
@@ -440,10 +440,10 @@ describe('dispatcher integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Pause on question
+  // Explicit pause marker
   // -------------------------------------------------------------------------
-  describe('pause on question detection', () => {
-    it('pauses job and task when Claude asks a question', async () => {
+  describe('pause marker detection', () => {
+    it('pauses job and task when the runtime emits an explicit pause marker', async () => {
       seedJob('job-001', 'running');
       seedTask('task-001', 'in_progress');
       spawnBehavior = 'question';
