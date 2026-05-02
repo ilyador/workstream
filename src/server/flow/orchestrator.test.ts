@@ -15,6 +15,7 @@ vi.mock('../supabase.js', () => ({
 
 vi.mock('../git-utils.js', () => ({
   stagedDiffStat: vi.fn().mockReturnValue({ filesChanged: 0, linesAdded: 0, linesRemoved: 0, changedFiles: [] }),
+  repositoryChangeFingerprint: vi.fn().mockReturnValue(''),
 }));
 
 vi.mock('../runtimes/index.js', () => ({
@@ -27,7 +28,7 @@ vi.mock('./prompt-builder.js', () => ({
 }));
 
 import { __test__ } from './orchestrator.js';
-const { detectPauseQuestion, checkGate, stepTimeoutMs } = __test__;
+const { detectPauseQuestion, checkGate, stepTimeoutMs, gateJumpLimitForTarget, stepRequiresRepositoryChange } = __test__;
 
 function baseStep(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -124,9 +125,9 @@ describe('stepTimeoutMs', () => {
     expect(stepTimeoutMs(step)).toBe(45 * 60 * 1000);
   });
 
-  it('uses the longer default timeout for Qwen steps', () => {
+  it('uses the default timeout for Qwen steps', () => {
     const step = baseStep({ runtime_id: 'qwen_code' });
-    expect(stepTimeoutMs(step)).toBe(120 * 60 * 1000);
+    expect(stepTimeoutMs(step)).toBe(60 * 60 * 1000);
   });
 
   it('allows Qwen timeout override from the environment', () => {
@@ -151,5 +152,49 @@ describe('stepTimeoutMs', () => {
       if (previous === undefined) delete process.env.WORKSTREAM_STEP_TIMEOUT_MINUTES;
       else process.env.WORKSTREAM_STEP_TIMEOUT_MINUTES = previous;
     }
+  });
+});
+
+describe('gateJumpLimitForTarget', () => {
+  it('uses the short default jump-back limit for Gemma steps', () => {
+    const step = baseStep({ runtime_id: 'gemma_code' });
+    expect(gateJumpLimitForTarget(step)).toBe(2);
+  });
+
+  it('allows Gemma jump-back limit override from the environment', () => {
+    const previous = process.env.WORKSTREAM_GEMMA_GATE_JUMP_LIMIT;
+    process.env.WORKSTREAM_GEMMA_GATE_JUMP_LIMIT = '3';
+    try {
+      const step = baseStep({ runtime_id: 'gemma_code' });
+      expect(gateJumpLimitForTarget(step)).toBe(3);
+    } finally {
+      if (previous === undefined) delete process.env.WORKSTREAM_GEMMA_GATE_JUMP_LIMIT;
+      else process.env.WORKSTREAM_GEMMA_GATE_JUMP_LIMIT = previous;
+    }
+  });
+
+  it('keeps the global jump-back limit for non-local runtimes', () => {
+    const previous = process.env.WORKSTREAM_GATE_JUMP_LIMIT;
+    process.env.WORKSTREAM_GATE_JUMP_LIMIT = '7';
+    try {
+      const step = baseStep({ runtime_id: 'claude_code' });
+      expect(gateJumpLimitForTarget(step)).toBe(7);
+    } finally {
+      if (previous === undefined) delete process.env.WORKSTREAM_GATE_JUMP_LIMIT;
+      else process.env.WORKSTREAM_GATE_JUMP_LIMIT = previous;
+    }
+  });
+});
+
+describe('stepRequiresRepositoryChange', () => {
+  it('guards local mutating runtime steps', () => {
+    expect(stepRequiresRepositoryChange(baseStep({ runtime_id: 'gemma_code', tools: ['Read', 'Edit'] }))).toBe(true);
+    expect(stepRequiresRepositoryChange(baseStep({ runtime_id: 'qwen_code', tools: ['Write'] }))).toBe(true);
+  });
+
+  it('does not guard read-only, gate, or non-local steps', () => {
+    expect(stepRequiresRepositoryChange(baseStep({ runtime_id: 'gemma_code', tools: ['Read', 'Grep'] }))).toBe(false);
+    expect(stepRequiresRepositoryChange(baseStep({ runtime_id: 'gemma_code', tools: ['Edit'], is_gate: true }))).toBe(false);
+    expect(stepRequiresRepositoryChange(baseStep({ runtime_id: 'claude_code', tools: ['Edit'] }))).toBe(false);
   });
 });

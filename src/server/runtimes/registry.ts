@@ -4,11 +4,13 @@ import type { RuntimeDriver, ExecuteStepOptions, SummarizeOptions } from './type
 import { claudeDriver } from './claude-driver.js';
 import { codexDriver } from './codex-driver.js';
 import { qwenDriver } from './qwen-driver.js';
+import { gemmaDriver } from './gemma-driver.js';
 
 const drivers = new Map<AiRuntimeId, RuntimeDriver>([
   ['claude_code', claudeDriver],
   ['codex', codexDriver],
   ['qwen_code', qwenDriver],
+  ['gemma_code', gemmaDriver],
 ]);
 
 function resolveDriver(runtimeId: string): RuntimeDriver {

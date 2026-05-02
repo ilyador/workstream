@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
 import { join } from 'path';
 import { supabase } from '../supabase.js';
-import { stagedDiffStat } from '../git-utils.js';
+import { repositoryChangeFingerprint, stagedDiffStat } from '../git-utils.js';
 import { getActiveProcessCount } from '../process-lifecycle.js';
 import type { FlowConfig, FlowStepConfig } from '../flow-config.js';
 import { buildStepPrompt } from './prompt-builder.js';
@@ -16,7 +16,12 @@ import { lookupProjectId } from '../realtime-core-handlers.js';
 
 const TOOL_LINE_RE = /^\[(?:Bash|Read|Write|Edit|Glob|Grep|Agent|ToolSearch|TodoWrite|Skill|NotebookEdit|EnterPlanMode|ExitPlanMode)\b/;
 const DEFAULT_STEP_TIMEOUT_MINUTES = 45;
-const DEFAULT_QWEN_STEP_TIMEOUT_MINUTES = 120;
+const DEFAULT_QWEN_STEP_TIMEOUT_MINUTES = 60;
+const DEFAULT_GATE_JUMP_LIMIT = 50;
+const DEFAULT_QWEN_GATE_JUMP_LIMIT = 2;
+const DEFAULT_GEMMA_GATE_JUMP_LIMIT = 2;
+const LOCAL_RUNTIME_IDS_REQUIRING_CHANGES = new Set(['qwen_code', 'gemma_code']);
+const REPO_MUTATION_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
 
 function stripToolCallLines(text: string): string {
   return text.split('\n')
@@ -60,11 +65,59 @@ function timeoutMinutesFromEnv(key: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function positiveIntegerFromEnv(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function stepTimeoutMs(step: FlowStepConfig): number {
   const defaultMinutes = timeoutMinutesFromEnv('WORKSTREAM_STEP_TIMEOUT_MINUTES', DEFAULT_STEP_TIMEOUT_MINUTES);
   const qwenMinutes = timeoutMinutesFromEnv('WORKSTREAM_QWEN_STEP_TIMEOUT_MINUTES', DEFAULT_QWEN_STEP_TIMEOUT_MINUTES);
   const timeoutMinutes = step.runtime_id === 'qwen_code' ? qwenMinutes : defaultMinutes;
   return Math.round(timeoutMinutes * 60 * 1000);
+}
+
+function gateJumpLimitForTarget(step: FlowStepConfig): number {
+  if (step.runtime_id === 'qwen_code') {
+    return positiveIntegerFromEnv('WORKSTREAM_QWEN_GATE_JUMP_LIMIT', DEFAULT_QWEN_GATE_JUMP_LIMIT);
+  }
+  if (step.runtime_id === 'gemma_code') {
+    return positiveIntegerFromEnv('WORKSTREAM_GEMMA_GATE_JUMP_LIMIT', DEFAULT_GEMMA_GATE_JUMP_LIMIT);
+  }
+  return positiveIntegerFromEnv('WORKSTREAM_GATE_JUMP_LIMIT', DEFAULT_GATE_JUMP_LIMIT);
+}
+
+function retryRuntimeLabel(step: FlowStepConfig): string {
+  if (step.runtime_id === 'qwen_code') return ' for Qwen';
+  if (step.runtime_id === 'gemma_code') return ' for Gemma';
+  return '';
+}
+
+function stepRequiresRepositoryChange(step: FlowStepConfig): boolean {
+  if (step.runtime_kind !== 'coding' || step.is_gate) return false;
+  if (!LOCAL_RUNTIME_IDS_REQUIRING_CHANGES.has(step.runtime_id)) return false;
+  return step.tools.some(tool => REPO_MUTATION_TOOLS.has(tool));
+}
+
+function checkpointRefForJob(jobId: string): string {
+  return `refs/workstream/checkpoints/${jobId}`;
+}
+
+function safeRepositoryChangeFingerprint(localPath: string, jobId: string, onLog: (text: string) => void): string | null {
+  try {
+    return repositoryChangeFingerprint(localPath, checkpointRefForJob(jobId));
+  } catch (err: any) {
+    onLog(`[guard] Could not inspect repository changes for no-op detection: ${err.message}\n`);
+    return null;
+  }
+}
+
+function noRepositoryChangeMessage(step: FlowStepConfig, output: string): string {
+  const excerpt = stripToolCallLines(output).replace(/\s+/g, ' ').trim().substring(0, 500);
+  const outputText = excerpt ? ` Runtime output excerpt: ${excerpt}` : '';
+  return `${step.name} completed without repository changes. ${step.runtime_id} returned successfully but did not edit files, so the job was stopped to avoid a verify/review retry loop.${outputText}`;
 }
 
 interface GateResult {
@@ -191,8 +244,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
   // Track cumulative attempts per step so jump-back retries don't reset the counter
   const stepAttemptOffsets: Record<string, number> = {};
-  const MAX_TOTAL_JUMPS = 50;
-  let totalJumps = 0;
+  const gateJumpCounts: Record<string, number> = {};
 
   let i = 0;
   while (i < steps.length) {
@@ -218,6 +270,9 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
       }) !== 'updated') return;
 
       const prompt = await buildStepPrompt(step, flow, task, phasesCompleted, localPath, task.answer);
+      const repositoryFingerprintBefore = stepRequiresRepositoryChange(step)
+        ? safeRepositoryChangeFingerprint(localPath, jobId, onLog)
+        : null;
 
       onLog(`\n--- Step: ${step.name} (attempt ${displayAttempt}/${maxAttempts}) ---\n`);
 
@@ -233,6 +288,13 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
           timeoutMs: stepTimeoutMs(step),
         });
         if (!await isJobStillRunning(jobId)) return;
+
+        if (repositoryFingerprintBefore !== null) {
+          const repositoryFingerprintAfter = safeRepositoryChangeFingerprint(localPath, jobId, onLog);
+          if (repositoryFingerprintAfter !== null && repositoryFingerprintAfter === repositoryFingerprintBefore) {
+            throw new Error(noRepositoryChangeMessage(step, output));
+          }
+        }
 
         const phaseOutput = {
           phase: step.name,
@@ -268,40 +330,43 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
           const failed = gateResult.failed;
           const reason = gateResult.reason;
 
-          if (failed && displayAttempt < maxAttempts) {
-            if (step.on_fail_jump_to != null) {
-              const jumpIndex = steps.findIndex(s => s.position === step.on_fail_jump_to);
-              if (jumpIndex >= 0 && jumpIndex < i) {
-                if (++totalJumps > MAX_TOTAL_JUMPS) {
-                  const msg = `Aborting: exceeded ${MAX_TOTAL_JUMPS} total jump-back retries (possible cycle)`;
-                  if (await updateRunningJob(jobId, { status: 'failed', phases_completed: phasesCompleted, completed_at: new Date().toISOString(), question: msg }) === 'canceled') return;
-                  await updateTaskStatus(task.id, 'paused');
-                  onFail(msg);
-                  return;
-                }
-                const retryMsg = `${step.name} failed (attempt ${displayAttempt}/${maxAttempts}): ${reason}. Retrying from '${steps[jumpIndex].name}'...`;
-                onLog(`\n${retryMsg}\n`);
-                if (await updateRunningJob(jobId, { question: retryMsg }) !== 'updated') return;
-                await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
-                // Clear steps from jumpIndex through i so they re-run
-                // Preserve failed step's output for retry context
-                const failedOutput = phasesCompleted.find(p => p.phase === step.name)?.output;
-                for (let ci = jumpIndex; ci <= i; ci++) {
-                  completedPhaseNames.delete(steps[ci].name);
-                }
-                for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
-                  const stepIdx = steps.findIndex(s => s.name === phasesCompleted[pi].phase);
-                  if (stepIdx >= jumpIndex && stepIdx <= i) { phasesCompleted.splice(pi, 1); }
-                }
-                // Store gate feedback on the job -- steps with 'gate_feedback' context source will pick it up
-                if (failedOutput) {
-                  task._gateFeedback = `${step.name} failed: ${reason}\n\nFull output:\n${failedOutput.substring(0, 3000)}`;
-                }
-                stepAttemptOffsets[step.name] = displayAttempt;
-                i = jumpIndex;
-                break;
+          if (failed && step.on_fail_jump_to != null) {
+            const jumpIndex = steps.findIndex(s => s.position === step.on_fail_jump_to);
+            if (jumpIndex >= 0 && jumpIndex < i) {
+              const jumpTarget = steps[jumpIndex];
+              const jumpKey = jumpTarget.name;
+              gateJumpCounts[jumpKey] = (gateJumpCounts[jumpKey] ?? 0) + 1;
+              const jumpLimit = gateJumpLimitForTarget(jumpTarget);
+              if (gateJumpCounts[jumpKey] > jumpLimit) {
+                const runtimeLabel = retryRuntimeLabel(jumpTarget);
+                const msg = `Aborting: exceeded ${jumpLimit} jump-back retries${runtimeLabel} returning to '${jumpTarget.name}' (possible cycle)`;
+                if (await updateRunningJob(jobId, { status: 'failed', phases_completed: phasesCompleted, completed_at: new Date().toISOString(), question: msg }) === 'canceled') return;
+                await updateTaskStatus(task.id, 'paused');
+                onFail(msg);
+                return;
               }
+              const retryMsg = `${step.name} failed: ${reason}. Returning to '${jumpTarget.name}' for fixes...`;
+              onLog(`\n${retryMsg}\n`);
+              if (await updateRunningJob(jobId, { question: retryMsg }) !== 'updated') return;
+              await supabase.from('job_logs').insert({ job_id: jobId, event: 'log', data: { text: `[retry] ${retryMsg}` } });
+              // Clear steps from jumpIndex through i so they re-run.
+              for (let ci = jumpIndex; ci <= i; ci++) {
+                completedPhaseNames.delete(steps[ci].name);
+              }
+              for (let pi = phasesCompleted.length - 1; pi >= 0; pi--) {
+                const stepIdx = steps.findIndex(s => s.name === phasesCompleted[pi].phase);
+                if (stepIdx >= jumpIndex && stepIdx <= i) { phasesCompleted.splice(pi, 1); }
+              }
+              await savePhases(jobId, phasesCompleted);
+              // Store gate feedback on the task; steps with 'gate_feedback' context source will pick it up.
+              task._gateFeedback = `${step.name} failed: ${reason}\n\nFull output:\n${phaseOutput.output.substring(0, 3000)}`;
+              delete stepAttemptOffsets[step.name];
+              i = jumpIndex;
+              break;
             }
+          }
+
+          if (failed && displayAttempt < maxAttempts) {
             const retryMsg = `${step.name} failed (attempt ${displayAttempt}/${maxAttempts}): ${reason}. Retrying...`;
             onLog(`\n${retryMsg}\n`);
             if (await updateRunningJob(jobId, { question: retryMsg }) !== 'updated') return;
@@ -550,4 +615,6 @@ export const __test__ = {
   detectPauseQuestion,
   checkGate,
   stepTimeoutMs,
+  gateJumpLimitForTarget,
+  stepRequiresRepositoryChange,
 };

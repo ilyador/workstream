@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
+import { mkdirSync, rmSync } from 'fs';
 import type { ChildProcess } from 'child_process';
 
 // ---------------------------------------------------------------------------
@@ -9,6 +10,10 @@ import type { ChildProcess } from 'child_process';
 const jobRows: Record<string, Record<string, unknown>> = {};
 const taskRows: Record<string, Record<string, unknown>> = {};
 const logInserts: Array<{ job_id: string; event: string; data: any }> = [];
+const gitMockState = vi.hoisted(() => ({
+  repositoryFingerprint: '',
+  repositoryFingerprintQueue: [] as string[],
+}));
 
 function resetState() {
   for (const k of Object.keys(jobRows)) delete jobRows[k];
@@ -143,6 +148,14 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
+vi.mock('./git-utils.js', () => ({
+  git: vi.fn(async () => ''),
+  gitSync: vi.fn(() => ''),
+  stagedDiff: vi.fn(() => ''),
+  stagedDiffStat: vi.fn(() => ({ filesChanged: 0, linesAdded: 0, linesRemoved: 0, changedFiles: [] })),
+  repositoryChangeFingerprint: vi.fn(() => gitMockState.repositoryFingerprintQueue.shift() ?? gitMockState.repositoryFingerprint),
+}));
+
 // Mock ai-runtime-discovery so requireDetectedAiRuntime works without a live cache
 vi.mock('./ai-runtime-discovery.js', () => ({
   requireDetectedAiRuntime: vi.fn((id: string) => ({ id, available: true, label: id, command: id })),
@@ -234,6 +247,13 @@ function seedTask(id: string, status = 'in_progress') {
   taskRows[id] = { id, status };
 }
 
+function jsonResponse(value: Record<string, unknown>, status = 200): Response {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -243,10 +263,21 @@ describe('dispatcher integration', () => {
     resetState();
     spawnBehavior = 'succeed';
     spawnDelay = 0;
+    gitMockState.repositoryFingerprint = '';
+    gitMockState.repositoryFingerprintQueue = [];
+    mkdirSync('/tmp/fake-project', { recursive: true });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => jsonResponse({
+      message: { role: 'assistant', content: 'Did the work.\n[summary] Completed the step\n' },
+    })));
     vi.clearAllMocks();
     // Re-establish spawn mock (may have been overridden by individual tests)
     const cp = await import('child_process');
     vi.mocked(cp.spawn).mockImplementation((() => makeFakeProcess()) as any);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    rmSync('/tmp/fake-project', { recursive: true, force: true });
   });
 
   // -------------------------------------------------------------------------
@@ -321,6 +352,196 @@ describe('dispatcher integration', () => {
       expect(taskRows['task-001'].status).toBe('review');
       expect(onReview).toHaveBeenCalled();
       expect(onDone).toHaveBeenCalled();
+    });
+  });
+
+  describe('gate jump-back repair loop', () => {
+    it('returns a terminal gate failure to the jump target instead of pausing', async () => {
+      seedJob('job-001', 'running');
+      seedTask('task-001', 'in_progress');
+
+      const outputs = [
+        'Developed the change.\n[summary] Implemented\n',
+        '```json\n{"passed": false, "reason": "Review found a syntax error"}\n```\n[summary] Review failed\n',
+        'Fixed the review issue.\n[summary] Fixed\n',
+        '```json\n{"passed": true, "reason": "No issues found"}\n```\n[summary] Review passed\n',
+        'Implemented and reviewed the change.\n',
+      ];
+      const { spawn } = await import('child_process');
+      vi.mocked(spawn).mockImplementation((() => {
+        const proc = new EventEmitter() as any;
+        const stdin = new EventEmitter() as any;
+        stdin.write = vi.fn();
+        stdin.end = vi.fn();
+        proc.stdin = stdin;
+        proc.stdout = new EventEmitter();
+        proc.stderr = new EventEmitter();
+        proc.pid = Math.floor(Math.random() * 10000);
+        proc.kill = vi.fn(() => true);
+        setTimeout(() => {
+          const text = outputs.shift() ?? 'Did the work.\n';
+          const event = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text }] } });
+          proc.stdout.emit('data', Buffer.from(event + '\n'));
+          const result = JSON.stringify({ type: 'result', duration_ms: 100 });
+          proc.stdout.emit('data', Buffer.from(result + '\n'));
+          proc.emit('close', 0);
+        }, 1);
+        return proc;
+      }) as any);
+
+      const onPause = vi.fn();
+      const onReview = vi.fn();
+      const develop = makeStep({
+        position: 1,
+        name: 'develop',
+        is_gate: false,
+        context_sources: ['task_description', 'gate_feedback'],
+      });
+      const review = makeStep({
+        position: 2,
+        name: 'review',
+        is_gate: true,
+        max_retries: 0,
+        on_max_retries: 'pause',
+        on_fail_jump_to: 1,
+      });
+
+      await runFlowJob(makeCtx({
+        flow: makeFlow({ steps: [develop, review] }),
+        onPause,
+        onReview,
+      }));
+
+      expect(onPause).not.toHaveBeenCalled();
+      expect(onReview).toHaveBeenCalled();
+      expect(jobRows['job-001'].status).toBe('review');
+      expect(taskRows['task-001'].status).toBe('review');
+      expect(outputs).toHaveLength(0);
+      const phases = jobRows['job-001'].phases_completed as Array<{ summary?: string; output?: string }>;
+      expect(phases).toHaveLength(2);
+      expect(phases.map(phase => phase.summary)).toEqual(['Fixed', 'Review passed']);
+      expect(phases.some(phase => String(phase.output).includes('Review found a syntax error'))).toBe(false);
+    });
+
+    it('caps Qwen jump-back repair loops after two retries', async () => {
+      seedJob('job-001', 'running');
+      seedTask('task-001', 'in_progress');
+      spawnBehavior = 'gate-fail';
+      const previousLimit = process.env.WORKSTREAM_QWEN_GATE_JUMP_LIMIT;
+      process.env.WORKSTREAM_QWEN_GATE_JUMP_LIMIT = '2';
+
+      const { spawn } = await import('child_process');
+
+      const onFail = vi.fn();
+      const develop = makeStep({
+        position: 1,
+        name: 'develop',
+        runtime_id: 'qwen_code',
+        runtime_variant: null,
+        is_gate: false,
+      });
+      const review = makeStep({
+        position: 2,
+        name: 'review',
+        is_gate: true,
+        max_retries: 200,
+        on_max_retries: 'fail',
+        on_fail_jump_to: 1,
+      });
+
+      try {
+        await runFlowJob(makeCtx({
+          flow: makeFlow({ steps: [develop, review] }),
+          onFail,
+        }));
+      } finally {
+        if (previousLimit === undefined) delete process.env.WORKSTREAM_QWEN_GATE_JUMP_LIMIT;
+        else process.env.WORKSTREAM_QWEN_GATE_JUMP_LIMIT = previousLimit;
+      }
+
+      expect(onFail).toHaveBeenCalled();
+      expect(onFail.mock.calls[0][0]).toContain("exceeded 2 jump-back retries for Qwen returning to 'develop'");
+      expect(jobRows['job-001'].status).toBe('failed');
+      expect(taskRows['task-001'].status).toBe('paused');
+      expect(vi.mocked(spawn).mock.calls).toHaveLength(6);
+    });
+
+    it('caps Gemma jump-back repair loops after two retries', async () => {
+      seedJob('job-001', 'running');
+      seedTask('task-001', 'in_progress');
+      spawnBehavior = 'gate-fail';
+      const previousLimit = process.env.WORKSTREAM_GEMMA_GATE_JUMP_LIMIT;
+      process.env.WORKSTREAM_GEMMA_GATE_JUMP_LIMIT = '2';
+
+      const { spawn } = await import('child_process');
+
+      const onFail = vi.fn();
+      const develop = makeStep({
+        position: 1,
+        name: 'develop',
+        runtime_id: 'gemma_code',
+        runtime_variant: 'gemma4:e4b',
+        is_gate: false,
+      });
+      const review = makeStep({
+        position: 2,
+        name: 'review',
+        is_gate: true,
+        max_retries: 200,
+        on_max_retries: 'fail',
+        on_fail_jump_to: 1,
+      });
+
+      try {
+        await runFlowJob(makeCtx({
+          flow: makeFlow({ steps: [develop, review] }),
+          onFail,
+        }));
+      } finally {
+        if (previousLimit === undefined) delete process.env.WORKSTREAM_GEMMA_GATE_JUMP_LIMIT;
+        else process.env.WORKSTREAM_GEMMA_GATE_JUMP_LIMIT = previousLimit;
+      }
+
+      expect(onFail).toHaveBeenCalled();
+      expect(onFail.mock.calls[0][0]).toContain("exceeded 2 jump-back retries for Gemma returning to 'develop'");
+      expect(jobRows['job-001'].status).toBe('failed');
+      expect(taskRows['task-001'].status).toBe('paused');
+      expect(vi.mocked(spawn).mock.calls).toHaveLength(3);
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+    });
+
+    it('fails a local mutating develop step that completes without repository changes', async () => {
+      seedJob('job-001', 'running');
+      seedTask('task-001', 'in_progress');
+      spawnBehavior = 'succeed';
+      gitMockState.repositoryFingerprintQueue = ['same', 'same'];
+
+      const onFail = vi.fn();
+      const onReview = vi.fn();
+      const onDone = vi.fn();
+
+      await runFlowJob(makeCtx({
+        flow: makeFlow({
+          steps: [makeStep({
+            position: 1,
+            name: 'develop',
+            runtime_id: 'gemma_code',
+            runtime_variant: 'gemma4:e4b',
+            tools: ['Read', 'Edit', 'Write'],
+            is_gate: false,
+          })],
+        }),
+        onFail,
+        onReview,
+        onDone,
+      }));
+
+      expect(onFail).toHaveBeenCalled();
+      expect(onFail.mock.calls[0][0]).toContain('develop completed without repository changes');
+      expect(jobRows['job-001'].status).toBe('failed');
+      expect(taskRows['task-001'].status).toBe('paused');
+      expect(onReview).not.toHaveBeenCalled();
+      expect(onDone).not.toHaveBeenCalled();
     });
   });
 

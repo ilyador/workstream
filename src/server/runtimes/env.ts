@@ -18,6 +18,16 @@ const RUNTIME_SECRET_KEYS: Record<AiRuntimeId, readonly string[]> = {
     'QWEN_CODE_TOOL_CALL_STYLE',
     'QWEN_DEFAULT_AUTH_TYPE',
   ],
+  gemma_code: [
+    'OPENAI_API_KEY',
+    'OPENAI_BASE_URL',
+    'OLLAMA_API_KEY',
+    'OLLAMA_HOST',
+    'OLLAMA_BASE_URL',
+    'GEMMA_OPENAI_BASE_URL',
+    'GEMMA_OLLAMA_BASE_URL',
+    'GEMMA_MODEL',
+  ],
 };
 
 export function buildRuntimeEnv(runtimeId: AiRuntimeId): NodeJS.ProcessEnv {

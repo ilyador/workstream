@@ -18,8 +18,8 @@ import {
 } from './ai-runtimes';
 
 describe('static definitions', () => {
-  it('includes all three implemented runtimes', () => {
-    expect(AVAILABLE_AI_RUNTIMES.map(r => r.id).sort()).toEqual(['claude_code', 'codex', 'qwen_code']);
+  it('includes all implemented runtimes', () => {
+    expect(AVAILABLE_AI_RUNTIMES.map(r => r.id).sort()).toEqual(['claude_code', 'codex', 'gemma_code', 'qwen_code']);
   });
 
   it('all current runtimes are coding kind', () => {
@@ -82,12 +82,14 @@ describe('helpers', () => {
   it('supportsEffortControl returns true only for supporting runtimes', () => {
     expect(supportsEffortControl('claude_code')).toBe(true);
     expect(supportsEffortControl('qwen_code')).toBe(false);
+    expect(supportsEffortControl('gemma_code')).toBe(false);
     expect(supportsEffortControl(null)).toBe(false);
   });
 
   it('supportsMultiagent returns true only for claude_code', () => {
     expect(supportsMultiagent('claude_code')).toBe(true);
     expect(supportsMultiagent('codex')).toBe(false);
+    expect(supportsMultiagent('gemma_code')).toBe(false);
     expect(supportsMultiagent(null)).toBe(false);
   });
 });
@@ -106,21 +108,25 @@ describe('ai runtime normalization', () => {
     expect(normalizeRuntimeVariant('claude_code', null)).toBe('opus');
     expect(normalizeRuntimeVariant('codex', null)).toBe('gpt-5.4');
     expect(normalizeRuntimeVariant('qwen_code', null)).toBe('qwen3.6:35b-a3b-q4_K_M');
+    expect(normalizeRuntimeVariant('gemma_code', null)).toBe('gemma4:e4b');
   });
 
   it('preserves a valid variant choice', () => {
     expect(normalizeRuntimeVariant('codex', 'gpt-5.3-codex')).toBe('gpt-5.3-codex');
     expect(normalizeRuntimeVariant('qwen_code', 'qwen3-coder')).toBe('qwen3-coder');
+    expect(normalizeRuntimeVariant('gemma_code', 'gemma4:26b')).toBe('gemma4:26b');
   });
 
   it('falls back to the default variant when the variant is not in the runtime options', () => {
     expect(normalizeRuntimeVariant('codex', 'gpt-999')).toBe('gpt-5.4');
     expect(normalizeRuntimeVariant('qwen_code', 'qwen-unknown')).toBe('qwen3.6:35b-a3b-q4_K_M');
+    expect(normalizeRuntimeVariant('gemma_code', 'gemma-unknown')).toBe('gemma4:e4b');
   });
 
   it('normalizeRuntimeId preserves a valid runtime id that matches the kind', () => {
     expect(normalizeRuntimeId('codex', 'coding')).toBe('codex');
     expect(normalizeRuntimeId('qwen_code', 'coding')).toBe('qwen_code');
+    expect(normalizeRuntimeId('gemma_code', 'coding')).toBe('gemma_code');
   });
 
   it('normalizeRuntimeKind returns coding for valid coding kind', () => {

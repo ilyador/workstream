@@ -26,14 +26,106 @@ const SUMMARY_INSTRUCTIONS =
   '\nAt the very end of your response, write a one-line summary of what you did in this step using this exact format:\n' +
   '[summary] Your short summary here\n';
 
+const QWEN_TOOL_NAME_MAP: Record<string, string[]> = {
+  Read: ['read_file', 'list_directory'],
+  Write: ['write_file'],
+  Edit: ['edit'],
+  Bash: ['run_shell_command'],
+  Grep: ['grep_search'],
+  Glob: ['glob'],
+  WebFetch: ['web_fetch'],
+  WebSearch: ['web_search'],
+  TodoWrite: ['todo_write'],
+  Agent: ['agent'],
+  Skill: ['skill'],
+};
+
+const OPENCODE_TOOL_NAME_MAP: Record<string, string[]> = {
+  Read: ['read', 'list'],
+  Write: ['write', 'edit'],
+  Edit: ['edit'],
+  Bash: ['bash'],
+  Grep: ['grep'],
+  Glob: ['glob'],
+  WebFetch: ['webfetch'],
+  WebSearch: ['websearch'],
+  TodoWrite: ['todowrite'],
+  Agent: ['task'],
+  Skill: ['skill'],
+};
+
+const GEMMA_TOOL_NAME_MAP: Record<string, string[]> = {
+  Read: ['read_file', 'list_directory'],
+  Write: ['write_file'],
+  Edit: ['edit'],
+  Bash: ['run_shell_command'],
+  Grep: ['grep_search'],
+  Glob: ['glob'],
+};
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function qwenToolNames(tools: string[]): string[] {
+  return unique(tools.flatMap(tool => QWEN_TOOL_NAME_MAP[tool] ?? [tool]));
+}
+
+function openCodeToolNames(tools: string[]): string[] {
+  return unique(tools.flatMap(tool => OPENCODE_TOOL_NAME_MAP[tool] ?? [tool]));
+}
+
+function gemmaToolNames(tools: string[]): string[] {
+  return unique(tools.flatMap(tool => GEMMA_TOOL_NAME_MAP[tool] ?? []));
+}
+
+function expectsRepositoryChanges(step: FlowStepConfig): boolean {
+  if (step.runtime_kind !== 'coding' || step.is_gate) return false;
+  return step.tools.some(tool => tool === 'Edit' || tool === 'Write' || tool === 'NotebookEdit');
+}
+
+function buildToolInstruction(step: FlowStepConfig): string {
+  if (step.tools.length === 0) return '';
+  if (step.runtime_id === 'qwen_code') {
+    const qwenNames = qwenToolNames(step.tools);
+    const legacyNames = step.tools.filter(tool => !qwenNames.includes(tool));
+    const legacyWarning = legacyNames.length > 0
+      ? ` Do not call Workstream/Claude tool names such as ${legacyNames.join(', ')}.`
+      : '';
+    return `- Use only these Qwen tool names: ${qwenNames.join(', ')}.${legacyWarning} Do not attempt tools that are not listed.\n`;
+  }
+  if (step.runtime_id === 'gemma_code') {
+    const gemmaNames = gemmaToolNames(step.tools);
+    const legacyNames = step.tools.filter(tool => !gemmaNames.includes(tool));
+    const legacyWarning = legacyNames.length > 0
+      ? ` Do not call Workstream/Claude tool names such as ${legacyNames.join(', ')}.`
+      : '';
+    return `- Use only these Gemma tool names: ${gemmaNames.join(', ')}.${legacyWarning} Do not attempt tools that are not listed.\n`;
+  }
+  return `- Use only these step tools: ${step.tools.join(', ')}. Do not attempt tools that are not listed.\n`;
+}
+
+function buildWorkspaceBoundary(localPath: string): string {
+  return `## Workspace Boundary
+- The repository root for this job is: ${localPath}
+- Only read, write, edit, create files, or run commands inside that directory.
+- Do not use sibling checkouts, parent directories, or absolute paths outside this job root.
+- If earlier context or a previous plan mentions an absolute path outside this job root, convert it to the equivalent relative path inside this job root before using it.
+`;
+}
+
 function buildExecutionContract(step: FlowStepConfig, previousOutputs: any[]): string | null {
   if (step.runtime_kind !== 'coding' || step.is_gate) return null;
 
   const planInstruction = previousOutputs.length > 0
     ? '- Previous step outputs are binding context. If they contain a plan, implement that plan directly and do not reopen its decisions.\n'
     : '';
-  const toolInstruction = step.tools.length > 0
-    ? `- Use only these step tools: ${step.tools.join(', ')}. Do not attempt tools that are not listed.\n`
+  const toolInstruction = buildToolInstruction(step);
+  const repositoryChangeInstruction = expectsRepositoryChanges(step)
+    ? '- This step is expected to leave repository changes. Use edit/write tools to modify files; a prose-only response is a failed step.\n'
+    : '';
+  const repositoryFailureInstruction = expectsRepositoryChanges(step)
+    ? '- If you cannot make the required repository changes, return a concise failure reason instead of pretending the step is complete.\n'
     : '';
 
   return `## Execution Contract
@@ -42,6 +134,7 @@ function buildExecutionContract(step: FlowStepConfig, previousOutputs: any[]): s
 ${planInstruction}- Treat the task description, current step instructions, repository instructions, and available project context as sufficient.
 - Ignore any previous-plan instruction that asks for subagents, skills, TodoWrite/todo lists, checklist tracking, or other unavailable tools. Execute directly with the current step tools.
 ${toolInstruction}- Do not create a new plan or task checklist; keep implementation moving.
+${repositoryChangeInstruction}${repositoryFailureInstruction}
 - If a detail is not explicit, inspect the existing codebase and choose the smallest implementation that follows established local patterns.
 - Only stop for user input if this exact current step explicitly instructs you to ask a question. Otherwise, report any true blocker as a failed step.
 `;
@@ -60,6 +153,10 @@ export async function buildStepPrompt(
 
   if (flow.agents_md) {
     parts.push(`## Agent Instructions\n${flow.agents_md.substring(0, 8000)}\n`);
+  }
+
+  if (step.runtime_kind === 'coding') {
+    parts.push(buildWorkspaceBoundary(localPath));
   }
 
   for (const source of step.context_sources) {

@@ -1,11 +1,14 @@
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'fs';
+import { homedir, tmpdir } from 'os';
+import { join } from 'path';
 import type { FlowStepConfig } from '../flow-config.js';
 import type { RuntimeDriver, ExecuteStepOptions, SummarizeOptions } from './types.js';
 import { buildRuntimeEnv } from './env.js';
 import { runProcess } from './process-runner.js';
 
 const QWEN_SUMMARY_TIMEOUT_MS = 180_000;
-const QWEN_EXECUTE_MAX_SESSION_TURNS = 24;
-const QWEN_SUMMARY_MAX_SESSION_TURNS = 1;
+const QWEN_CONFIG_PARENT = join(tmpdir(), 'workstream-qwen');
+const QWEN_PROJECT_RESIDUE_DIRS = ['.qwen-worktrees'];
 
 const QWEN_CORE_TOOLS = [
   'read_file',
@@ -55,6 +58,26 @@ interface QwenRunState {
   loggedTextStart: boolean;
 }
 
+interface QwenSettingsInfo {
+  authType?: string;
+  modelName?: string;
+  openaiBaseUrl?: string;
+  openaiApiKeyEnv?: string;
+  envValues: Record<string, string>;
+}
+
+interface QwenLaunchConfig {
+  authType?: string;
+  modelName?: string;
+  openaiBaseUrl?: string;
+}
+
+interface PreparedQwenEnvironment {
+  env: NodeJS.ProcessEnv;
+  configDir: string;
+  launchConfig: QwenLaunchConfig;
+}
+
 function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
@@ -85,22 +108,150 @@ function buildToolArgs(step: FlowStepConfig): string[] {
   return args;
 }
 
-function buildArgs(step: FlowStepConfig, includePartialMessages: boolean, maxSessionTurns: number): string[] {
+function buildArgs(
+  step: FlowStepConfig,
+  includePartialMessages: boolean,
+  launchConfig: QwenLaunchConfig,
+): string[] {
   const args = [
+    '--bare',
+    '--no-chat-recording',
     '--output-format', 'stream-json',
     '--approval-mode', 'yolo',
-    '--max-session-turns', String(maxSessionTurns),
     ...buildToolArgs(step),
   ];
   if (includePartialMessages) args.push('--include-partial-messages');
-  if (step.runtime_variant) args.push('--model', step.runtime_variant);
+  const modelName = step.runtime_variant || launchConfig.modelName;
+  if (launchConfig.authType) args.push('--auth-type', launchConfig.authType);
+  if (launchConfig.authType === 'openai' && launchConfig.openaiBaseUrl) {
+    args.push('--openai-base-url', launchConfig.openaiBaseUrl);
+  }
+  if (modelName) args.push('--model', modelName);
   return args;
 }
 
-function buildEnv(): NodeJS.ProcessEnv {
-  return {
+function safePathPart(value: string): string {
+  const safe = value.replace(/[^a-zA-Z0-9_.-]/g, '-').replace(/^-+|-+$/g, '');
+  return safe || 'job';
+}
+
+function sourceQwenConfigDir(): string {
+  return process.env.QWEN_CONFIG_DIR || join(homedir(), '.qwen');
+}
+
+function readQwenSettings(sourceDir: string): QwenSettingsInfo {
+  const settingsPath = join(sourceDir, 'settings.json');
+  if (!existsSync(settingsPath)) return { envValues: {} };
+
+  try {
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8')) as Record<string, unknown>;
+    const envValues: Record<string, string> = {};
+    const configuredEnv = objectValue(settings.env);
+    if (configuredEnv) {
+      for (const [key, value] of Object.entries(configuredEnv)) {
+        if (typeof value === 'string') envValues[key] = value;
+      }
+    }
+
+    const security = objectValue(settings.security);
+    const auth = objectValue(security?.auth);
+    const authType = stringValue(auth?.selectedType);
+    const model = objectValue(settings.model);
+    const modelName = stringValue(model?.name);
+    const providers = objectValue(settings.modelProviders);
+    const providerList = authType && Array.isArray(providers?.[authType])
+      ? providers[authType] as unknown[]
+      : [];
+    const provider = providerList
+      .map(value => objectValue(value))
+      .find(value => value && (stringValue(value.id) === modelName || stringValue(value.name) === modelName))
+      ?? providerList.map(value => objectValue(value)).find(Boolean)
+      ?? null;
+
+    return {
+      authType: authType ?? undefined,
+      modelName: modelName ?? undefined,
+      openaiBaseUrl: authType === 'openai' ? stringValue(provider?.baseUrl) ?? undefined : undefined,
+      openaiApiKeyEnv: authType === 'openai' ? stringValue(provider?.envKey) ?? undefined : undefined,
+      envValues,
+    };
+  } catch {
+    return { envValues: {} };
+  }
+}
+
+function prepareQwenConfigDir(jobId: string, sourceDir: string): string {
+  const configDir = join(QWEN_CONFIG_PARENT, safePathPart(jobId));
+  rmSync(configDir, { recursive: true, force: true });
+  mkdirSync(configDir, { recursive: true });
+
+  if (!existsSync(sourceDir)) return configDir;
+
+  for (const filename of ['settings.json', 'settings.json.orig']) {
+    const source = join(sourceDir, filename);
+    if (existsSync(source)) copyFileSync(source, join(configDir, filename));
+  }
+
+  return configDir;
+}
+
+function cleanupQwenConfigDir(configDir: string): void {
+  if (configDir === QWEN_CONFIG_PARENT) return;
+  if (!configDir.startsWith(`${QWEN_CONFIG_PARENT}/`)) return;
+  rmSync(configDir, { recursive: true, force: true });
+}
+
+function cleanupProjectResidue(cwd: string): void {
+  for (const dirName of QWEN_PROJECT_RESIDUE_DIRS) {
+    const residuePath = join(cwd, dirName);
+    try {
+      if (existsSync(residuePath) && statSync(residuePath).isDirectory()) {
+        rmSync(residuePath, { recursive: true, force: true });
+      }
+    } catch {
+      // Best-effort cleanup. Failure here should not mask the actual runtime result.
+    }
+  }
+}
+
+function prepareQwenEnvironment(jobId: string): PreparedQwenEnvironment {
+  const sourceDir = sourceQwenConfigDir();
+  const settings = readQwenSettings(sourceDir);
+  const configDir = prepareQwenConfigDir(jobId, sourceDir);
+  const env: NodeJS.ProcessEnv = {
     ...buildRuntimeEnv('qwen_code'),
+    QWEN_CONFIG_DIR: configDir,
     QWEN_CODE_NO_RELAUNCH: 'true',
+  };
+
+  for (const [key, value] of Object.entries(settings.envValues)) {
+    if (env[key] === undefined) env[key] = value;
+  }
+
+  const modelName = process.env.OPENAI_MODEL
+    || process.env.QWEN_MODEL
+    || settings.modelName;
+  const openaiBaseUrl = process.env.OPENAI_BASE_URL || settings.openaiBaseUrl;
+  const authType = process.env.QWEN_DEFAULT_AUTH_TYPE
+    || settings.authType
+    || (openaiBaseUrl || env.OPENAI_API_KEY ? 'openai' : undefined);
+
+  if (modelName) {
+    env.OPENAI_MODEL ??= modelName;
+    env.QWEN_MODEL ??= modelName;
+  }
+  if (openaiBaseUrl) env.OPENAI_BASE_URL ??= openaiBaseUrl;
+  if (!env.OPENAI_API_KEY && settings.openaiApiKeyEnv && env[settings.openaiApiKeyEnv]) {
+    env.OPENAI_API_KEY = env[settings.openaiApiKeyEnv];
+  }
+  if (!env.OPENAI_API_KEY && env.OLLAMA_API_KEY) {
+    env.OPENAI_API_KEY = env.OLLAMA_API_KEY;
+  }
+
+  return {
+    env,
+    configDir,
+    launchConfig: { authType, modelName, openaiBaseUrl },
   };
 }
 
@@ -262,9 +413,10 @@ async function runQwen(
     onLog: (text: string) => void;
     timeoutMs?: number;
     includePartialMessages: boolean;
-    maxSessionTurns: number;
   },
 ): Promise<string> {
+  cleanupProjectResidue(opts.cwd);
+  const { env, configDir, launchConfig } = prepareQwenEnvironment(opts.jobId);
   const state: QwenRunState = {
     finalResult: null,
     finalAssistantText: [],
@@ -274,23 +426,27 @@ async function runQwen(
     loggedTextStart: false,
   };
 
-  await runProcess({
-    jobId: opts.jobId,
-    command: 'qwen',
-    args: buildArgs(opts.step, opts.includePartialMessages, opts.maxSessionTurns),
-    cwd: opts.cwd,
-    env: buildEnv(),
-    stdin: opts.prompt,
-    timeoutMs: opts.timeoutMs,
-    onLine: (line, stream) => {
-      if (stream === 'stdout') {
-        handleQwenLine(line, state, opts.onLog);
-      } else if (line.trim()) {
-        opts.onLog(`${line}\n`);
-      }
-    },
-    onLog: opts.onLog,
-  });
+  try {
+    await runProcess({
+      jobId: opts.jobId,
+      command: 'qwen',
+      args: buildArgs(opts.step, opts.includePartialMessages, launchConfig),
+      cwd: opts.cwd,
+      env,
+      stdin: opts.prompt,
+      timeoutMs: opts.timeoutMs,
+      onLine: (line, stream) => {
+        if (stream === 'stdout') {
+          handleQwenLine(line, state, opts.onLog);
+        } else if (line.trim()) {
+          opts.onLog(`${line}\n`);
+        }
+      },
+      onLog: opts.onLog,
+    });
+  } finally {
+    if (configDir) cleanupQwenConfigDir(configDir);
+  }
 
   const output = firstNonEmpty([
     state.finalResult ?? '',
@@ -320,7 +476,6 @@ export const qwenDriver: RuntimeDriver = {
       timeoutMs: opts.timeoutMs,
       onLog: opts.onLog,
       includePartialMessages: true,
-      maxSessionTurns: QWEN_EXECUTE_MAX_SESSION_TURNS,
     });
   },
 
@@ -333,7 +488,6 @@ export const qwenDriver: RuntimeDriver = {
       timeoutMs: QWEN_SUMMARY_TIMEOUT_MS,
       onLog: () => {},
       includePartialMessages: false,
-      maxSessionTurns: QWEN_SUMMARY_MAX_SESSION_TURNS,
     });
   },
 };

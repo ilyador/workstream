@@ -52,6 +52,27 @@ export function stagedDiffStat(cwd: string): { filesChanged: number; linesAdded:
   return { filesChanged, linesAdded, linesRemoved, changedFiles };
 }
 
+/**
+ * Fingerprint repository changes relative to a checkpoint ref plus the current
+ * worktree. This catches both committed edits and uncommitted/untracked edits.
+ */
+export function repositoryChangeFingerprint(cwd: string, baseRef: string): string {
+  let committedDiff = '';
+  try {
+    execFileSync('git', ['rev-parse', '--verify', baseRef], { cwd, timeout: 5000 });
+    committedDiff = execFileSync('git', ['diff', '--binary', '--full-index', baseRef, 'HEAD'], {
+      cwd,
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).toString().trim();
+  } catch {
+    committedDiff = '';
+  }
+
+  const worktreeDiff = stagedDiff(cwd);
+  return [committedDiff, worktreeDiff].filter(Boolean).join('\n\n--- worktree ---\n');
+}
+
 /** Stage all changes and commit. Resolves silently if nothing to commit. */
 export async function autoCommit(localPath: string, taskType: string, taskTitle: string): Promise<void> {
   await git(['add', '-A'], localPath);

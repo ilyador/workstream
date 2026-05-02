@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const spawnMock = vi.fn();
 
@@ -47,7 +50,7 @@ describe('QwenDriver', () => {
     spawnMock.mockReset();
   });
 
-  it('spawns qwen with stream-json output, partial messages, and yolo approval', async () => {
+  it('spawns qwen in bare non-recording mode with stream-json output, partial messages, and yolo approval', async () => {
     const proc = new MockProc();
     spawnMock.mockReturnValue(proc);
 
@@ -63,12 +66,14 @@ describe('QwenDriver', () => {
 
     const [cmd, args] = spawnMock.mock.calls[0];
     expect(cmd).toBe('qwen');
+    expect(args).toContain('--bare');
+    expect(args).toContain('--no-chat-recording');
     expect(args).toContain('--output-format');
     expect(args[args.indexOf('--output-format') + 1]).toBe('stream-json');
     expect(args).toContain('--include-partial-messages');
     expect(args).toContain('--approval-mode');
     expect(args[args.indexOf('--approval-mode') + 1]).toBe('yolo');
-    expect(argValue(args, '--max-session-turns')).toBe('24');
+    expect(args).not.toContain('--max-session-turns');
 
     proc.stdout.emit('data', jsonLine({ type: 'result', result: 'done' }));
     proc.emit('close', 0);
@@ -168,7 +173,7 @@ describe('QwenDriver', () => {
     await promise;
   });
 
-  it('sets QWEN_CODE_NO_RELAUNCH env var', async () => {
+  it('sets QWEN_CODE_NO_RELAUNCH and an isolated QWEN_CONFIG_DIR env var', async () => {
     const proc = new MockProc();
     spawnMock.mockReturnValue(proc);
 
@@ -183,11 +188,106 @@ describe('QwenDriver', () => {
     });
 
     const env = spawnMock.mock.calls[0][2].env;
+    const configDir = env.QWEN_CONFIG_DIR as string;
     expect(env.QWEN_CODE_NO_RELAUNCH).toBe('true');
+    expect(configDir).toContain('workstream-qwen');
+    expect(configDir).toContain('j1');
+    expect(existsSync(configDir)).toBe(true);
 
     proc.stdout.emit('data', jsonLine({ type: 'result', result: 'ok' }));
     proc.emit('close', 0);
     await promise;
+    expect(existsSync(configDir)).toBe(false);
+  });
+
+  it('copies local Qwen OpenAI-compatible settings into the isolated launch environment', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+    const sourceConfigDir = mkdtempSync(join(tmpdir(), 'qwen-source-config-'));
+    writeFileSync(join(sourceConfigDir, 'settings.json'), JSON.stringify({
+      env: { OLLAMA_API_KEY: 'ollama-local' },
+      security: { auth: { selectedType: 'openai' } },
+      model: { name: 'qwen-local' },
+      modelProviders: {
+        openai: [{
+          id: 'qwen-local',
+          envKey: 'OLLAMA_API_KEY',
+          baseUrl: 'http://localhost:11434/v1',
+        }],
+      },
+    }));
+    const previous = {
+      QWEN_CONFIG_DIR: process.env.QWEN_CONFIG_DIR,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
+      OPENAI_MODEL: process.env.OPENAI_MODEL,
+      QWEN_MODEL: process.env.QWEN_MODEL,
+      OLLAMA_API_KEY: process.env.OLLAMA_API_KEY,
+      QWEN_DEFAULT_AUTH_TYPE: process.env.QWEN_DEFAULT_AUTH_TYPE,
+    };
+    process.env.QWEN_CONFIG_DIR = sourceConfigDir;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_BASE_URL;
+    delete process.env.OPENAI_MODEL;
+    delete process.env.QWEN_MODEL;
+    delete process.env.OLLAMA_API_KEY;
+    delete process.env.QWEN_DEFAULT_AUTH_TYPE;
+
+    try {
+      const { qwenDriver } = await import('./qwen-driver.js');
+      const promise = qwenDriver.execute({
+        jobId: 'j1',
+        step: baseStep(),
+        task: { effort: null },
+        cwd: '/work',
+        prompt: 'x',
+        onLog: () => {},
+      });
+
+      const args = spawnMock.mock.calls[0][1] as string[];
+      const env = spawnMock.mock.calls[0][2].env;
+      expect(argValue(args, '--auth-type')).toBe('openai');
+      expect(argValue(args, '--openai-base-url')).toBe('http://localhost:11434/v1');
+      expect(argValue(args, '--model')).toBe('qwen-local');
+      expect(env.OLLAMA_API_KEY).toBe('ollama-local');
+      expect(env.OPENAI_API_KEY).toBe('ollama-local');
+      expect(env.OPENAI_BASE_URL).toBe('http://localhost:11434/v1');
+      expect(env.OPENAI_MODEL).toBe('qwen-local');
+
+      proc.stdout.emit('data', jsonLine({ type: 'result', result: 'ok' }));
+      proc.emit('close', 0);
+      await promise;
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      rmSync(sourceConfigDir, { recursive: true, force: true });
+    }
+  });
+
+  it('removes repo-local qwen scratch directories before launch', async () => {
+    const proc = new MockProc();
+    spawnMock.mockReturnValue(proc);
+    const cwd = mkdtempSync(join(tmpdir(), 'qwen-driver-test-'));
+    mkdirSync(join(cwd, '.qwen-worktrees'), { recursive: true });
+
+    const { qwenDriver } = await import('./qwen-driver.js');
+    const promise = qwenDriver.execute({
+      jobId: 'j1',
+      step: baseStep(),
+      task: { effort: null },
+      cwd,
+      prompt: 'x',
+      onLog: () => {},
+    });
+
+    expect(existsSync(join(cwd, '.qwen-worktrees'))).toBe(false);
+
+    proc.stdout.emit('data', jsonLine({ type: 'result', result: 'ok' }));
+    proc.emit('close', 0);
+    await promise;
+    rmSync(cwd, { recursive: true, force: true });
   });
 
   it('passes runtime_variant as --model', async () => {
@@ -322,7 +422,7 @@ describe('QwenDriver', () => {
     const args = spawnMock.mock.calls[0][1] as string[];
     expect(args[args.indexOf('--output-format') + 1]).toBe('stream-json');
     expect(args).not.toContain('--include-partial-messages');
-    expect(argValue(args, '--max-session-turns')).toBe('1');
+    expect(args).not.toContain('--max-session-turns');
     expect(spawnMock.mock.calls[0][2].env.QWEN_CODE_NO_RELAUNCH).toBe('true');
     expect(proc.stdin.write).toHaveBeenCalledWith('summarize');
 

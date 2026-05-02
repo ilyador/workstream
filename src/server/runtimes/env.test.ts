@@ -16,6 +16,8 @@ describe('buildRuntimeEnv', () => {
       OPENAI_BASE_URL: 'http://localhost:11434/v1',
       OPENAI_MODEL: 'qwen-local',
       OLLAMA_API_KEY: 'ollama-secret',
+      OLLAMA_HOST: 'http://localhost:11434',
+      GEMMA_MODEL: 'gemma4:e4b',
       DASHSCOPE_API_KEY: 'sk-dashscope-secret',
       DATABASE_URL: 'postgres://secret',
       GITHUB_TOKEN: 'github-secret',
@@ -29,7 +31,7 @@ describe('buildRuntimeEnv', () => {
   });
 
   it('sets TERM to dumb for all runtimes', () => {
-    for (const id of ['claude_code', 'codex', 'qwen_code'] as const) {
+    for (const id of ['claude_code', 'codex', 'qwen_code', 'gemma_code'] as const) {
       expect(buildRuntimeEnv(id).TERM).toBe('dumb');
     }
   });
@@ -48,9 +50,10 @@ describe('buildRuntimeEnv', () => {
     expect(buildRuntimeEnv('codex').OPENAI_API_KEY).toBe('sk-openai-secret');
     expect(buildRuntimeEnv('claude_code').OPENAI_API_KEY).toBeUndefined();
     expect(buildRuntimeEnv('qwen_code').OPENAI_API_KEY).toBe('sk-openai-secret');
+    expect(buildRuntimeEnv('gemma_code').OPENAI_API_KEY).toBe('sk-openai-secret');
   });
 
-  it('forwards local OpenAI-compatible Qwen settings to qwen_code only', () => {
+  it('forwards local OpenAI-compatible settings to local OpenAI-compatible runtimes only', () => {
     const qwenEnv = buildRuntimeEnv('qwen_code');
     expect(qwenEnv.OPENAI_BASE_URL).toBe('http://localhost:11434/v1');
     expect(qwenEnv.OPENAI_MODEL).toBe('qwen-local');
@@ -62,16 +65,24 @@ describe('buildRuntimeEnv', () => {
     expect(buildRuntimeEnv('codex').OPENAI_BASE_URL).toBeUndefined();
     expect(buildRuntimeEnv('codex').OPENAI_MODEL).toBeUndefined();
     expect(buildRuntimeEnv('codex').OLLAMA_API_KEY).toBeUndefined();
+
+    const gemmaEnv = buildRuntimeEnv('gemma_code');
+    expect(gemmaEnv.OPENAI_BASE_URL).toBe('http://localhost:11434/v1');
+    expect(gemmaEnv.OPENAI_MODEL).toBeUndefined();
+    expect(gemmaEnv.OLLAMA_API_KEY).toBe('ollama-secret');
+    expect(gemmaEnv.OLLAMA_HOST).toBe('http://localhost:11434');
+    expect(gemmaEnv.GEMMA_MODEL).toBe('gemma4:e4b');
   });
 
   it('forwards DASHSCOPE_API_KEY only to qwen_code', () => {
     expect(buildRuntimeEnv('qwen_code').DASHSCOPE_API_KEY).toBe('sk-dashscope-secret');
     expect(buildRuntimeEnv('claude_code').DASHSCOPE_API_KEY).toBeUndefined();
     expect(buildRuntimeEnv('codex').DASHSCOPE_API_KEY).toBeUndefined();
+    expect(buildRuntimeEnv('gemma_code').DASHSCOPE_API_KEY).toBeUndefined();
   });
 
   it('never forwards DATABASE_URL, GITHUB_TOKEN, or SUPABASE secrets', () => {
-    for (const id of ['claude_code', 'codex', 'qwen_code'] as const) {
+    for (const id of ['claude_code', 'codex', 'qwen_code', 'gemma_code'] as const) {
       const env = buildRuntimeEnv(id);
       expect(env.DATABASE_URL).toBeUndefined();
       expect(env.GITHUB_TOKEN).toBeUndefined();
@@ -81,7 +92,7 @@ describe('buildRuntimeEnv', () => {
   });
 
   it('forwards HOME, USER, LANG, TMPDIR to all runtimes', () => {
-    for (const id of ['claude_code', 'codex', 'qwen_code'] as const) {
+    for (const id of ['claude_code', 'codex', 'qwen_code', 'gemma_code'] as const) {
       const env = buildRuntimeEnv(id);
       expect(env.HOME).toBe('/home/test');
       expect(env.USER).toBe('test');
@@ -120,6 +131,7 @@ describe('buildRuntimeEnv', () => {
     process.env.CLAUDE_CONFIG_DIR = '/custom/claude';
     process.env.CODEX_CONFIG_DIR = '/custom/codex';
     process.env.QWEN_CONFIG_DIR = '/custom/qwen';
+    process.env.GEMMA_MODEL = 'gemma4:e4b';
 
     const claudeEnv = buildRuntimeEnv('claude_code');
     expect(claudeEnv.CLAUDE_CONFIG_DIR).toBe('/custom/claude');
@@ -133,5 +145,9 @@ describe('buildRuntimeEnv', () => {
     const qwenEnv = buildRuntimeEnv('qwen_code');
     expect(qwenEnv.QWEN_CONFIG_DIR).toBe('/custom/qwen');
     expect(qwenEnv.CODEX_CONFIG_DIR).toBeUndefined();
+
+    const gemmaEnv = buildRuntimeEnv('gemma_code');
+    expect(gemmaEnv.GEMMA_MODEL).toBe('gemma4:e4b');
+    expect(gemmaEnv.QWEN_CONFIG_DIR).toBeUndefined();
   });
 });

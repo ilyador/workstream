@@ -145,6 +145,17 @@ describe('buildStepPrompt', () => {
     expect(prompt).toContain('[summary] Your short summary here');
   });
 
+  it('includes a workspace boundary for coding steps', async () => {
+    const { buildStepPrompt } = await import('./prompt-builder.js');
+    const step = baseStep();
+    const prompt = await buildStepPrompt(step, baseFlow(), baseTask(), [], testDir);
+
+    expect(prompt).toContain('## Workspace Boundary');
+    expect(prompt).toContain(`The repository root for this job is: ${testDir}`);
+    expect(prompt).toContain('Do not use sibling checkouts, parent directories, or absolute paths outside this job root.');
+    expect(prompt).toContain('convert it to the equivalent relative path inside this job root');
+  });
+
   it('includes the human answer block when answer is provided', async () => {
     const { buildStepPrompt } = await import('./prompt-builder.js');
     const step = baseStep();
@@ -175,6 +186,34 @@ describe('buildStepPrompt', () => {
 
     expect(prompt).toContain('Use only these step tools: Read, Edit, Write, Bash.');
     expect(prompt).toContain('Do not attempt tools that are not listed.');
+    expect(prompt).toContain('This step is expected to leave repository changes.');
+    expect(prompt).toContain('a prose-only response is a failed step.');
+  });
+
+  it('uses Qwen-native tool names in the execution contract for qwen steps', async () => {
+    const { buildStepPrompt } = await import('./prompt-builder.js');
+    const step = baseStep({
+      runtime_id: 'qwen_code',
+      tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'],
+    });
+    const prompt = await buildStepPrompt(step, baseFlow(), baseTask(), [], testDir);
+
+    expect(prompt).toContain('Use only these Qwen tool names: read_file, list_directory, edit, write_file, run_shell_command, grep_search, glob.');
+    expect(prompt).toContain('Do not call Workstream/Claude tool names such as Read, Edit, Write, Bash, Grep, Glob.');
+    expect(prompt).not.toContain('Use only these step tools: Read, Edit, Write, Bash');
+  });
+
+  it('uses Gemma-native tool names in the execution contract for gemma steps', async () => {
+    const { buildStepPrompt } = await import('./prompt-builder.js');
+    const step = baseStep({
+      runtime_id: 'gemma_code',
+      tools: ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob'],
+    });
+    const prompt = await buildStepPrompt(step, baseFlow(), baseTask(), [], testDir);
+
+    expect(prompt).toContain('Use only these Gemma tool names: read_file, list_directory, edit, write_file, run_shell_command, grep_search, glob.');
+    expect(prompt).toContain('Do not call Workstream/Claude tool names such as Read, Edit, Write, Bash, Grep, Glob.');
+    expect(prompt).not.toContain('Use only these step tools: Read, Edit, Write, Bash');
   });
 
   it('does not add the unattended execution contract for gate steps', async () => {

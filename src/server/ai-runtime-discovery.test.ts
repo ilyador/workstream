@@ -38,6 +38,7 @@ describe('ai runtime discovery', () => {
       const runtimeCommand = args[0];
       if (runtimeCommand === 'claude') return '/usr/bin/claude\n';
       if (runtimeCommand === 'codex') return '/usr/bin/codex\n';
+      if (runtimeCommand === 'ollama') return '/usr/bin/ollama\n';
       throw new Error('not found');
     });
 
@@ -55,6 +56,10 @@ describe('ai runtime discovery', () => {
     expect(runtimes.find(runtime => runtime.id === 'qwen_code')).toMatchObject({
       available: false,
       detectedPath: null,
+    });
+    expect(runtimes.find(runtime => runtime.id === 'gemma_code')).toMatchObject({
+      available: true,
+      detectedPath: '/usr/bin/ollama',
     });
   });
 

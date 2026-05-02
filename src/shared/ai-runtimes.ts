@@ -1,6 +1,6 @@
 export type AiRuntimeKind = 'coding' | 'image';
 
-export type AiRuntimeId = 'claude_code' | 'codex' | 'qwen_code';
+export type AiRuntimeId = 'claude_code' | 'codex' | 'qwen_code' | 'gemma_code';
 
 export interface RuntimeVariantOption {
   id: string;
@@ -76,6 +76,24 @@ export const AI_RUNTIME_DEFINITIONS: AiRuntimeDefinition[] = [
       { id: 'qwen3-coder', label: 'Qwen3 Coder' },
     ],
     defaultVariant: 'qwen3.6:35b-a3b-q4_K_M',
+  },
+  {
+    id: 'gemma_code',
+    kind: 'coding',
+    label: 'Gemma Code',
+    description: 'Local Gemma 4 coding agent backed by Ollama tool calls.',
+    command: 'ollama',
+    implemented: true,
+    supportsTools: true,
+    supportsEffortControl: false,
+    supportsMultiagent: false,
+    variantOptions: [
+      { id: 'gemma4:e2b', label: 'Gemma 4 E2B' },
+      { id: 'gemma4:e4b', label: 'Gemma 4 E4B' },
+      { id: 'gemma4:26b', label: 'Gemma 4 26B' },
+      { id: 'gemma4:31b', label: 'Gemma 4 31B' },
+    ],
+    defaultVariant: 'gemma4:e4b',
   },
 ];
 
