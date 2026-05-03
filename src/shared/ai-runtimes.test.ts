@@ -107,19 +107,20 @@ describe('ai runtime normalization', () => {
   it('applies the runtime default variant when no variant is provided', () => {
     expect(normalizeRuntimeVariant('claude_code', null)).toBe('opus');
     expect(normalizeRuntimeVariant('codex', null)).toBe('gpt-5.4');
-    expect(normalizeRuntimeVariant('qwen_code', null)).toBe('qwen3.6:35b-a3b-q4_K_M');
+    expect(normalizeRuntimeVariant('qwen_code', null)).toBe('qwen3-coder:30b');
     expect(normalizeRuntimeVariant('gemma_code', null)).toBe('gemma4:e4b');
   });
 
   it('preserves a valid variant choice', () => {
     expect(normalizeRuntimeVariant('codex', 'gpt-5.3-codex')).toBe('gpt-5.3-codex');
+    expect(normalizeRuntimeVariant('qwen_code', 'qwen3-coder:30b')).toBe('qwen3-coder:30b');
     expect(normalizeRuntimeVariant('qwen_code', 'qwen3-coder')).toBe('qwen3-coder');
     expect(normalizeRuntimeVariant('gemma_code', 'gemma4:26b')).toBe('gemma4:26b');
   });
 
   it('falls back to the default variant when the variant is not in the runtime options', () => {
     expect(normalizeRuntimeVariant('codex', 'gpt-999')).toBe('gpt-5.4');
-    expect(normalizeRuntimeVariant('qwen_code', 'qwen-unknown')).toBe('qwen3.6:35b-a3b-q4_K_M');
+    expect(normalizeRuntimeVariant('qwen_code', 'qwen-unknown')).toBe('qwen3-coder:30b');
     expect(normalizeRuntimeVariant('gemma_code', 'gemma-unknown')).toBe('gemma4:e4b');
   });
 
