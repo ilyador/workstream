@@ -389,6 +389,14 @@ function toolRepeatKey(name: string, args: Record<string, unknown>): string {
   return `${name}:unknown-target`;
 }
 
+function isMutationTool(name: string): boolean {
+  return name === 'write_file' || name === 'edit';
+}
+
+function repeatedToolMessage(repeatKey: string): string {
+  return `gemma appears stuck repeatedly using tools on ${repeatKey}; stopped after ${GEMMA_MAX_TOOL_CALLS_PER_TARGET} calls`;
+}
+
 function formatDuration(ms: number): string {
   const minutes = Math.round(ms / 60_000);
   return minutes >= 1 ? `${minutes}m` : `${Math.round(ms / 1000)}s`;
@@ -463,6 +471,7 @@ async function runGemma(opts: GemmaRunOptions): Promise<string> {
     { role: 'user', content: opts.prompt },
   ];
   const toolTargetCounts = new Map<string, number>();
+  let successfulMutationCount = 0;
 
   opts.onLog(`[gemma] model=${modelId} endpoint=${baseUrl}/api/chat\n`);
 
@@ -505,13 +514,20 @@ async function runGemma(opts: GemmaRunOptions): Promise<string> {
       const repeatCount = (toolTargetCounts.get(repeatKey) ?? 0) + 1;
       toolTargetCounts.set(repeatKey, repeatCount);
       if (repeatCount > GEMMA_MAX_TOOL_CALLS_PER_TARGET) {
-        throw new Error(`gemma appears stuck repeatedly using tools on ${repeatKey}; stopped after ${GEMMA_MAX_TOOL_CALLS_PER_TARGET} calls`);
+        const message = repeatedToolMessage(repeatKey);
+        if (successfulMutationCount > 0) {
+          const summary = `[summary] ${message}; ${successfulMutationCount} file mutation(s) were applied and should be verified.`;
+          opts.onLog(`[gemma] ${summary}\n`);
+          return summary;
+        }
+        throw new Error(message);
       }
 
       opts.onLog(`[gemma:${toolTitle(name, args)}]\n`);
       let content: string;
       try {
         content = await runTool(name, opts.cwd, args);
+        if (isMutationTool(name)) successfulMutationCount++;
       } catch (error) {
         content = `error: ${error instanceof Error ? error.message : String(error)}`;
       }

@@ -232,6 +232,40 @@ describe('GemmaDriver', () => {
     })).rejects.toThrow(/gemma appears stuck repeatedly using tools on file:loop\.txt/);
   });
 
+  it('returns partial success when the repeat guard fires after file mutations', async () => {
+    let callIndex = 0;
+    const fetchMock = vi.fn().mockImplementation(() => {
+      callIndex += 1;
+      return Promise.resolve(jsonResponse({
+        message: {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{
+            id: `call-${callIndex}`,
+            function: {
+              name: 'write_file',
+              arguments: { path: 'loop.txt', content: `v${callIndex}\n` },
+            },
+          }],
+        },
+      }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { gemmaDriver } = await import('./gemma-driver.js');
+    await expect(gemmaDriver.execute({
+      jobId: 'j1',
+      step: baseStep({ tools: ['Write'] }),
+      task: { effort: null },
+      cwd: tempDir,
+      prompt: 'loop',
+      onLog: () => {},
+    })).resolves.toContain('file mutation(s) were applied and should be verified');
+
+    expect(fetchMock).toHaveBeenCalledTimes(11);
+    expect(readFileSync(join(tempDir, 'loop.txt'), 'utf-8')).toBe('v10\n');
+  });
+
   it('rejects when the working directory is missing', async () => {
     const { gemmaDriver } = await import('./gemma-driver.js');
     const missingDir = join(tempDir, 'missing');
