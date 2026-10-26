@@ -9,6 +9,16 @@ import { runProcess } from './process-runner.js';
 const QWEN_SUMMARY_TIMEOUT_MS = 180_000;
 const QWEN_CONFIG_PARENT = join(tmpdir(), 'workstream-qwen');
 const QWEN_PROJECT_RESIDUE_DIRS = ['.qwen-worktrees'];
+const QWEN_EXECUTE_SYSTEM_PROMPT = [
+  'You are an unattended coding agent inside an automated Workstream job.',
+  'Use the provided tools to inspect and modify files. Never ask the user questions.',
+  'Never describe a tool call as text. Text such as [edit], [read_file], code fences, or patch blocks is not a tool call.',
+  'When files must change, call edit or write_file with absolute paths inside the repository root.',
+  'A final response before a required edit or write_file tool call is invalid.',
+  'Never output [summary] until after required file changes are complete.',
+  'After each tool result, continue the original task until it is complete or truly blocked.',
+  'If blocked, return a concise failure reason. Otherwise keep the final response concise.',
+].join(' ');
 
 const QWEN_CORE_TOOLS = [
   'read_file',
@@ -112,6 +122,7 @@ function buildArgs(
   step: FlowStepConfig,
   includePartialMessages: boolean,
   launchConfig: QwenLaunchConfig,
+  systemPrompt?: string,
 ): string[] {
   const args = [
     '--bare',
@@ -120,6 +131,7 @@ function buildArgs(
     '--approval-mode', 'yolo',
     ...buildToolArgs(step),
   ];
+  if (systemPrompt) args.push('--system-prompt', systemPrompt);
   if (includePartialMessages) args.push('--include-partial-messages');
   const modelName = step.runtime_variant || launchConfig.modelName;
   if (launchConfig.authType) args.push('--auth-type', launchConfig.authType);
@@ -413,6 +425,7 @@ async function runQwen(
     onLog: (text: string) => void;
     timeoutMs?: number;
     includePartialMessages: boolean;
+    systemPrompt?: string;
   },
 ): Promise<string> {
   cleanupProjectResidue(opts.cwd);
@@ -430,7 +443,7 @@ async function runQwen(
     await runProcess({
       jobId: opts.jobId,
       command: 'qwen',
-      args: buildArgs(opts.step, opts.includePartialMessages, launchConfig),
+      args: buildArgs(opts.step, opts.includePartialMessages, launchConfig, opts.systemPrompt),
       cwd: opts.cwd,
       env,
       stdin: opts.prompt,
@@ -476,6 +489,7 @@ export const qwenDriver: RuntimeDriver = {
       timeoutMs: opts.timeoutMs,
       onLog: opts.onLog,
       includePartialMessages: true,
+      systemPrompt: QWEN_EXECUTE_SYSTEM_PROMPT,
     });
   },
 

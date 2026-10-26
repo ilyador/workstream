@@ -141,4 +141,21 @@ describe('checkpoint', () => {
       warnSpy.mockRestore();
     });
   });
+
+  describe('checkpointExists', () => {
+    it('returns true when the checkpoint ref resolves', async () => {
+      gitSyncMock.mockImplementation(() => 'checkpoint-sha');
+      const { checkpointExists } = await import('./checkpoint.js');
+      expect(checkpointExists('/repo', 'job-1')).toBe(true);
+      expect(gitSyncMock).toHaveBeenCalledWith(['rev-parse', '--verify', 'refs/workstream/checkpoints/job-1'], '/repo');
+    });
+
+    it('returns false when the checkpoint ref is missing', async () => {
+      gitSyncMock.mockImplementation(() => {
+        throw new Error('fatal: Needed a single revision');
+      });
+      const { checkpointExists } = await import('./checkpoint.js');
+      expect(checkpointExists('/repo', 'job-1')).toBe(false);
+    });
+  });
 });

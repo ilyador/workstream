@@ -72,11 +72,13 @@ export const AI_RUNTIME_DEFINITIONS: AiRuntimeDefinition[] = [
     supportsEffortControl: false,
     supportsMultiagent: false,
     variantOptions: [
+      { id: 'qwen3-coder:30b-16k', label: 'Qwen3 Coder 30B 16K' },
+      { id: 'qwen3-coder:30b-8k', label: 'Qwen3 Coder 30B 8K' },
       { id: 'qwen3-coder:30b', label: 'Qwen3 Coder 30B' },
       { id: 'qwen3.6:35b-a3b-q4_K_M', label: 'Qwen 3.6 35B' },
       { id: 'qwen3-coder', label: 'Qwen3 Coder (latest)' },
     ],
-    defaultVariant: 'qwen3-coder:30b',
+    defaultVariant: 'qwen3-coder:30b-16k',
   },
   {
     id: 'gemma_code',

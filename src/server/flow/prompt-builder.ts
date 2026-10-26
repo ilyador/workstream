@@ -26,6 +26,8 @@ const SUMMARY_INSTRUCTIONS =
   '\nAt the very end of your response, write a one-line summary of what you did in this step using this exact format:\n' +
   '[summary] Your short summary here\n';
 
+const LOCAL_MUTATING_RUNTIME_IDS = new Set(['qwen_code', 'gemma_code']);
+
 const QWEN_TOOL_NAME_MAP: Record<string, string[]> = {
   Read: ['read_file', 'list_directory'],
   Write: ['write_file'],
@@ -82,6 +84,22 @@ function gemmaToolNames(tools: string[]): string[] {
 function expectsRepositoryChanges(step: FlowStepConfig): boolean {
   if (step.runtime_kind !== 'coding' || step.is_gate) return false;
   return step.tools.some(tool => tool === 'Edit' || tool === 'Write' || tool === 'NotebookEdit');
+}
+
+function buildFinalInstructions(step: FlowStepConfig): string {
+  if (expectsRepositoryChanges(step) && LOCAL_MUTATING_RUNTIME_IDS.has(step.runtime_id)) {
+    const verifyInstruction = step.tools.includes('Bash')
+      ? '- Before your final response, run a quick verification command if one is available and appropriate.\n'
+      : '';
+    return `\n## Final Response Rules
+- Do not produce a final text response or \`[summary]\` until after at least one edit/write_file tool call has successfully changed files.
+- A response that only says you will start, will inspect, or will modify files is invalid.
+${verifyInstruction}- After the required repository changes are made, end with a one-line summary using this exact format:
+[summary] Your short summary here
+`;
+  }
+
+  return SUMMARY_INSTRUCTIONS;
 }
 
 function buildToolInstruction(step: FlowStepConfig): string {
@@ -188,7 +206,7 @@ export async function buildStepPrompt(
   const executionContract = buildExecutionContract(step, previousOutputs);
   if (executionContract) parts.push(executionContract);
 
-  parts.push(SUMMARY_INSTRUCTIONS);
+  parts.push(buildFinalInstructions(step));
   return parts.join('\n');
 }
 

@@ -120,6 +120,26 @@ function noRepositoryChangeMessage(step: FlowStepConfig, output: string): string
   return `${step.name} completed without repository changes. ${step.runtime_id} returned successfully but did not edit files, so the job was stopped to avoid a verify/review retry loop.${outputText}`;
 }
 
+function shouldRetryNoRepositoryChange(step: FlowStepConfig): boolean {
+  return LOCAL_RUNTIME_IDS_REQUIRING_CHANGES.has(step.runtime_id);
+}
+
+function noRepositoryChangeRetryPrompt(originalPrompt: string, previousOutput: string): string {
+  const excerpt = stripToolCallLines(previousOutput).replace(/\s+/g, ' ').trim().substring(0, 1000);
+  return `${originalPrompt}
+
+## Mandatory Retry After Invalid No-Op
+Your previous response completed without repository changes, which is invalid for this step.
+Previous response excerpt:
+${excerpt || '(no assistant text)'}
+
+Do not summarize, plan, or say you will start. Continue the original task now.
+The next assistant action must inspect or modify files with the available tools.
+This retry only succeeds if the repository has actual file changes afterward.
+Do not write \`[summary]\` until after at least one edit/write_file tool call has successfully changed files.
+`;
+}
+
 interface GateResult {
   failed: boolean;
   reason: string;
@@ -278,7 +298,7 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
 
       try {
         if (!await isJobStillRunning(jobId)) return;
-        const output = await executeFlowStep({
+        let output = await executeFlowStep({
           jobId,
           step,
           task,
@@ -290,7 +310,26 @@ export async function runFlowJob(ctx: FlowJobContext): Promise<void> {
         if (!await isJobStillRunning(jobId)) return;
 
         if (repositoryFingerprintBefore !== null) {
-          const repositoryFingerprintAfter = safeRepositoryChangeFingerprint(localPath, jobId, onLog);
+          let repositoryFingerprintAfter = safeRepositoryChangeFingerprint(localPath, jobId, onLog);
+          if (
+            repositoryFingerprintAfter !== null
+            && repositoryFingerprintAfter === repositoryFingerprintBefore
+            && shouldRetryNoRepositoryChange(step)
+          ) {
+            onLog(`[guard] ${step.runtime_id} returned without repository changes; retrying once with stricter no-op recovery instructions\n`);
+            const retryOutput = await executeFlowStep({
+              jobId,
+              step,
+              task,
+              cwd: localPath,
+              prompt: noRepositoryChangeRetryPrompt(prompt, output),
+              onLog,
+              timeoutMs: stepTimeoutMs(step),
+            });
+            if (!await isJobStillRunning(jobId)) return;
+            output = `${output}\n\n${retryOutput}`;
+            repositoryFingerprintAfter = safeRepositoryChangeFingerprint(localPath, jobId, onLog);
+          }
           if (repositoryFingerprintAfter !== null && repositoryFingerprintAfter === repositoryFingerprintBefore) {
             throw new Error(noRepositoryChangeMessage(step, output));
           }

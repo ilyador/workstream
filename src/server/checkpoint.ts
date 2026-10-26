@@ -100,6 +100,16 @@ export function revertToCheckpoint(localPath: string, jobId: string): { reverted
   return { reverted: true };
 }
 
+export function checkpointExists(localPath: string, jobId: string): boolean {
+  assertValidJobId(jobId);
+  try {
+    git(['rev-parse', '--verify', `refs/workstream/checkpoints/${jobId}`], localPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function deleteCheckpoint(localPath: string, jobId: string): void {
   assertValidJobId(jobId);
   try {

@@ -109,29 +109,59 @@ interface WorkstreamPrResponse {
 }
 
 // Session token management
-let accessToken: string | null = typeof localStorage !== 'undefined' ? localStorage.getItem('workstream-token') : null;
-let refreshToken: string | null = typeof localStorage !== 'undefined' ? localStorage.getItem('workstream-refresh') : null;
+const ACCESS_TOKEN_KEY = 'workstream-token';
+const REFRESH_TOKEN_KEY = 'workstream-refresh';
+
+function storage(): Storage | null {
+  return typeof localStorage !== 'undefined' ? localStorage : null;
+}
+
+function readStoredSession(): SessionTokens {
+  const store = storage();
+  return {
+    access_token: store?.getItem(ACCESS_TOKEN_KEY) ?? '',
+    refresh_token: store?.getItem(REFRESH_TOKEN_KEY) ?? '',
+  };
+}
+
+let storedSession = readStoredSession();
+let accessToken: string | null = storedSession.access_token || null;
+let refreshToken: string | null = storedSession.refresh_token || null;
+
+function syncSessionFromStorage(): void {
+  storedSession = readStoredSession();
+  accessToken = storedSession.access_token || null;
+  refreshToken = storedSession.refresh_token || null;
+}
 
 export function setSession(access: string, refresh: string) {
   accessToken = access;
   refreshToken = refresh;
-  localStorage.setItem('workstream-token', access);
-  localStorage.setItem('workstream-refresh', refresh);
+  storedSession = { access_token: access, refresh_token: refresh };
+  const store = storage();
+  store?.setItem(ACCESS_TOKEN_KEY, access);
+  store?.setItem(REFRESH_TOKEN_KEY, refresh);
 }
 
 export function clearSession() {
   accessToken = null;
   refreshToken = null;
-  localStorage.removeItem('workstream-token');
-  localStorage.removeItem('workstream-refresh');
+  storedSession = { access_token: '', refresh_token: '' };
+  const store = storage();
+  store?.removeItem(ACCESS_TOKEN_KEY);
+  store?.removeItem(REFRESH_TOKEN_KEY);
 }
 
-export function getToken() { return accessToken; }
+export function getToken() {
+  syncSessionFromStorage();
+  return accessToken;
+}
 
 // Serialize token refresh to prevent parallel requests from racing
 let refreshPromise: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
+  syncSessionFromStorage();
   if (!refreshToken) return false;
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
@@ -173,6 +203,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  syncSessionFromStorage();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),

@@ -34,7 +34,7 @@ begin
 
     insert into flow_steps (flow_id, name, position, instructions, runtime_kind, runtime_id, runtime_variant, tools, context_sources, use_project_data, is_gate, on_fail_jump_to, max_retries, on_max_retries) values
     (fid, 'plan',    1, plan_instr,    'coding', 'claude_code', 'opus',             '{"Read","Grep","Glob","Bash"}',                exec_ctx,    false, false, null, 0, 'pause'),
-    (fid, 'develop', 2, develop_instr, 'coding', 'qwen_code',  'qwen3-coder-plus', '{"Read","Edit","Write","Bash","Grep","Glob"}',  develop_ctx, false, false, null, 0, 'pause'),
+    (fid, 'develop', 2, develop_instr, 'coding', 'qwen_code',  'qwen3-coder:30b-16k', '{"Read","Edit","Write","Bash","Grep","Glob"}',  develop_ctx, false, false, null, 0, 'pause'),
     (fid, 'verify',  3, verify_instr,  'coding', 'claude_code', 'sonnet',           '{"Bash","Read"}',                              verify_ctx,  false, true,  2,    2, 'pause'),
     (fid, 'review',  4, review_instr,  'coding', 'claude_code', 'sonnet',           '{"Read","Grep"}',                              review_ctx,  false, true,  2,    1, 'pause');
 

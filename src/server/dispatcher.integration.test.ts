@@ -514,7 +514,7 @@ describe('dispatcher integration', () => {
       seedJob('job-001', 'running');
       seedTask('task-001', 'in_progress');
       spawnBehavior = 'succeed';
-      gitMockState.repositoryFingerprintQueue = ['same', 'same'];
+      gitMockState.repositoryFingerprintQueue = ['same', 'same', 'same'];
 
       const onFail = vi.fn();
       const onReview = vi.fn();
@@ -542,6 +542,39 @@ describe('dispatcher integration', () => {
       expect(taskRows['task-001'].status).toBe('paused');
       expect(onReview).not.toHaveBeenCalled();
       expect(onDone).not.toHaveBeenCalled();
+    });
+
+    it('retries a local mutating develop step once when the first response makes no repository changes', async () => {
+      seedJob('job-001', 'running');
+      seedTask('task-001', 'in_progress');
+      spawnBehavior = 'succeed';
+      gitMockState.repositoryFingerprintQueue = ['same', 'same', 'changed'];
+
+      const onFail = vi.fn();
+      const onReview = vi.fn();
+      const onLog = vi.fn();
+      const { spawn } = await import('child_process');
+
+      await runFlowJob(makeCtx({
+        flow: makeFlow({
+          steps: [makeStep({
+            position: 1,
+            name: 'develop',
+            runtime_id: 'qwen_code',
+            runtime_variant: 'qwen3-coder:30b-16k',
+            tools: ['Read', 'Edit', 'Write'],
+            is_gate: false,
+          })],
+        }),
+        onFail,
+        onReview,
+        onLog,
+      }));
+
+      expect(onFail).not.toHaveBeenCalled();
+      expect(onReview).toHaveBeenCalled();
+      expect(vi.mocked(spawn).mock.calls).toHaveLength(3);
+      expect(onLog.mock.calls.some(call => String(call[0]).includes('retrying once with stricter no-op recovery instructions'))).toBe(true);
     });
   });
 

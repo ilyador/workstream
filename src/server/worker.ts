@@ -5,9 +5,9 @@ import { homedir } from 'os';
 import { runFlowJob, cancelJob, cancelAllJobs, cleanupOrphanedJobs } from './runner.js';
 import type { FlowConfig } from './runner.js';
 import { supabase } from './supabase.js';
-import { createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
+import { checkpointExists, createCheckpoint, revertToCheckpoint, deleteCheckpoint } from './checkpoint.js';
 import { queueNextWorkstreamTask } from './auto-continue.js';
-import { autoCommit, slugify } from './git-utils.js';
+import { autoCommit, slugify, stagedDiffStat } from './git-utils.js';
 import { search as ragSearch } from './rag/service.js';
 import { refreshDetectedAiRuntimes, getDetectedAiRuntimeTimestamp } from './ai-runtime-discovery.js';
 import { cleanupWorktree, ensureWorktree } from './worktree.js';
@@ -230,15 +230,52 @@ async function startJob(job: ClaimedJob): Promise<void> {
     return;
   }
 
-  // Create checkpoint for fresh starts only
-  if (!isResume) {
+  if (isResume && checkpointExists(localPath, jobId)) {
+    try {
+      revertToCheckpoint(localPath, jobId);
+      await writeLog(jobId, 'log', { text: '[checkpoint] Restored saved state before resume' });
+    } catch (err: any) {
+      const failMsg = `Checkpoint restore failed before resume: ${err.message}. Refusing to continue from an unknown worktree state.`;
+      await writeLog(jobId, 'failed', { error: failMsg });
+      await supabase.from('jobs').update({
+        status: 'failed',
+        completed_at: new Date().toISOString(),
+        question: failMsg,
+      }).eq('id', jobId);
+      await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
+      await notifyTaskFailure(task, failMsg);
+      return;
+    }
+  }
+
+  const dirtyState = stagedDiffStat(localPath);
+  const hasUncheckpointedChanges = dirtyState.filesChanged > 0 || dirtyState.changedFiles.length > 0;
+  if (isResume && hasUncheckpointedChanges) {
+    const changed = dirtyState.changedFiles.length > 0 ? ` Changed files: ${dirtyState.changedFiles.slice(0, 8).join(', ')}` : '';
+    const failMsg = `Cannot safely continue failed job: worktree has changes but no valid clean checkpoint.${changed}`;
+    await writeLog(jobId, 'failed', { error: failMsg });
+    await supabase.from('jobs').update({
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      question: failMsg,
+    }).eq('id', jobId);
+    await supabase.from('tasks').update({ status: 'paused' }).eq('id', task.id);
+    await notifyTaskFailure(task, failMsg);
+    return;
+  }
+
+  const needsCheckpoint = !isResume || !checkpointExists(localPath, jobId);
+
+  // Create a checkpoint for fresh starts, and recreate it when continuing a
+  // failed job whose original checkpoint was already consumed by a prior revert.
+  if (needsCheckpoint) {
     try {
       const checkpoint = createCheckpoint(localPath, jobId);
       await supabase.from('jobs').update({
         checkpoint_ref: checkpoint.commitSha,
         checkpoint_status: 'active',
       }).eq('id', jobId);
-      await writeLog(jobId, 'log', { text: '[checkpoint] Saved working directory state' });
+      await writeLog(jobId, 'log', { text: isResume ? '[checkpoint] Recreated working directory state for resume' : '[checkpoint] Saved working directory state' });
     } catch (err: any) {
       if (task.auto_continue) {
         // Fatal for auto-continue: no checkpoint = no safety net

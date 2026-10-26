@@ -73,6 +73,10 @@ describe('QwenDriver', () => {
     expect(args).toContain('--include-partial-messages');
     expect(args).toContain('--approval-mode');
     expect(args[args.indexOf('--approval-mode') + 1]).toBe('yolo');
+    expect(args).toContain('--system-prompt');
+    expect(args[args.indexOf('--system-prompt') + 1]).toContain('unattended coding agent');
+    expect(args[args.indexOf('--system-prompt') + 1]).toContain('final response before a required edit or write_file tool call is invalid');
+    expect(args[args.indexOf('--system-prompt') + 1]).toContain('Never output [summary] until after required file changes are complete');
     expect(args).not.toContain('--max-session-turns');
 
     proc.stdout.emit('data', jsonLine({ type: 'result', result: 'done' }));
@@ -423,6 +427,7 @@ describe('QwenDriver', () => {
     expect(args[args.indexOf('--output-format') + 1]).toBe('stream-json');
     expect(args).not.toContain('--include-partial-messages');
     expect(args).not.toContain('--max-session-turns');
+    expect(args).not.toContain('--system-prompt');
     expect(spawnMock.mock.calls[0][2].env.QWEN_CODE_NO_RELAUNCH).toBe('true');
     expect(proc.stdin.write).toHaveBeenCalledWith('summarize');
 

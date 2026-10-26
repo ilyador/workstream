@@ -203,6 +203,21 @@ describe('buildStepPrompt', () => {
     expect(prompt).not.toContain('Use only these step tools: Read, Edit, Write, Bash');
   });
 
+  it('ends local mutating steps with no-summary-before-edit rules', async () => {
+    const { buildStepPrompt } = await import('./prompt-builder.js');
+    const step = baseStep({
+      runtime_id: 'qwen_code',
+      tools: ['Read', 'Edit', 'Write', 'Bash'],
+    });
+    const prompt = await buildStepPrompt(step, baseFlow(), baseTask(), [], testDir);
+
+    expect(prompt).toContain('## Final Response Rules');
+    expect(prompt).toContain('Do not produce a final text response or `[summary]` until after at least one edit/write_file tool call has successfully changed files.');
+    expect(prompt).toContain('A response that only says you will start, will inspect, or will modify files is invalid.');
+    expect(prompt).toContain('run a quick verification command');
+    expect(prompt.trimEnd()).toContain('[summary] Your short summary here');
+  });
+
   it('uses Gemma-native tool names in the execution contract for gemma steps', async () => {
     const { buildStepPrompt } = await import('./prompt-builder.js');
     const step = baseStep({

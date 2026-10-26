@@ -19,7 +19,7 @@ Create AI workers with instructions and strict steps. They write code, design pa
 4. Each task auto-commits to the stream's git worktree branch
 5. When done, click **Create PR**
 
-Example: designer generates a layout from a screenshot, passes it to copywriter for text, passes it to developer to build it. You add review pauses wherever you want.
+Example: designer generates a layout from a screenshot, passes it to copywriter for text, passes it to developer to build it.
 
 ## Default Workers
 
